@@ -307,6 +307,7 @@ def test_offer_template_backend_instance_and_workflow_remaining(monkeypatch, tmp
     monkeypatch.setattr(api_backend, "use_existing_ollama_server", lambda url, model_name: type("S", (), {"url": "http://e"})())
     monkeypatch.setattr(api_backend, "HolmesRunner", lambda _path: type("R", (), {"ask": lambda self, **_: "a"})())
     monkeypatch.setattr(api_backend, "provision_vastai_ollama", lambda *_args, **_kwargs: type("R", (), {"contract_id": 8, "ollama_url": "http://x", "model_name": "m"})())
+    monkeypatch.setattr(api_backend, "_vastai_sdk", lambda: MagicMock())
     stopped = []
     monkeypatch.setattr(api_backend, "stop_vastai_instance", lambda *_args, **_kwargs: stopped.append(True))
     kubeconfig = tmp_path / "config"

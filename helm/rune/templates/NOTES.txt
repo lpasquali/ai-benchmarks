@@ -1,0 +1,60 @@
+CHART NAME: {{ .Chart.Name }}
+CHART VERSION: {{ .Chart.Version }}
+APP VERSION: {{ .Chart.AppVersion }}
+
+RUNE has been deployed! 🎉
+
+----------------------------------------------------------------------------
+Connecting to the API
+----------------------------------------------------------------------------
+
+{{- if .Values.ingress.enabled }}
+  The API is reachable via Ingress:
+  {{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+  {{- end }}
+
+{{- else if contains "NodePort" .Values.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "rune.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  export RUNE_API_BASE_URL="http://$NODE_IP:$NODE_PORT"
+
+{{- else if contains "LoadBalancer" .Values.service.type }}
+  NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+  Watch its status with:
+    kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "rune.fullname" . }}
+
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "rune.fullname" . }} --template "{{"{{range (index .status.loadBalancer.ingress 0)}}{{.}}{{end}}"}}")
+  export RUNE_API_BASE_URL="http://$SERVICE_IP:{{ .Values.service.port }}"
+
+{{- else }}
+  # ClusterIP — use port-forward to reach the API from your workstation:
+  kubectl port-forward --namespace {{ .Release.Namespace }} svc/{{ include "rune.fullname" . }} 8080:{{ .Values.service.port }}
+  export RUNE_API_BASE_URL="http://127.0.0.1:8080"
+{{- end }}
+
+----------------------------------------------------------------------------
+Running RUNE as a client against the Kubernetes API
+----------------------------------------------------------------------------
+Once the API URL is exported, install the rune client locally:
+
+  pip install rune-bench            # from PyPI (when published)
+  # or for the current source tree:
+  pip install -e /path/to/ai-benchmarks
+
+Then run commands against the remote server:
+
+  rune --backend http \
+       --api-base-url "$RUNE_API_BASE_URL" \
+       run-benchmark --question "What is unhealthy in this cluster?"
+
+  # If the server uses a self-signed certificate, add --insecure:
+  rune --backend http \
+       --api-base-url "https://rune.internal" \
+       --insecure \
+       run-benchmark
+
+----------------------------------------------------------------------------
+Docs
+----------------------------------------------------------------------------
+  README: https://github.com/lpasquali/ai-benchmarks

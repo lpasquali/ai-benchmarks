@@ -40,7 +40,7 @@ def test_ollama_client_make_request_and_helpers(monkeypatch):
         def read(self):
             return b'{"models": [{"name": "b"}, {"name": "a"}]}'
 
-    def fake_urlopen(request, timeout):
+    def fake_urlopen(request, timeout, context=None):
         captured["timeout"] = timeout
         captured["method"] = request.get_method()
         return DummyResponse()
@@ -356,6 +356,7 @@ def test_api_backend_functions(monkeypatch, tmp_path):
     assert api_backend.run_ollama_instance(req) == {"mode": "existing", "ollama_url": "norm:u"}
 
     monkeypatch.setattr(api_backend, "provision_vastai_ollama", lambda *_args, **_kwargs: type("R", (), {"contract_id": 3, "ollama_url": "http://x", "model_name": "m"})())
+    monkeypatch.setattr(api_backend, "_vastai_sdk", lambda: MagicMock())
     req_v = api_backend.RunOllamaInstanceRequest(vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url=None)
     assert api_backend.run_ollama_instance(req_v)["mode"] == "vastai"
 

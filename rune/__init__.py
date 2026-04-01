@@ -8,6 +8,7 @@ This file only handles CLI argument parsing, Rich output, and orchestration.
 
 from pathlib import Path
 import os
+import socket
 from typing import Callable
 
 import typer
@@ -47,6 +48,7 @@ BACKEND_MODE = os.environ.get("RUNE_BACKEND", "local").strip().lower() or "local
 API_BASE_URL = os.environ.get("RUNE_API_BASE_URL", "http://localhost:8080").strip() or "http://localhost:8080"
 API_TOKEN = os.environ.get("RUNE_API_TOKEN", "").strip() or None
 API_TENANT = os.environ.get("RUNE_API_TENANT", "default").strip() or "default"
+VERIFY_SSL = not (os.environ.get("RUNE_INSECURE", "").strip().lower() in {"1", "true", "yes", "on"})
 
 
 @app.callback()
@@ -82,9 +84,16 @@ def main(
         help="Show outbound client requests and API calls",
         is_eager=True,
     ),
+    insecure: bool = typer.Option(
+        False,
+        "--insecure",
+        envvar="RUNE_INSECURE",
+        help="Skip TLS certificate verification (for self-signed certs, e.g. in-cluster)",
+        is_eager=True,
+    ),
 ) -> None:
     """Configure global CLI options."""
-    global BACKEND_MODE, API_BASE_URL, API_TOKEN, API_TENANT
+    global BACKEND_MODE, API_BASE_URL, API_TOKEN, API_TENANT, VERIFY_SSL
     normalized_backend = backend.strip().lower()
     if normalized_backend not in {"local", "http"}:
         raise typer.BadParameter("--backend must be either 'local' or 'http'")
@@ -92,12 +101,44 @@ def main(
     API_BASE_URL = api_base_url.strip() or "http://localhost:8080"
     API_TOKEN = api_token.strip() or None
     API_TENANT = api_tenant.strip() or "default"
+    VERIFY_SSL = not insecure
     set_debug(debug)
 
 
 def _print_error_and_exit(message: str, code: int = 1) -> None:
     console.print(f"[red]{message}[/red]")
     raise typer.Exit(code)
+
+
+def _is_containerized() -> bool:
+    """Return True when running inside a Docker container or Kubernetes pod."""
+    return (
+        os.environ.get("KUBERNETES_SERVICE_HOST") is not None
+        or Path("/.dockerenv").exists()
+    )
+
+
+def _find_free_port() -> int:
+    """Bind to port 0 and let the OS pick a free ephemeral port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        return s.getsockname()[1]
+
+
+def _resolve_serve_port() -> int:
+    """Return the port the API server should bind to.
+
+    In a container (Docker / Kubernetes) use the conventional 8080 so
+    Service/Ingress rules work without surprises.  On a developer
+    workstation 8080 is often occupied, so we pick a random free port
+    instead.
+    """
+    if _is_containerized():
+        return 8080
+    port = _find_free_port()
+    console.print(f"[dim]Local mode: using random free port {port}[/dim]")
+    return port
 
 
 def _enable_debug_if_requested(debug: bool) -> None:
@@ -120,6 +161,12 @@ def _fetch_model_capabilities(ollama_url: str, model: str) -> OllamaModelCapabil
         return OllamaClient(ollama_url).get_model_capabilities(normalized)
     except RuntimeError:
         return None
+
+
+def _vastai_sdk() -> VastAI:
+    """Instantiate VastAI SDK reading the API key from the environment."""
+    api_key = os.environ.get("VAST_API_KEY", "")
+    return VastAI(api_key=api_key, raw=True)
 
 
 def _apply_model_limits(capabilities: OllamaModelCapabilities) -> None:
@@ -216,7 +263,7 @@ def _print_ollama_models(ollama_url: str, models: list[str], running_models: set
 
 
 def _http_client() -> RuneApiClient:
-    return RuneApiClient(API_BASE_URL, api_token=API_TOKEN, tenant_id=API_TENANT)
+    return RuneApiClient(API_BASE_URL, api_token=API_TOKEN, tenant_id=API_TENANT, verify_ssl=VERIFY_SSL)
 
 
 def _run_http_job_with_progress(
@@ -267,7 +314,7 @@ def _run_vastai_provisioning(
     max_dph: float,
     reliability: float,
 ) -> VastAIProvisioningResult:
-    sdk = VastAI(raw=True)
+    sdk = _vastai_sdk()
 
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as p:
         task = p.add_task("Provisioning on Vast.ai...", total=None)
@@ -300,11 +347,11 @@ def serve_api(
         envvar="RUNE_API_HOST",
         help="Host to bind API server to",
     ),
-    api_port: int = typer.Option(
-        8080,
+    api_port: int | None = typer.Option(
+        None,
         "--port",
         envvar="RUNE_API_PORT",
-        help="Port to bind API server to",
+        help="Port to bind API server to (default: 8080 in containers, random free port locally)",
     ),
     debug: bool = typer.Option(
         False,
@@ -314,13 +361,19 @@ def serve_api(
     ),
 ) -> None:
     """Start the standalone RUNE API server."""
-    from rune.api import main as start_api_server
-    
+    from rune_bench.api_server import RuneApiApplication
+
     _enable_debug_if_requested(debug)
-    console.print(Panel.fit(f"[bold blue]RUNE API Server[/bold blue]\nStarting on {api_host}:{api_port}"))
-    
+
+    resolved_port = api_port if api_port is not None else _resolve_serve_port()
+    console.print(Panel.fit(
+        f"[bold blue]RUNE API Server[/bold blue]\nStarting on {api_host}:{resolved_port}"
+        + ("  [yellow](TLS verification disabled)[/yellow]" if not VERIFY_SSL else "")
+    ))
+
     try:
-        start_api_server()
+        app_server = RuneApiApplication.from_env()
+        app_server.serve(host=api_host, port=resolved_port)
     except KeyboardInterrupt:
         console.print("\n[yellow]Server stopped.[/yellow]")
         raise typer.Exit(0)
@@ -744,7 +797,7 @@ def run_benchmark(
         if not selected_ollama_url:
             if vastai_stop_instance and vastai_contract_to_stop is not None:
                 try:
-                    teardown = stop_vastai_instance(VastAI(raw=True), vastai_contract_to_stop)
+                    teardown = stop_vastai_instance(_vastai_sdk(), vastai_contract_to_stop)
                     status = "verified" if teardown.verification_ok else "not fully verified"
                     console.print(f"[green]Destroyed Vast.ai contract:[/green] {vastai_contract_to_stop} ({status})")
                     if teardown.destroyed_volume_ids:
@@ -798,7 +851,7 @@ def run_benchmark(
     finally:
         if vastai and vastai_stop_instance and vastai_contract_to_stop is not None:
             try:
-                teardown = stop_vastai_instance(VastAI(raw=True), vastai_contract_to_stop)
+                teardown = stop_vastai_instance(_vastai_sdk(), vastai_contract_to_stop)
                 status = "verified" if teardown.verification_ok else "not fully verified"
                 console.print(f"[green]Destroyed Vast.ai contract:[/green] {vastai_contract_to_stop} ({status})")
                 if teardown.destroyed_volume_ids:

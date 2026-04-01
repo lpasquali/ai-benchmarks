@@ -1,5 +1,6 @@
 """Local execution backend behind the RUNE HTTP API."""
 
+import os
 from pathlib import Path
 
 from vastai import VastAI
@@ -19,6 +20,12 @@ from rune_bench.workflows import (
     list_running_ollama_models,
     warmup_existing_ollama_model,
 )
+
+
+def _vastai_sdk() -> VastAI:
+    """Instantiate VastAI SDK reading the API key from the environment."""
+    api_key = os.environ.get("VAST_API_KEY", "")
+    return VastAI(api_key=api_key, raw=True)
 
 
 def list_vastai_models() -> list[dict]:
@@ -50,7 +57,7 @@ def run_ollama_instance(request: RunOllamaInstanceRequest) -> dict:
         }
 
     result = provision_vastai_ollama(
-        VastAI(raw=True),
+        _vastai_sdk(),
         template_hash=request.template_hash,
         min_dph=request.min_dph,
         max_dph=request.max_dph,
@@ -89,7 +96,7 @@ def run_benchmark(request: RunBenchmarkRequest) -> dict:
 
     if request.vastai:
         result = provision_vastai_ollama(
-            VastAI(raw=True),
+            _vastai_sdk(),
             template_hash=request.template_hash,
             min_dph=request.min_dph,
             max_dph=request.max_dph,
@@ -125,7 +132,7 @@ def run_benchmark(request: RunBenchmarkRequest) -> dict:
         )
     finally:
         if request.vastai and request.vastai_stop_instance and vastai_contract_to_stop is not None:
-            stop_vastai_instance(VastAI(raw=True), vastai_contract_to_stop)
+            stop_vastai_instance(_vastai_sdk(), vastai_contract_to_stop)
 
     return {
         "answer": answer,

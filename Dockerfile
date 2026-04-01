@@ -46,7 +46,8 @@ ENV RUNE_BACKEND=local \
     RUNE_QUESTION="" \
     RUNE_MODEL=llama3.1:8b \
     RUNE_KUBECONFIG=/root/.kube/config \
-    RUNE_IDEMPOTENCY_KEY=""
+    RUNE_IDEMPOTENCY_KEY="" \
+    VAST_API_KEY=""
 
 # Define an entrypoint so the container runs as an executable
 # Use "serve" command by default for standalone API server mode
