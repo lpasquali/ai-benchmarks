@@ -45,6 +45,8 @@ def normalize_ollama_url(ollama_url: str | None) -> str:
     Adds ``http://`` when missing. This is a convenience wrapper that delegates
     to OllamaClient's normalization logic.
     """
+    if ollama_url is None:
+        raise RuntimeError("Missing Ollama URL")
     try:
         client = OllamaClient(ollama_url)
         return client.base_url
@@ -132,9 +134,10 @@ def provision_vastai_ollama(
         total_vram_mb = int(float(reusable.get("gpu_total_ram", 0)))
         try:
             selected_model = ModelSelector().select(total_vram_mb)
-            contract_id = reusable.get("id")
-            if not contract_id:
+            reusable_contract_id = reusable.get("id")
+            if reusable_contract_id is None or reusable_contract_id == "":
                 raise RuntimeError("Reusable instance is missing contract id")
+            contract_id: int | str = reusable_contract_id
             instance_info = reusable
             reused_existing_instance = True
             offer_id = int(float(reusable.get("ask_contract_id", reusable.get("id", 0))))

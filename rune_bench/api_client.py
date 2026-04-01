@@ -3,6 +3,7 @@
 import os
 from dataclasses import dataclass
 import time
+from typing import Callable
 from urllib.parse import urlencode
 
 from rune_bench.common import make_http_request, normalize_url
@@ -115,7 +116,7 @@ class RuneApiClient:
         *,
         timeout_seconds: int = 3600,
         poll_interval_seconds: float = 2.0,
-        on_update: callable | None = None,
+        on_update: Callable[[str, str | None], None] | None = None,
     ) -> dict:
         deadline = time.monotonic() + timeout_seconds
         last_status = ""

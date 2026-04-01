@@ -337,6 +337,7 @@ def _run_vastai_provisioning(
             raise typer.Exit(0)
         except RuntimeError as exc:
             _print_error_and_exit(str(exc))
+    raise AssertionError("unreachable")
 
 
 @app.command("serve")
@@ -444,21 +445,22 @@ def run_ollama_instance(
         except RuntimeError as exc:
             _print_error_and_exit(str(exc))
 
-        result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
-        mode = result.get("mode")
+        result_obj = payload.get("result")
+        http_result: dict[str, object] = result_obj if isinstance(result_obj, dict) else {}
+        mode = http_result.get("mode")
         if mode == "existing":
             server = ExistingOllamaServer(
-                url=str(result.get("ollama_url", ollama_url or "")),
+                url=str(http_result.get("ollama_url", ollama_url or "")),
                 model_name="<user-selected>",
             )
             _print_existing_ollama(server)
             return
         if mode == "vastai":
-            console.print(f"[green]Provisioned contract:[/green] {result.get('contract_id')}")
-            if result.get("ollama_url"):
-                console.print(f"[dim]Detected Ollama endpoint:[/dim] {result.get('ollama_url')}")
-            if result.get("model_name"):
-                console.print(f"[green]Selected model:[/green] {result.get('model_name')}")
+            console.print(f"[green]Provisioned contract:[/green] {http_result.get('contract_id')}")
+            if http_result.get("ollama_url"):
+                console.print(f"[dim]Detected Ollama endpoint:[/dim] {http_result.get('ollama_url')}")
+            if http_result.get("model_name"):
+                console.print(f"[green]Selected model:[/green] {http_result.get('model_name')}")
             return
         _print_error_and_exit("HTTP backend finished but did not return an Ollama instance result")
 
@@ -630,8 +632,9 @@ def run_agentic_agent(
         except RuntimeError as exc:
             _print_error_and_exit(str(exc))
 
-        result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
-        answer = result.get("answer") or payload.get("answer")
+        result_obj = payload.get("result")
+        http_result: dict[str, object] = result_obj if isinstance(result_obj, dict) else {}
+        answer = http_result.get("answer") or payload.get("answer")
         if not isinstance(answer, str) or not answer.strip():
             _print_error_and_exit("HTTP backend finished but did not return an agent answer")
 
@@ -766,8 +769,9 @@ def run_benchmark(
         except RuntimeError as exc:
             _print_error_and_exit(str(exc))
 
-        result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
-        answer = result.get("answer") or payload.get("answer")
+        result_obj = payload.get("result")
+        http_result: dict[str, object] = result_obj if isinstance(result_obj, dict) else {}
+        answer = http_result.get("answer") or payload.get("answer")
         if not isinstance(answer, str) or not answer.strip():
             _print_error_and_exit("HTTP backend finished but did not return a benchmark answer")
 
