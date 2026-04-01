@@ -8,6 +8,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import rune
+import rune.api as rune_api_module
 import rune_bench.agents.holmes as holmes_module
 import rune_bench.api_backend as api_backend
 import rune_bench.api_client as api_client_module
@@ -253,6 +254,106 @@ def test_rune_main_guard_executes(monkeypatch):
     monkeypatch.setattr(sys, "argv", [str(rune_path), "--help"])
     with pytest.raises(SystemExit):
         runpy.run_path(str(rune_path), run_name="__main__")
+
+
+def test_rune_init_main_guard_executes(monkeypatch):
+    init_path = Path(__file__).resolve().parents[1] / "rune" / "__init__.py"
+    monkeypatch.setattr(sys, "argv", [str(init_path), "--help"])
+    with pytest.raises(SystemExit):
+        runpy.run_path(str(init_path), run_name="__main__")
+
+
+def test_run_ollama_instance_http_vastai_result_branch(monkeypatch):
+    test_console = rune.Console(record=True, width=220)
+    monkeypatch.setattr(rune, "console", test_console)
+    monkeypatch.setattr(rune, "BACKEND_MODE", "http")
+
+    fake_client = type("C", (), {"submit_ollama_instance_job": lambda self, *_a, **_k: "job-1"})()
+    monkeypatch.setattr(rune, "_http_client", lambda: fake_client)
+    monkeypatch.setattr(
+        rune,
+        "_run_http_job_with_progress",
+        lambda **_k: {
+            "result": {
+                "mode": "vastai",
+                "contract_id": 123,
+                "ollama_url": "http://x:11434",
+                "model_name": "llama3.1:8b",
+            }
+        },
+    )
+
+    rune.run_ollama_instance(
+        debug=False,
+        vastai=True,
+        template_hash="t",
+        min_dph=1,
+        max_dph=2,
+        reliability=0.9,
+        ollama_url=None,
+        idempotency_key=None,
+    )
+
+
+def test_run_ollama_instance_http_existing_result_branch(monkeypatch):
+    test_console = rune.Console(record=True, width=220)
+    monkeypatch.setattr(rune, "console", test_console)
+    monkeypatch.setattr(rune, "BACKEND_MODE", "http")
+
+    fake_client = type("C", (), {"submit_ollama_instance_job": lambda self, *_a, **_k: "job-1"})()
+    monkeypatch.setattr(rune, "_http_client", lambda: fake_client)
+    monkeypatch.setattr(
+        rune,
+        "_run_http_job_with_progress",
+        lambda **_k: {
+            "result": {
+                "mode": "existing",
+                "ollama_url": "http://x:11434",
+            }
+        },
+    )
+
+    captured = {}
+    monkeypatch.setattr(rune, "_print_existing_ollama", lambda server: captured.setdefault("url", server.url))
+
+    rune.run_ollama_instance(
+        debug=False,
+        vastai=False,
+        template_hash="t",
+        min_dph=1,
+        max_dph=2,
+        reliability=0.9,
+        ollama_url="http://fallback:11434",
+        idempotency_key=None,
+    )
+
+    assert captured["url"] == "http://x:11434"
+
+
+def test_rune_api_entrypoint_main_and_guard(monkeypatch):
+    calls = {}
+
+    class FakeApp:
+        def serve(self, *, host, port):
+            calls["host"] = host
+            calls["port"] = port
+
+    class FakeRuneApiApplication:
+        @classmethod
+        def from_env(cls):
+            return FakeApp()
+
+    monkeypatch.setattr("rune_bench.api_server.RuneApiApplication", FakeRuneApiApplication)
+    monkeypatch.setattr(rune_api_module, "RuneApiApplication", FakeRuneApiApplication)
+    monkeypatch.setenv("RUNE_API_HOST", "127.0.0.1")
+    monkeypatch.setenv("RUNE_API_PORT", "18080")
+
+    rune_api_module.main()
+    assert calls == {"host": "127.0.0.1", "port": 18080}
+
+    api_path = Path(__file__).resolve().parents[1] / "rune" / "api.py"
+    monkeypatch.setattr(sys, "argv", [str(api_path)])
+    runpy.run_path(str(api_path), run_name="__main__")
 
 
 def test_holmes_and_ollama_remaining_branches(monkeypatch, tmp_path):
