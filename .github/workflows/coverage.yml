@@ -178,10 +178,148 @@ jobs:
             echo "❌ Functional tests failed (see the first failed pytest step above)"
           fi
 
+  quality:
+    name: Lint and Type Checks
+    needs: coverage
+    if: ${{ needs.coverage.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+
+      - name: Restore virtualenv cache
+        id: cache-venv
+        uses: actions/cache@v5
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/coverage.yml') }}
+
+      - name: Install dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install quality tools
+        run: .venv/bin/pip install ruff mypy
+
+      - name: Run ruff (syntax/runtime focused)
+        run: .venv/bin/python -m ruff check --select=E9,F63,F7,F82 rune rune_bench tests
+
+      - name: Run mypy
+        continue-on-error: true
+        run: .venv/bin/python -m mypy rune rune_bench --ignore-missing-imports --follow-imports=silent --no-error-summary
+
+  security:
+    name: Security Scans
+    needs: coverage
+    if: ${{ needs.coverage.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+
+      - name: Restore virtualenv cache
+        id: cache-venv
+        uses: actions/cache@v5
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/coverage.yml') }}
+
+      - name: Install dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install security tools
+        run: .venv/bin/pip install bandit pip-audit
+
+      - name: Run bandit on application code
+        continue-on-error: true
+        run: .venv/bin/python -m bandit -q -r rune rune_bench -f txt
+
+      - name: Run dependency audit (advisory)
+        continue-on-error: true
+        run: .venv/bin/python -m pip_audit
+
+  smoke:
+    name: CLI and API Smoke Test
+    needs: coverage
+    if: ${{ needs.coverage.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+
+      - name: Restore virtualenv cache
+        id: cache-venv
+        uses: actions/cache@v5
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/coverage.yml') }}
+
+      - name: Install dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: CLI help smoke
+        run: .venv/bin/python -m rune --help
+
+      - name: API module smoke
+        run: .venv/bin/python -c "from rune_bench.api_server import RuneApiApplication; print('ok')"
+
   docker-build:
     name: Docker Build Check
-    needs: test
-    if: ${{ needs.test.result == 'success' }}
+    needs: [test, quality, smoke]
+    if: ${{ needs.test.result == 'success' && needs.quality.result == 'success' && needs.smoke.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
