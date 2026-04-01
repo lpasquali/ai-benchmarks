@@ -53,17 +53,17 @@ plain = manager.normalize_model_name("ollama/mistral:latest")
 
 ### List available models on a server
 ```bash
-./rune.py ollama-list-models --ollama-url http://localhost:11434
+python -m rune ollama-list-models --ollama-url http://localhost:11434
 ```
 
 ### List Vast.ai models
 ```bash
-./rune.py vastai-list-models
+python -m rune vastai-list-models
 ```
 
 ### Run benchmark with warm-up
 ```bash
-./rune.py run-benchmark \
+python -m rune run-benchmark \
     --ollama-url http://localhost:11434 \
     --model kavai/qwen3.5-GPT5:9b \
     --ollama-warmup \

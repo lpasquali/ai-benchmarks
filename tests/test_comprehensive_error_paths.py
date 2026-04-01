@@ -1,0 +1,416 @@
+import os
+import sys
+import types
+from pathlib import Path
+from unittest.mock import MagicMock
+from urllib.request import Request, urlopen
+
+import pytest
+
+import rune_bench.agents.holmes as holmes_module
+import rune_bench.api_backend as api_backend
+import rune_bench.api_client as api_client_module
+import rune_bench.api_server as api_server
+import rune_bench.workflows as workflows
+from rune_bench.agents.holmes import HolmesRunner
+from rune_bench.api_client import RuneApiClient
+from rune_bench.ollama.client import OllamaClient, OllamaModelCapabilities
+from rune_bench.vastai.instance import InstanceManager
+from rune_bench.vastai.offer import OfferFinder
+from rune_bench.vastai.template import TemplateLoader
+
+
+def test_holmes_runner_remaining_paths(monkeypatch, tmp_path):
+    kubeconfig = tmp_path / "config"
+    kubeconfig.write_text("apiVersion: v1\n")
+    runner = HolmesRunner(kubeconfig)
+
+    fake_client = MagicMock()
+    fake_holmes = MagicMock()
+    fake_holmes.ask.side_effect = TypeError("unsupported")
+    fake_holmes.Holmes.side_effect = [TypeError("new-signature"), fake_client]
+    fake_client.ask.return_value = "fallback-answer"
+    monkeypatch.setattr(holmes_module, "holmes", fake_holmes)
+    monkeypatch.setattr(runner, "_configure_ollama_model_limits", lambda **_: None)
+    assert runner.ask("q", "m") == "fallback-answer"
+
+    monkeypatch.setattr(holmes_module, "holmes", types.SimpleNamespace())
+    monkeypatch.setattr(runner, "_ask_via_cli", lambda **_: "cli-answer")
+    assert runner.ask("q", "m") == "cli-answer"
+
+    monkeypatch.setattr(runner, "_ask_via_cli", lambda **_: None)
+    with pytest.raises(RuntimeError, match="Unsupported HolmesGPT SDK API shape"):
+        runner.ask("q", "m")
+
+    runner._configure_ollama_model_limits(model="m", ollama_url=None)
+
+    fake_manager = MagicMock()
+    fake_manager.normalize_model_name.return_value = "plain"
+    monkeypatch.setattr(holmes_module.OllamaModelManager, "create", lambda *_: fake_manager)
+    monkeypatch.setattr(holmes_module, "OllamaClient", lambda *_: type("C", (), {"get_model_capabilities": lambda self, _m: (_ for _ in ()).throw(RuntimeError("boom"))})())
+    runner._configure_ollama_model_limits(model="m", ollama_url="http://x")
+
+    runner._set_model_limit_override(env_name="OVERRIDE_MAX_CONTENT_SIZE", value=0)
+
+    fake_llm = types.SimpleNamespace()
+    monkeypatch.setitem(sys.modules, "holmes.core.llm", fake_llm)
+    os.environ.pop("OVERRIDE_MAX_OUTPUT_TOKEN", None)
+    runner._set_model_limit_override(env_name="OVERRIDE_MAX_OUTPUT_TOKEN", value=77)
+    assert os.environ["OVERRIDE_MAX_OUTPUT_TOKEN"] == "77"
+
+    runner = object.__new__(HolmesRunner)
+    runner._kubeconfig = kubeconfig
+
+    monkeypatch.setattr(holmes_module.subprocess, "Popen", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("missing")))
+    with pytest.raises(RuntimeError, match="Failed to execute Holmes CLI fallback"):
+        runner._ask_via_cli("q", "m")
+
+    class BadProc:
+        def __init__(self):
+            self.stdout = iter(["bad\n"])
+            self.returncode = 1
+
+        def wait(self):
+            return None
+
+    monkeypatch.setattr(holmes_module.subprocess, "Popen", lambda *args, **kwargs: BadProc())
+    with pytest.raises(RuntimeError, match="Holmes CLI fallback failed"):
+        runner._ask_via_cli("q", "m")
+
+
+def test_api_client_remaining_paths(monkeypatch):
+    monkeypatch.setenv("RUNE_API_TOKEN", "env-token")
+    monkeypatch.setenv("RUNE_API_TENANT", "env-tenant")
+    client = RuneApiClient("api:8080")
+    assert client.api_token == "env-token"
+    assert client.tenant_id == "env-tenant"
+
+    from urllib.error import HTTPError, URLError
+
+    class NoDetailHTTPError(HTTPError):
+        def __init__(self):
+            super().__init__("http://api", 500, "bad", hdrs=None, fp=None)
+
+        def read(self):
+            return b""
+
+    monkeypatch.setattr(api_client_module, "urlopen", lambda *args, **kwargs: (_ for _ in ()).throw(NoDetailHTTPError()))
+    with pytest.raises(RuntimeError, match="HTTP 500"):
+        client._request("GET", "/x")
+
+    monkeypatch.setattr(api_client_module, "urlopen", lambda *args, **kwargs: (_ for _ in ()).throw(URLError("boom")))
+    with pytest.raises(RuntimeError, match="boom"):
+        client._request("GET", "/x")
+
+    monkeypatch.setattr(api_client_module, "urlopen", lambda *args, **kwargs: (_ for _ in ()).throw(TimeoutError("late")))
+    with pytest.raises(RuntimeError, match="late"):
+        client._request("GET", "/x")
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def __init__(self, raw):
+            self._raw = raw
+
+        def read(self):
+            return self._raw
+
+    monkeypatch.setattr(api_client_module, "urlopen", lambda *args, **kwargs: Response(b"[]"))
+    with pytest.raises(RuntimeError, match="unexpected payload"):
+        client._request("GET", "/x")
+
+    monkeypatch.setattr(client, "_request", lambda *args, **kwargs: {})
+    with pytest.raises(RuntimeError, match="missing 'models' list"):
+        client.get_vastai_models()
+    with pytest.raises(RuntimeError, match="missing 'models' list"):
+        client.get_ollama_models("http://x")
+
+    monkeypatch.setattr(client, "_request", lambda *args, **kwargs: {"models": [], "running_models": "bad"})
+    with pytest.raises(RuntimeError, match="missing 'running_models' list"):
+        client.get_ollama_models("http://x")
+
+    monkeypatch.setattr(client, "_request", lambda *args, **kwargs: {})
+    for submit in (client.submit_agentic_agent_job, client.submit_benchmark_job, client.submit_ollama_instance_job):
+        with pytest.raises(RuntimeError, match="missing 'job_id'"):
+            submit({})
+    with pytest.raises(RuntimeError, match="missing 'status'"):
+        client.get_job_status("job")
+
+    statuses = iter([{"status": "running"}, {"status": "cancelled", "message": "bye"}])
+    monkeypatch.setattr(client, "get_job_status", lambda *_args, **_kwargs: next(statuses))
+    monkeypatch.setattr(api_client_module.time, "sleep", lambda *_args, **_kwargs: None)
+    updates = []
+    with pytest.raises(RuntimeError, match="bye"):
+        client.wait_for_job("job", timeout_seconds=5, poll_interval_seconds=0, on_update=lambda status, message: updates.append((status, message)))
+    assert updates[0] == ("running", None)
+
+    values = iter([0.0, 10.0])
+    monkeypatch.setattr(api_client_module.time, "monotonic", lambda: next(values))
+    monkeypatch.setattr(client, "get_job_status", lambda *_args, **_kwargs: {"status": "running"})
+    with pytest.raises(RuntimeError, match="Timed out waiting"):
+        client.wait_for_job("job", timeout_seconds=1, poll_interval_seconds=0)
+
+
+def test_api_server_remaining_paths(monkeypatch, tmp_path):
+    store = api_server.JobStore(tmp_path / "jobs.db")
+    created = []
+
+    def backend_ollama(request):
+        created.append(request.ollama_url)
+        return {"mode": "existing"}
+
+    def backend_bench(request):
+        return {"answer": request.question}
+
+    app = api_server.RuneApiApplication(
+        store=store,
+        security=api_server.ApiSecurityConfig(auth_disabled=False, tenant_tokens={"tenant": "token"}),
+        backend_functions={"ollama-instance": backend_ollama, "benchmark": backend_bench, "agentic-agent": lambda request: (_ for _ in ()).throw(RuntimeError("bad-run"))},
+    )
+    monkeypatch.setattr(
+        api_server,
+        "list_ollama_models",
+        lambda ollama_url: {"ollama_url": ollama_url, "models": [], "running_models": []},
+    )
+    server = api_server.ThreadingHTTPServer(("127.0.0.1", 0), app.create_handler())
+    import threading
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host, port = server.server_address
+    base = f"http://{host}:{port}"
+    try:
+        req = Request(f"{base}/v1/ollama/models?ollama_url=http://x", headers={"Authorization": "Bearer token", "X-Tenant-ID": "tenant"})
+        with urlopen(req) as response:
+            assert response.status == 200
+
+        bad_auth = Request(f"{base}/v1/jobs/whatever", method="POST", data=b"{}", headers={"Authorization": "Bearer wrong", "X-Tenant-ID": "tenant", "Content-Type": "application/json"})
+        with pytest.raises(Exception):
+            urlopen(bad_auth)
+
+        bad_kind = Request(f"{base}/v1/jobs/whatever", method="POST", data=b"{}", headers={"Authorization": "Bearer token", "X-Tenant-ID": "tenant", "Content-Type": "application/json"})
+        with pytest.raises(Exception):
+            urlopen(bad_kind)
+
+        req = Request(f"{base}/v1/jobs/ollama-instance", method="POST", data=b'{"vastai": false, "template_hash": "t", "min_dph": 1, "max_dph": 2, "reliability": 0.9, "ollama_url": "http://x"}', headers={"Authorization": "Bearer token", "X-Tenant-ID": "tenant", "Content-Type": "application/json"})
+        with urlopen(req) as response:
+            payload = response.read().decode("utf-8")
+            assert "job_id" in payload
+
+        req = Request(f"{base}/v1/jobs/benchmark", method="POST", data=b'{"vastai": false, "template_hash": "t", "min_dph": 1, "max_dph": 2, "reliability": 0.9, "ollama_url": null, "question": "q", "model": "m", "ollama_warmup": false, "ollama_warmup_timeout": 1, "kubeconfig": "/tmp/k", "vastai_stop_instance": false}', headers={"Authorization": "Bearer token", "X-Tenant-ID": "tenant", "Content-Type": "application/json", "Idempotency-Key": "id1"})
+        with urlopen(req) as response:
+            assert response.status == 202
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+        server.server_close()
+
+    jobs = [store.get_job(job_id) for job_id, _ in [store.create_job(tenant_id="tenant", kind="agentic-agent", request_payload={})]]
+    assert jobs[0] is not None
+
+    job_id, _ = store.create_job(tenant_id="tenant", kind="agentic-agent", request_payload={"question": "q", "model": "m", "ollama_url": None, "ollama_warmup": False, "ollama_warmup_timeout": 1, "kubeconfig": "/tmp/k"})
+    app._execute_job(job_id, "agentic-agent", {"question": "q", "model": "m", "ollama_url": None, "ollama_warmup": False, "ollama_warmup_timeout": 1, "kubeconfig": "/tmp/k"})
+    assert store.get_job(job_id).status == "failed"
+
+    assert app._dispatch("ollama-instance", {"vastai": False, "template_hash": "t", "min_dph": 1, "max_dph": 2, "reliability": 0.9, "ollama_url": "http://x"}) == {"mode": "existing"}
+    assert app._dispatch("benchmark", {"vastai": False, "template_hash": "t", "min_dph": 1, "max_dph": 2, "reliability": 0.9, "ollama_url": None, "question": "qq", "model": "m", "ollama_warmup": False, "ollama_warmup_timeout": 1, "kubeconfig": "/tmp/k", "vastai_stop_instance": False}) == {"answer": "qq"}
+
+    monkeypatch.setattr(api_server, "ThreadingHTTPServer", lambda *args, **kwargs: type("S", (), {"serve_forever": lambda self: None, "server_close": lambda self: None})())
+    api_server.RuneApiApplication(store=store, security=api_server.ApiSecurityConfig(auth_disabled=True, tenant_tokens={})).serve("127.0.0.1", 0)
+
+
+def test_api_server_error_paths(monkeypatch, tmp_path):
+    class ExplodingStore(api_server.JobStore):
+        def create_job(self, **kwargs):
+            raise RuntimeError("db-down")
+
+    store = ExplodingStore(tmp_path / "jobs.db")
+    app = api_server.RuneApiApplication(
+        store=store,
+        security=api_server.ApiSecurityConfig(auth_disabled=False, tenant_tokens={"tenant": "token"}),
+        backend_functions={"agentic-agent": lambda request: {"answer": "ok"}},
+    )
+    server = api_server.ThreadingHTTPServer(("127.0.0.1", 0), app.create_handler())
+    import threading
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host, port = server.server_address
+    base = f"http://{host}:{port}"
+    try:
+        req = Request(
+            f"{base}/v1/jobs/agentic-agent",
+            method="POST",
+            data=b"{",
+            headers={"X-API-Key": "token", "X-Tenant-ID": "tenant", "Content-Type": "application/json"},
+        )
+        with pytest.raises(Exception):
+            urlopen(req)
+
+        req = Request(
+            f"{base}/v1/jobs/agentic-agent",
+            method="POST",
+            data=b"{}",
+            headers={"X-API-Key": "token", "X-Tenant-ID": "tenant", "Content-Type": "application/json"},
+        )
+        with pytest.raises(Exception):
+            urlopen(req)
+
+        req = Request(f"{base}/v1/jobs/missing", headers={"X-API-Key": "token", "X-Tenant-ID": "tenant"})
+        with pytest.raises(Exception):
+            urlopen(req)
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+        server.server_close()
+
+    real_store = api_server.JobStore(tmp_path / "ok.db")
+    app = api_server.RuneApiApplication(
+        store=real_store,
+        security=api_server.ApiSecurityConfig(auth_disabled=True, tenant_tokens={}),
+        backend_functions={"agentic-agent": lambda request: {"answer": request.question}},
+    )
+    job_id, _ = real_store.create_job(
+        tenant_id="default",
+        kind="agentic-agent",
+        request_payload={"question": "q", "model": "m", "ollama_url": None, "ollama_warmup": False, "ollama_warmup_timeout": 1, "kubeconfig": "/tmp/k"},
+    )
+    app._execute_job(job_id, "agentic-agent", {"question": "q", "model": "m", "ollama_url": None, "ollama_warmup": False, "ollama_warmup_timeout": 1, "kubeconfig": "/tmp/k"})
+    assert real_store.get_job(job_id).status == "succeeded"
+
+
+def test_offer_template_backend_instance_and_workflow_remaining(monkeypatch, tmp_path):
+    sdk = MagicMock()
+    sdk.search_offers.side_effect = Exception("down")
+    with pytest.raises(RuntimeError, match="offer search failed"):
+        OfferFinder(sdk).find_best(1, 2, 0.9)
+
+    sdk = MagicMock()
+    sdk.search_offers.return_value = [{"id": None, "gpu_total_ram": 0}]
+    with pytest.raises(RuntimeError, match="missing id or gpu_total_ram"):
+        OfferFinder(sdk).find_best(1, 2, 0.9)
+
+    sdk = MagicMock()
+    sdk.show_templates.side_effect = Exception("down")
+    with pytest.raises(RuntimeError, match="Failed to fetch Vast.ai templates"):
+        TemplateLoader(sdk).load("x")
+
+    sdk = MagicMock()
+    sdk.show_templates.return_value = {"not": "a-list"}
+    with pytest.raises(RuntimeError, match="Template 'x' not found"):
+        TemplateLoader(sdk).load("x")
+
+    assert TemplateLoader._find([{"hash_id": "x"}], "x") == {"hash_id": "x"}
+
+    monkeypatch.setattr(api_backend, "use_existing_ollama_server", lambda url, model_name: type("S", (), {"url": "http://e"})())
+    monkeypatch.setattr(api_backend, "HolmesRunner", lambda _path: type("R", (), {"ask": lambda self, **_: "a"})())
+    monkeypatch.setattr(api_backend, "provision_vastai_ollama", lambda *_args, **_kwargs: type("R", (), {"contract_id": 8, "ollama_url": "http://x", "model_name": "m"})())
+    stopped = []
+    monkeypatch.setattr(api_backend, "stop_vastai_instance", lambda *_args, **_kwargs: stopped.append(True))
+    kubeconfig = tmp_path / "config"
+    kubeconfig.write_text("apiVersion: v1\n")
+    result = api_backend.run_benchmark(api_backend.RunBenchmarkRequest(vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url=None, question="q", model="m", ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=str(kubeconfig), vastai_stop_instance=True))
+    assert result["contract_id"] == 8
+    assert stopped == [True]
+
+    sdk = MagicMock()
+    sdk.show_instances.return_value = [{"id": 1, "actual_status": "stopped"}]
+    assert InstanceManager(sdk).find_reusable_running_instance(min_dph=1, max_dph=2, reliability=0.9) is None
+
+    sdk.show_instances.return_value = [{"id": 1, "actual_status": "running", "dph_total": 9, "reliability": 0.1}]
+    assert InstanceManager(sdk).find_reusable_running_instance(min_dph=1, max_dph=2, reliability=0.9) is None
+
+    sdk.destroy_instance.side_effect = Exception("boom")
+    with pytest.raises(RuntimeError, match="Failed to destroy Vast.ai instance"):
+        InstanceManager(sdk)._destroy_instance(1)
+
+    manager = InstanceManager(MagicMock())
+    values = iter([0.0, 10.0])
+    monkeypatch.setattr("rune_bench.vastai.instance.time.monotonic", lambda: next(values))
+    monkeypatch.setattr(manager, "_fetch_instance", lambda _cid: {"id": _cid})
+    monkeypatch.setattr("rune_bench.vastai.instance.time.sleep", lambda *_: None)
+    assert manager._wait_until_instance_absent(1, timeout_seconds=1) is False
+
+    sdk = MagicMock()
+    sdk.show_instances.return_value = {"bad": True}
+    assert InstanceManager(sdk).list_instances() == []
+
+    sdk = MagicMock()
+    sdk.show_instances.return_value = [
+        {"id": 1, "actual_status": "running", "gpu_total_ram": 100, "dph_total": 1.9, "reliability": 0.95},
+        {"id": 2, "actual_status": "running", "gpu_total_ram": 100, "dph_total": 1.2, "reliability": 0.95},
+    ]
+    assert InstanceManager(sdk).find_reusable_running_instance(min_dph=1, max_dph=2, reliability=0.9)["id"] == 2
+
+    called = []
+    manager = InstanceManager(MagicMock())
+    monkeypatch.setattr(manager, "_destroy_instance", lambda contract_id: called.append(contract_id))
+    manager.stop_instance(9)
+    assert called == [9]
+
+    details = InstanceManager.build_connection_details(1, {"actual_status": "running", "ports": {"svc2": [{"HostIp": None, "HostPort": None}]}})
+    assert details.service_urls == []
+
+    sdk = MagicMock()
+    sdk.show_volumes.side_effect = Exception("nope")
+    assert InstanceManager(sdk)._list_volumes_optional() is None
+
+    monkeypatch.setattr(workflows, "OllamaClient", lambda _url: (_ for _ in ()).throw(RuntimeError("bad")))
+    with pytest.raises(RuntimeError, match="bad"):
+        workflows.normalize_ollama_url("x")
+
+    class FakeManager:
+        def __init__(self, _sdk):
+            pass
+
+        def find_reusable_running_instance(self, **kwargs):
+            return {"id": 1, "gpu_total_ram": 10}
+
+        @staticmethod
+        def build_connection_details(contract_id, _info):
+            return workflows.ConnectionDetails(contract_id=contract_id, status="running", ssh_host=None, ssh_port=None, machine_id=None, service_urls=[])
+
+    monkeypatch.setattr(workflows, "InstanceManager", FakeManager)
+    monkeypatch.setattr(workflows.ModelSelector, "select", lambda self, _vram: (_ for _ in ()).throw(RuntimeError("small")))
+    monkeypatch.setattr(workflows.OfferFinder, "find_best", lambda self, **_: type("Offer", (), {"offer_id": 5, "total_vram_mb": 24000})())
+    monkeypatch.setattr(workflows.TemplateLoader, "load", lambda self, _hash: type("Tpl", (), {"env": "ENV=1", "image": "img"})())
+
+    class CreatedManager(FakeManager):
+        def __init__(self, _sdk):
+            pass
+
+        def find_reusable_running_instance(self, **kwargs):
+            return {"id": 1, "gpu_total_ram": 10}
+
+        def create(self, *args, **kwargs):
+            return 7
+
+        def wait_until_running(self, *args, **kwargs):
+            return {"id": 7}
+
+        def pull_model(self, *args, **kwargs):
+            return None
+
+    monkeypatch.setattr(workflows, "InstanceManager", CreatedManager)
+    monkeypatch.setattr(workflows.ModelSelector, "select", lambda self, _vram: type("M", (), {"name": "m", "vram_mb": 1, "required_disk_gb": 2})())
+    monkeypatch.setattr(workflows, "list_existing_ollama_models", lambda _url: [])
+    monkeypatch.setattr(workflows, "list_running_ollama_models", lambda _url: [])
+    monkeypatch.setattr(workflows, "normalize_ollama_model_for_api", lambda model: model)
+    monkeypatch.setattr(workflows, "warmup_existing_ollama_model", lambda *_args, **_kwargs: "m")
+    res = workflows.provision_vastai_ollama(MagicMock(), template_hash="t", min_dph=1, max_dph=2, reliability=0.9, confirm_create=lambda: True)
+    assert res.pull_warning is not None
+
+
+def test_api_backend_and_workflow_last_edges(monkeypatch, tmp_path):
+    kubeconfig = tmp_path / "config"
+    kubeconfig.write_text("apiVersion: v1\n")
+    monkeypatch.setattr(api_backend, "HolmesRunner", lambda _path: type("R", (), {"ask": lambda self, **_: "a"})())
+    result = api_backend.run_agentic_agent(api_backend.RunAgenticAgentRequest(question="q", model="m", ollama_url=None, ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=str(kubeconfig)))
+    assert result == {"answer": "a"}
+
+    fake_client = MagicMock()
+    fake_client.get_available_models.return_value = ["x"]
+    manager = api_backend.use_existing_ollama_server
+    assert callable(manager)
