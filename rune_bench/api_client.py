@@ -1,0 +1,139 @@
+"""HTTP client for RUNE API backend mode."""
+
+import json
+from dataclasses import dataclass
+import time
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode, urlparse
+from urllib.request import Request, urlopen
+
+
+@dataclass
+class RuneApiClient:
+    base_url: str
+
+    def __post_init__(self) -> None:
+        self.base_url = self._normalize_url(self.base_url)
+
+    @staticmethod
+    def _normalize_url(url: str | None) -> str:
+        if not url:
+            raise RuntimeError("Missing API base URL. Set --api-base-url or RUNE_API_BASE_URL.")
+
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"}:
+            url = f"http://{url}"
+            parsed = urlparse(url)
+
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise RuntimeError("Invalid API base URL. Expected format like http://host:8080")
+
+        return url.rstrip("/")
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        query: dict[str, str] | None = None,
+        body: dict | None = None,
+    ) -> dict:
+        url = self.base_url + path
+        if query:
+            url += "?" + urlencode(query)
+
+        data = None
+        headers: dict[str, str] = {}
+        if body is not None:
+            data = json.dumps(body).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+
+        request = Request(url, method=method, headers=headers, data=data)
+
+        try:
+            with urlopen(request, timeout=20) as response:
+                raw = response.read().decode("utf-8")
+        except HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace").strip()
+            if detail:
+                raise RuntimeError(f"API request failed {method} {url}: {detail}") from exc
+            raise RuntimeError(f"API request failed {method} {url}: HTTP {exc.code}") from exc
+        except (URLError, TimeoutError) as exc:
+            raise RuntimeError(f"API request failed {method} {url}: {exc}") from exc
+
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"API returned invalid JSON for {method} {url}") from exc
+
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"API returned unexpected payload for {method} {url}")
+
+        return payload
+
+    def get_vastai_models(self) -> list[dict]:
+        payload = self._request("GET", "/v1/catalog/vastai-models")
+        models = payload.get("models")
+        if not isinstance(models, list):
+            raise RuntimeError("API payload missing 'models' list for Vast.ai model catalog")
+        return [m for m in models if isinstance(m, dict)]
+
+    def get_ollama_models(self, ollama_url: str) -> dict:
+        payload = self._request("GET", "/v1/ollama/models", query={"ollama_url": ollama_url})
+        if not isinstance(payload.get("models"), list):
+            raise RuntimeError("API payload missing 'models' list for Ollama models endpoint")
+        if not isinstance(payload.get("running_models"), list):
+            raise RuntimeError("API payload missing 'running_models' list for Ollama models endpoint")
+        return payload
+
+    def submit_agentic_agent_job(self, request_payload: dict) -> str:
+        payload = self._request("POST", "/v1/jobs/agentic-agent", body=request_payload)
+        job_id = payload.get("job_id")
+        if not isinstance(job_id, str) or not job_id.strip():
+            raise RuntimeError("API response missing 'job_id' for agentic-agent job")
+        return job_id
+
+    def submit_benchmark_job(self, request_payload: dict) -> str:
+        payload = self._request("POST", "/v1/jobs/benchmark", body=request_payload)
+        job_id = payload.get("job_id")
+        if not isinstance(job_id, str) or not job_id.strip():
+            raise RuntimeError("API response missing 'job_id' for benchmark job")
+        return job_id
+
+    def get_job_status(self, job_id: str) -> dict:
+        payload = self._request("GET", f"/v1/jobs/{job_id}")
+        status = payload.get("status")
+        if not isinstance(status, str) or not status.strip():
+            raise RuntimeError(f"API response missing 'status' for job {job_id}")
+        return payload
+
+    def wait_for_job(
+        self,
+        job_id: str,
+        *,
+        timeout_seconds: int = 3600,
+        poll_interval_seconds: float = 2.0,
+        on_update: callable | None = None,
+    ) -> dict:
+        deadline = time.monotonic() + timeout_seconds
+        last_status = ""
+
+        while time.monotonic() < deadline:
+            payload = self.get_job_status(job_id)
+            status = str(payload.get("status", "unknown")).strip().lower()
+            message = payload.get("message")
+            if isinstance(message, str) and on_update is not None and status != last_status:
+                on_update(status, message)
+            elif on_update is not None and status != last_status:
+                on_update(status, None)
+
+            last_status = status
+            if status in {"succeeded", "success", "completed"}:
+                return payload
+            if status in {"failed", "error", "cancelled", "canceled"}:
+                detail = payload.get("error") or payload.get("message") or f"status={status}"
+                raise RuntimeError(f"Job {job_id} failed: {detail}")
+
+            time.sleep(poll_interval_seconds)
+
+        raise RuntimeError(f"Timed out waiting for job {job_id} after {timeout_seconds}s")
