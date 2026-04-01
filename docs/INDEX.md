@@ -23,7 +23,7 @@
 
 The `rune_bench.ollama` package provides a clean, modular abstraction for interacting with Ollama servers. It's designed as a **reusable library** that can be used in:
 
-- ✓ CLI commands (rune.py)
+- ✓ CLI commands (python -m rune)
 - ✓ Scripting and automation
 - ✓ Testing frameworks
 - ✓ Other Python projects
@@ -104,10 +104,10 @@ except RuntimeError as e:
 ### CLI Usage
 ```bash
 # List available models
-./rune.py ollama-list-models --ollama-url http://localhost:11434
+python -m rune ollama-list-models --ollama-url http://localhost:11434
 
 # Run benchmark with warm-up
-./rune.py run-benchmark \
+python -m rune run-benchmark \
     --ollama-url http://localhost:11434 \
     --model mistral:latest \
     --ollama-warmup \
@@ -238,7 +238,7 @@ docs/
 
 1. **Read the Quick Reference** to see usage examples
 2. **Check the Architecture** documentation for design patterns
-3. **Look at existing code** (rune.py) to see how it uses the classes
+3. **Look at existing code** (`rune/__init__.py`) to see how it uses the classes
 4. **Start using in new code** - use OllamaModelManager directly
 5. **Add new features** - extend classes instead of adding functions
 

@@ -16,8 +16,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application files
 COPY . .
 
-# Ensure the RUNE script is executable
-RUN chmod +x rune.py
-
 # Define an entrypoint so the container runs as an executable CLI tool
-ENTRYPOINT ["python", "rune.py"]
+ENTRYPOINT ["python", "-m", "rune"]
