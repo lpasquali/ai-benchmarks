@@ -132,7 +132,17 @@ jobs:
           push: false
           tags: ai-benchmarks:rune-ci-local
       - run: |
-          docker run --rm ai-benchmarks:rune-ci-local vastai-list-models >/dev/null
+          set -euo pipefail
+          docker run -d --rm --name rune-smoke -p 18080:8080 ai-benchmarks:rune-ci-local
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:18080/healthz >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:18080/healthz >/dev/null
+          docker logs rune-smoke | tail -100 || true
+          docker stop rune-smoke
 
   smoke-operator-container:
     name: RuneGate/CLI-and-API-Smoke/Go-Operator-Container
