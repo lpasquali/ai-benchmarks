@@ -55,11 +55,22 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const fs = require('fs');
-            const coverage = require('child_process').execSync('coverage report --format=json', { encoding: 'utf-8' });
             try {
-              const data = JSON.parse(coverage);
-              const total = data.totals.percent_covered;
+              const output = require('child_process').execSync('coverage report', { encoding: 'utf-8' });
+              const lines = output.split('\n');
+              const totalLine = lines.find((line) => line.trim().startsWith('TOTAL'));
+              if (!totalLine) {
+                console.log('Could not find TOTAL line in coverage report');
+                return;
+              }
+
+              const percentMatch = totalLine.match(/(\d+)%\s*$/);
+              if (!percentMatch) {
+                console.log('Could not parse coverage percentage from TOTAL line:', totalLine);
+                return;
+              }
+
+              const total = Number(percentMatch[1]);
               const comment = `## Coverage Report\n\n**Total Coverage:** ${total.toFixed(2)}%\n\n${total >= 97 ? '✅ Meets 97% threshold' : '❌ Below 97% threshold'}`;
               github.rest.issues.createComment({
                 issue_number: context.issue.number,
@@ -68,5 +79,5 @@ jobs:
                 body: comment
               });
             } catch (e) {
-              console.log('Could not parse coverage JSON');
+              console.log('Could not generate coverage PR comment:', e.message);
             }
