@@ -1,12 +1,11 @@
 """HTTP client for RUNE API backend mode."""
 
-import json
 import os
 from dataclasses import dataclass
 import time
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode, urlparse
-from urllib.request import Request, urlopen
+from urllib.parse import urlencode
+
+from rune_bench.common import make_http_request, normalize_url
 
 
 @dataclass
@@ -16,24 +15,9 @@ class RuneApiClient:
     tenant_id: str | None = None
 
     def __post_init__(self) -> None:
-        self.base_url = self._normalize_url(self.base_url)
+        self.base_url = normalize_url(self.base_url, service_name="RUNE API")
         self.api_token = (self.api_token or os.environ.get("RUNE_API_TOKEN") or "").strip() or None
         self.tenant_id = (self.tenant_id or os.environ.get("RUNE_API_TENANT") or "default").strip() or "default"
-
-    @staticmethod
-    def _normalize_url(url: str | None) -> str:
-        if not url:
-            raise RuntimeError("Missing API base URL. Set --api-base-url or RUNE_API_BASE_URL.")
-
-        parsed = urlparse(url)
-        if parsed.scheme not in {"http", "https"}:
-            url = f"http://{url}"
-            parsed = urlparse(url)
-
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise RuntimeError("Invalid API base URL. Expected format like http://host:8080")
-
-        return url.rstrip("/")
 
     def _request(
         self,
@@ -48,39 +32,22 @@ class RuneApiClient:
         if query:
             url += "?" + urlencode(query)
 
-        data = None
         headers: dict[str, str] = {"X-Tenant-ID": self.tenant_id or "default"}
         if self.api_token:
             headers["Authorization"] = f"Bearer {self.api_token}"
             headers["X-API-Key"] = self.api_token
-        if body is not None:
-            data = json.dumps(body).encode("utf-8")
-            headers["Content-Type"] = "application/json"
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
 
-        request = Request(url, method=method, headers=headers, data=data)
-
-        try:
-            with urlopen(request, timeout=20) as response:
-                raw = response.read().decode("utf-8")
-        except HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace").strip()
-            if detail:
-                raise RuntimeError(f"API request failed {method} {url}: {detail}") from exc
-            raise RuntimeError(f"API request failed {method} {url}: HTTP {exc.code}") from exc
-        except (URLError, TimeoutError) as exc:
-            raise RuntimeError(f"API request failed {method} {url}: {exc}") from exc
-
-        try:
-            payload = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise RuntimeError(f"API returned invalid JSON for {method} {url}") from exc
-
-        if not isinstance(payload, dict):
-            raise RuntimeError(f"API returned unexpected payload for {method} {url}")
-
-        return payload
+        return make_http_request(
+            url,
+            method=method,
+            payload=body,
+            action=f"{method} {path}",
+            timeout_seconds=20,
+            headers=headers,
+            debug_prefix="RUNE API",
+        )
 
     def get_vastai_models(self) -> list[dict]:
         payload = self._request("GET", "/v1/catalog/vastai-models")
