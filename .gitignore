@@ -5,3 +5,5 @@ __pycache__/
 .coverage
 htmlcov
 .rune-api
+sbom/*.json
+sbom/*.sarif

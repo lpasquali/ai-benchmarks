@@ -10,6 +10,7 @@ permissions:
   contents: read
   issues: write
   pull-requests: write
+  security-events: write
 
 jobs:
   coverage:
@@ -238,3 +239,40 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm ai-benchmarks:rune-ci-local --help >/dev/null
+
+      - name: Generate CycloneDX SBOM for container image
+        uses: anchore/sbom-action@v0
+        with:
+          image: ai-benchmarks:rune-ci-local
+          format: cyclonedx-json
+          output-file: sbom/rune-image.cdx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-cyclonedx
+          path: sbom/rune-image.cdx.json
+          retention-days: 14
+
+      - name: Scan generated SBOM with Anchore Grype
+        uses: anchore/scan-action@v6
+        with:
+          sbom: sbom/rune-image.cdx.json
+          output-format: sarif
+          output-file: sbom/grype-results.sarif
+          severity-cutoff: high
+          fail-build: false
+
+      - name: Upload Grype SARIF to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: sbom/grype-results.sarif
+
+      - name: Upload Grype scan artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-grype-sarif
+          path: sbom/grype-results.sarif
+          retention-days: 14
