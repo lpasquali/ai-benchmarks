@@ -78,6 +78,7 @@ def main(
     debug: bool = typer.Option(
         False,
         "--debug",
+        envvar="RUNE_DEBUG",
         help="Show outbound client requests and API calls",
         is_eager=True,
     ),
@@ -291,34 +292,75 @@ def _run_vastai_provisioning(
             _print_error_and_exit(str(exc))
 
 
+@app.command("serve")
+def serve_api(
+    api_host: str = typer.Option(
+        "0.0.0.0",
+        "--host",
+        envvar="RUNE_API_HOST",
+        help="Host to bind API server to",
+    ),
+    api_port: int = typer.Option(
+        8080,
+        "--port",
+        envvar="RUNE_API_PORT",
+        help="Port to bind API server to",
+    ),
+    debug: bool = typer.Option(
+        False,
+        "--debug",
+        envvar="RUNE_DEBUG",
+        help="Show outbound client requests and API calls",
+    ),
+) -> None:
+    """Start the standalone RUNE API server."""
+    from rune.api import main as start_api_server
+    
+    _enable_debug_if_requested(debug)
+    console.print(Panel.fit(f"[bold blue]RUNE API Server[/bold blue]\nStarting on {api_host}:{api_port}"))
+    
+    try:
+        start_api_server()
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Server stopped.[/yellow]")
+        raise typer.Exit(0)
+    except Exception as exc:
+        _print_error_and_exit(f"Server error: {exc}")
+
+
 @app.command("run-ollama-instance")
 def run_ollama_instance(
     debug: bool = typer.Option(
         False,
         "--debug",
+        envvar="RUNE_DEBUG",
         help="Show outbound client requests and API calls",
     ),
     vastai: bool = typer.Option(
         False,
         "--vastai",
+        envvar="RUNE_VASTAI",
         help="Enable Vast.ai provisioning flow",
     ),
     template_hash: str = typer.Option(
         DEFAULT_VASTAI_TEMPLATE,
         "--vastai-template",
+        envvar="RUNE_VASTAI_TEMPLATE",
         help="Vast.ai template hash to use",
     ),
-    max_dph: float = typer.Option(3.0, "--vastai-max-dph", help="Maximum dollars per hour"),
-    min_dph: float = typer.Option(2.3, "--vastai-min-dph", help="Minimum dollars per hour"),
-    reliability: float = typer.Option(0.99, "--vastai-reliability", help="Minimum reliability score"),
+    max_dph: float = typer.Option(3.0, "--vastai-max-dph", envvar="RUNE_VASTAI_MAX_DPH", help="Maximum dollars per hour"),
+    min_dph: float = typer.Option(2.3, "--vastai-min-dph", envvar="RUNE_VASTAI_MIN_DPH", help="Minimum dollars per hour"),
+    reliability: float = typer.Option(0.99, "--vastai-reliability", envvar="RUNE_VASTAI_RELIABILITY", help="Minimum reliability score"),
     ollama_url: str | None = typer.Option(
         None,
         "--ollama-url",
+        envvar="RUNE_OLLAMA_URL",
         help="Use an already running Ollama server URL when --vastai is not enabled",
     ),
     idempotency_key: str | None = typer.Option(
         None,
         "--idempotency-key",
+        envvar="RUNE_IDEMPOTENCY_KEY",
         help="Optional idempotency key when using the HTTP backend",
     ),
 ) -> None:
@@ -418,11 +460,13 @@ def ollama_list_models(
     debug: bool = typer.Option(
         False,
         "--debug",
+        envvar="RUNE_DEBUG",
         help="Show outbound client requests and API calls",
     ),
     ollama_url: str = typer.Option(
         ...,
         "--ollama-url",
+        envvar="RUNE_OLLAMA_URL",
         help="Ollama server URL to query for available models",
     ),
 ) -> None:
@@ -457,44 +501,52 @@ def run_agentic_agent(
     debug: bool = typer.Option(
         False,
         "--debug",
+        envvar="RUNE_DEBUG",
         help="Show outbound client requests and API calls",
     ),
     question: str = typer.Option(
         "What is unhealthy in this Kubernetes cluster?",
         "--question",
         "-q",
+        envvar="RUNE_QUESTION",
         help="Question to ask the agentic system",
     ),
     model: str = typer.Option(
         "llama3.1:8b",
         "--model",
         "-m",
+        envvar="RUNE_MODEL",
         help="Model to use for the agent",
     ),
     ollama_url: str | None = typer.Option(
         None,
         "--ollama-url",
+        envvar="RUNE_OLLAMA_URL",
         help="Ollama server URL (used for Ollama-backed models)",
     ),
     ollama_warmup: bool = typer.Option(
         True,
         "--ollama-warmup/--no-ollama-warmup",
+        envvar="RUNE_OLLAMA_WARMUP",
         help="Load the selected model into the Ollama server before starting Holmes",
     ),
     ollama_warmup_timeout: int = typer.Option(
         90,
         "--ollama-warmup-timeout",
+        envvar="RUNE_OLLAMA_WARMUP_TIMEOUT",
         min=1,
         help="Seconds to wait for the Ollama model to become ready",
     ),
     kubeconfig: Path = typer.Option(
         Path.home() / ".kube" / "config",
         "--kubeconfig",
+        envvar="RUNE_KUBECONFIG",
         help="Path to kubeconfig file",
     ),
     idempotency_key: str | None = typer.Option(
         None,
         "--idempotency-key",
+        envvar="RUNE_IDEMPOTENCY_KEY",
         help="Optional idempotency key when using the HTTP backend",
     ),
 ) -> None:
@@ -558,62 +610,73 @@ def run_benchmark(
     debug: bool = typer.Option(
         False,
         "--debug",
+        envvar="RUNE_DEBUG",
         help="Show outbound client requests and API calls",
     ),
     vastai: bool = typer.Option(
         False,
         "--vastai",
+        envvar="RUNE_VASTAI",
         help="Enable Vast.ai provisioning flow (Phase 1)",
     ),
     template_hash: str = typer.Option(
         DEFAULT_VASTAI_TEMPLATE,
         "--vastai-template",
+        envvar="RUNE_VASTAI_TEMPLATE",
         help="Vast.ai template hash to use",
     ),
-    max_dph: float = typer.Option(3.0, "--vastai-max-dph", help="Maximum dollars per hour"),
-    min_dph: float = typer.Option(2.3, "--vastai-min-dph", help="Minimum dollars per hour"),
-    reliability: float = typer.Option(0.99, "--vastai-reliability", help="Minimum reliability score"),
+    max_dph: float = typer.Option(3.0, "--vastai-max-dph", envvar="RUNE_VASTAI_MAX_DPH", help="Maximum dollars per hour"),
+    min_dph: float = typer.Option(2.3, "--vastai-min-dph", envvar="RUNE_VASTAI_MIN_DPH", help="Minimum dollars per hour"),
+    reliability: float = typer.Option(0.99, "--vastai-reliability", envvar="RUNE_VASTAI_RELIABILITY", help="Minimum reliability score"),
     ollama_url: str | None = typer.Option(
         None,
         "--ollama-url",
+        envvar="RUNE_OLLAMA_URL",
         help="Existing Ollama server URL when --vastai is not enabled",
     ),
     question: str = typer.Option(
         "What is unhealthy in this Kubernetes cluster?",
         "--question",
         "-q",
+        envvar="RUNE_QUESTION",
         help="Question to ask the agentic system",
     ),
     model: str = typer.Option(
         "llama3.1:8b",
         "--model",
         "-m",
+        envvar="RUNE_MODEL",
         help="Model to use for the agent when --vastai is not enabled",
     ),
     ollama_warmup: bool = typer.Option(
         True,
         "--ollama-warmup/--no-ollama-warmup",
+        envvar="RUNE_OLLAMA_WARMUP",
         help="Load the selected model into the Ollama server before Holmes starts when using --ollama-url",
     ),
     ollama_warmup_timeout: int = typer.Option(
         90,
         "--ollama-warmup-timeout",
+        envvar="RUNE_OLLAMA_WARMUP_TIMEOUT",
         min=1,
         help="Seconds to wait for the Ollama model to become ready",
     ),
     kubeconfig: Path = typer.Option(
         Path.home() / ".kube" / "config",
         "--kubeconfig",
+        envvar="RUNE_KUBECONFIG",
         help="Path to kubeconfig file",
     ),
     vastai_stop_instance: bool = typer.Option(
         True,
         "--vastai-stop-instance/--no-vastai-stop-instance",
+        envvar="RUNE_VASTAI_STOP_INSTANCE",
         help="Destroy Vast.ai instance + related storage after agent execution and verify cleanup (enabled by default)",
     ),
     idempotency_key: str | None = typer.Option(
         None,
         "--idempotency-key",
+        envvar="RUNE_IDEMPOTENCY_KEY",
         help="Optional idempotency key when using the HTTP backend",
     ),
 ) -> None:
