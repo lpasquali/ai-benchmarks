@@ -39,6 +39,7 @@ ai-benchmarks/
 │   ├── architecture.md
 │   ├── OLLAMA_REFACTORING.md    # Details on class-based redesign
 │   └── ARCHITECTURE_COMPARISON.md
+├── rune-operator/           # Go Kubernetes operator for RuneBenchmark CRDs
 ├── experiments/
 │   └── provision.py
 ├── requirements.txt
@@ -47,6 +48,7 @@ ai-benchmarks/
 
 See [docs/architecture.md](docs/architecture.md) for workflow details, including the Ollama module design.
 See [docs/API_COMPATIBILITY_PLAN.md](docs/API_COMPATIBILITY_PLAN.md) for the CLI-to-API compatibility roadmap.
+See [rune-operator/README.md](rune-operator/README.md) for Kubernetes operator-based orchestration and observability.
 
 ## RUNE Commands
 
