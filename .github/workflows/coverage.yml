@@ -136,30 +136,30 @@ jobs:
           pip install pytest pytest-xdist
 
       - name: Run unit tests
-        run: .venv/bin/python -m pytest tests/ -v --tb=short -x
+        run: .venv/bin/python -m pytest -p no:cov tests/ -v --tb=short -x
 
       - name: Run CLI integration tests
-        run: .venv/bin/python -m pytest tests/test_rune_cli_integration.py -v --tb=short
+        run: .venv/bin/python -m pytest -p no:cov tests/test_rune_cli_integration.py -v --tb=short
 
       - name: Run API tests
-        run: .venv/bin/python -m pytest tests/test_api_*.py -v --tb=short
+        run: .venv/bin/python -m pytest -p no:cov tests/test_api_*.py -v --tb=short
 
       - name: Run model manager tests
-        run: .venv/bin/python -m pytest tests/test_ollama_model_manager.py -v --tb=short
+        run: .venv/bin/python -m pytest -p no:cov tests/test_ollama_model_manager.py -v --tb=short
 
       - name: Run Vast.ai integration tests (mocked)
-        run: .venv/bin/python -m pytest tests/test_vastai_instance_manager.py tests/test_vastai_mocked.py -v --tb=short
+        run: .venv/bin/python -m pytest -p no:cov tests/test_vastai_instance_manager.py tests/test_vastai_mocked.py -v --tb=short
 
       - name: Run error path tests
-        run: .venv/bin/python -m pytest tests/test_comprehensive_error_paths.py -v --tb=short
+        run: .venv/bin/python -m pytest -p no:cov tests/test_comprehensive_error_paths.py -v --tb=short
 
       - name: Run edge case tests
-        run: .venv/bin/python -m pytest tests/test_edge_cases_micro_branches.py -v --tb=short
+        run: .venv/bin/python -m pytest -p no:cov tests/test_edge_cases_micro_branches.py -v --tb=short
 
       - name: Generate test report
         if: always()
         run: |
-          .venv/bin/python -m pytest tests/ --tb=short -v --junit-xml=test-results.xml 2>&1 || true
+          .venv/bin/python -m pytest -p no:cov tests/ --tb=short -v --junit-xml=test-results.xml 2>&1 || true
 
       - name: Upload test results
         if: always()
