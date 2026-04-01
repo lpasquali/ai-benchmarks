@@ -52,8 +52,8 @@ func main() {
 	metrics.Register()
 
 	if err = (&controllers.RuneBenchmarkReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("rune-benchmark-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		klog.ErrorS(err, "unable to create controller", "controller", "RuneBenchmark")
