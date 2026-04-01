@@ -442,12 +442,39 @@ jobs:
             sbom/security-summary.sarif
           retention-days: 14
 
+  go-operator-check:
+    name: Go Operator Check
+    needs: test
+    if: ${{ needs.test.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}/rune-operator
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.23'
+          cache: true
+          cache-dependency-path: rune-operator/go.sum
+
+      - name: Verify build
+        run: go build ./...
+
+      - name: Run tests
+        run: go test ./... -v
+
   merge-gate:
     name: Merge Gate
     needs:
       - coverage
       - test
       - docker-build
+      - go-operator-check
     if: always()
     runs-on: ubuntu-latest
     steps:
