@@ -94,15 +94,15 @@ def test_api_client_remaining_paths(monkeypatch):
         def read(self):
             return b""
 
-    monkeypatch.setattr(api_client_module, "urlopen", lambda *args, **kwargs: (_ for _ in ()).throw(NoDetailHTTPError()))
+    monkeypatch.setattr("rune_bench.common.http_client.urlopen", lambda *args, **kwargs: (_ for _ in ()).throw(NoDetailHTTPError()))
     with pytest.raises(RuntimeError, match="HTTP 500"):
         client._request("GET", "/x")
 
-    monkeypatch.setattr(api_client_module, "urlopen", lambda *args, **kwargs: (_ for _ in ()).throw(URLError("boom")))
+    monkeypatch.setattr("rune_bench.common.http_client.urlopen", lambda *args, **kwargs: (_ for _ in ()).throw(URLError("boom")))
     with pytest.raises(RuntimeError, match="boom"):
         client._request("GET", "/x")
 
-    monkeypatch.setattr(api_client_module, "urlopen", lambda *args, **kwargs: (_ for _ in ()).throw(TimeoutError("late")))
+    monkeypatch.setattr("rune_bench.common.http_client.urlopen", lambda *args, **kwargs: (_ for _ in ()).throw(TimeoutError("late")))
     with pytest.raises(RuntimeError, match="late"):
         client._request("GET", "/x")
 
@@ -119,8 +119,8 @@ def test_api_client_remaining_paths(monkeypatch):
         def read(self):
             return self._raw
 
-    monkeypatch.setattr(api_client_module, "urlopen", lambda *args, **kwargs: Response(b"[]"))
-    with pytest.raises(RuntimeError, match="unexpected payload"):
+    monkeypatch.setattr("rune_bench.common.http_client.urlopen", lambda *args, **kwargs: Response(b"[]"))
+    with pytest.raises(RuntimeError, match="Unexpected JSON payload"):
         client._request("GET", "/x")
 
     monkeypatch.setattr(client, "_request", lambda *args, **kwargs: {})

@@ -2,17 +2,18 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from rune_bench.common import normalize_url
 from rune_bench.ollama.client import OllamaClient
 from rune_bench.ollama.models import OllamaModelManager
 
 
 def test_normalize_url_accepts_host_port_without_scheme():
-    assert OllamaClient._normalize_url("localhost:11434") == "http://localhost:11434"
+    assert normalize_url("localhost:11434", service_name="Ollama") == "http://localhost:11434"
 
 
 def test_normalize_url_rejects_invalid_input():
     with pytest.raises(RuntimeError):
-        OllamaClient._normalize_url(None)
+        normalize_url(None, service_name="Ollama")
 
 
 def test_get_model_capabilities_parses_context_length(monkeypatch):
