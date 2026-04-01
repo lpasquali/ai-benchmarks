@@ -258,21 +258,186 @@ jobs:
         uses: anchore/scan-action@v6
         with:
           sbom: sbom/rune-image.cdx.json
-          output-format: sarif
-          output-file: sbom/grype-results.sarif
-          severity-cutoff: high
+          output-format: json
+          output-file: sbom/grype-results.json
+          severity-cutoff: low
           fail-build: false
+
+      - name: Scan generated SBOM with Trivy
+        uses: aquasecurity/trivy-action@0.31.0
+        with:
+          scan-type: sbom
+          input: sbom/rune-image.cdx.json
+          format: json
+          output: sbom/trivy-results.json
+          exit-code: '0'
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+
+      - name: Summarize scanner results and enforce CVSS threshold
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          THRESHOLD = 8.8
+          sbom_dir = Path("sbom")
+
+          def safe_float(value):
+              try:
+                  return float(value)
+              except (TypeError, ValueError):
+                  return 0.0
+
+          def parse_grype(path: Path):
+              data = json.loads(path.read_text(encoding="utf-8"))
+              rows = []
+              for match in data.get("matches", []):
+                  vuln = match.get("vulnerability", {})
+                  artifact = match.get("artifact", {})
+                  vuln_id = vuln.get("id", "UNKNOWN")
+                  pkg = artifact.get("name", "unknown")
+                  version = artifact.get("version", "unknown")
+                  sev = vuln.get("severity", "UNKNOWN")
+
+                  cvss_values = []
+                  for cvss in vuln.get("cvss", []) or []:
+                      cvss_values.append(safe_float(cvss.get("metrics", {}).get("baseScore")))
+                      cvss_values.append(safe_float(cvss.get("metrics", {}).get("base_score")))
+                  score = max(cvss_values) if cvss_values else 0.0
+
+                  rows.append({
+                      "scanner": "grype",
+                      "id": vuln_id,
+                      "package": f"{pkg}:{version}",
+                      "severity": sev,
+                      "cvss": score,
+                  })
+              return rows
+
+          def parse_trivy(path: Path):
+              data = json.loads(path.read_text(encoding="utf-8"))
+              rows = []
+              for result in data.get("Results", []) or []:
+                  for vuln in result.get("Vulnerabilities", []) or []:
+                      vuln_id = vuln.get("VulnerabilityID", "UNKNOWN")
+                      pkg = vuln.get("PkgName") or result.get("Target") or "unknown"
+                      version = vuln.get("InstalledVersion", "unknown")
+                      sev = vuln.get("Severity", "UNKNOWN")
+                      score = safe_float(vuln.get("CVSS", {}).get("nvd", {}).get("V3Score"))
+                      if score == 0.0:
+                          score = safe_float(vuln.get("CVSS", {}).get("redhat", {}).get("V3Score"))
+                      if score == 0.0:
+                          score = safe_float(vuln.get("CVSS", {}).get("ghsa", {}).get("V3Score"))
+
+                      rows.append({
+                          "scanner": "trivy",
+                          "id": vuln_id,
+                          "package": f"{pkg}:{version}",
+                          "severity": sev,
+                          "cvss": score,
+                      })
+              return rows
+
+          findings = []
+          findings.extend(parse_grype(sbom_dir / "grype-results.json"))
+          findings.extend(parse_trivy(sbom_dir / "trivy-results.json"))
+
+          findings.sort(key=lambda x: x["cvss"], reverse=True)
+          high_risk = [f for f in findings if f["cvss"] > THRESHOLD]
+
+          summary_lines = []
+          summary_lines.append("SBOM vulnerability summary")
+          summary_lines.append(f"Policy: fail if any CVE has CVSS > {THRESHOLD}")
+          summary_lines.append("")
+          summary_lines.append(f"Total findings: {len(findings)}")
+          summary_lines.append(f"Findings over threshold: {len(high_risk)}")
+          summary_lines.append("")
+          summary_lines.append("Top findings (scanner | CVE | CVSS | severity | package)")
+          for row in findings[:25]:
+              summary_lines.append(
+                  f"- {row['scanner']} | {row['id']} | {row['cvss']:.1f} | {row['severity']} | {row['package']}"
+              )
+
+          summary_text = "\n".join(summary_lines) + "\n"
+          (sbom_dir / "security-summary.txt").write_text(summary_text, encoding="utf-8")
+
+          step_summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if step_summary_path:
+              Path(step_summary_path).write_text(
+                  "## SBOM Security Summary\n\n```text\n" + summary_text + "```\n",
+                  encoding="utf-8",
+              )
+
+          if high_risk:
+              print(summary_text)
+              print("\nBlocking merge: found vulnerability over policy threshold.")
+              raise SystemExit(1)
+
+          print(summary_text)
+          PY
+
+      - name: Create SARIF from security summary
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary_path = Path("sbom/security-summary.txt")
+          message = summary_path.read_text(encoding="utf-8") if summary_path.exists() else "SBOM summary missing"
+
+          sarif = {
+              "version": "2.1.0",
+              "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+              "runs": [
+                  {
+                      "tool": {
+                          "driver": {
+                              "name": "SBOM policy gate",
+                              "informationUri": "https://github.com/lpasquali/ai-benchmarks",
+                              "rules": [
+                                  {
+                                      "id": "SBOM-CVSS-THRESHOLD",
+                                      "name": "Block CVSS > 8.8",
+                                      "shortDescription": {"text": "Merge blocked when CVSS > 8.8 is found"},
+                                      "fullDescription": {"text": "Policy gate over Grype + Trivy results"},
+                                      "defaultConfiguration": {"level": "error"}
+                                  }
+                              ]
+                          }
+                      },
+                      "results": [
+                          {
+                              "ruleId": "SBOM-CVSS-THRESHOLD",
+                              "level": "note",
+                              "message": {"text": message}
+                          }
+                      ]
+                  }
+              ]
+          }
+
+          Path("sbom/security-summary.sarif").write_text(json.dumps(sarif, indent=2), encoding="utf-8")
+          PY
 
       - name: Upload Grype SARIF to code scanning
         if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: sbom/grype-results.sarif
+          sarif_file: sbom/security-summary.sarif
 
       - name: Upload Grype scan artifact
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: sbom-grype-sarif
-          path: sbom/grype-results.sarif
+          name: sbom-security-outputs
+          path: |
+            sbom/rune-image.cdx.json
+            sbom/grype-results.json
+            sbom/trivy-results.json
+            sbom/security-summary.txt
+            sbom/security-summary.sarif
           retention-days: 14

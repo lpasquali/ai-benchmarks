@@ -6,12 +6,21 @@ Standard location:
 
 What CI produces:
 - CycloneDX SBOM (JSON): sbom/rune-image.cdx.json
-- Grype SARIF scan report: sbom/grype-results.sarif
+- Grype scan report (JSON): sbom/grype-results.json
+- Trivy scan report (JSON): sbom/trivy-results.json
+- Unified security summary: sbom/security-summary.txt
+- Summary SARIF report: sbom/security-summary.sarif
 
 How it is generated:
 - GitHub Actions workflow: .github/workflows/coverage.yml
 - SBOM generator action: anchore/sbom-action
-- SBOM vulnerability scanner action: anchore/scan-action (Grype)
+- SBOM vulnerability scanner actions:
+	- anchore/scan-action (Grype)
+	- aquasecurity/trivy-action (Trivy)
+
+Policy gate:
+- Merge is blocked if any vulnerability with CVSS score > 8.8 is detected by either scanner.
+- Results are normalized into one summary so scanner outputs are homogeneous in CI artifacts.
 
 Notes:
 - Generated JSON/SARIF files are ignored by git and uploaded as workflow artifacts.
