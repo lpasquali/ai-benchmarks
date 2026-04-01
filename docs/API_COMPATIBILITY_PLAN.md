@@ -4,7 +4,7 @@ Goal: keep the current CLI UX unchanged while enabling a cloud-native API backen
 
 ## Command Compatibility Map
 
-Current CLI commands in [rune.py](../rune.py):
+Current CLI commands in [rune/__init__.py](../rune/__init__.py):
 
 - `run-ollama-instance`
 - `run-agentic-agent`
@@ -33,7 +33,7 @@ Status: completed.
 
 ### Phase 2 — HTTP backend (opt-in)
 
-Status: in progress.
+Status: completed.
 
 1. Add API transport client implementation using the same contracts.
 2. Add CLI option/environment switch to use local or remote backend.
@@ -42,14 +42,17 @@ Status: in progress.
 Implemented so far:
 
 - HTTP mode for `vastai-list-models` and `ollama-list-models`
+- HTTP mode for `run-ollama-instance` via async job submit/poll flow
 - HTTP mode for `run-agentic-agent` via async job submit/poll flow
 - HTTP mode for `run-benchmark` via async job submit/poll flow
+- In-repo HTTP server implementation with persistent SQLite job storage
+- Tenant-scoped auth and idempotent job submission controls
 
 ### Phase 3 — Kubernetes readiness
 
-1. Add async job model and idempotency keys.
-2. Add status/event endpoints for operator reconciliation loops.
-3. Add authn/authz + tenancy guardrails for cost-incurring operations.
+1. Add status/event endpoints for operator reconciliation loops.
+2. Add finer-grained authz guardrails for cost-incurring operations.
+3. Add explicit reconciliation/resource APIs beyond the current job model.
 
 ## Non-goals (for now)
 

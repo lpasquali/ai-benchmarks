@@ -45,6 +45,8 @@ console = Console()
 DEFAULT_VASTAI_TEMPLATE = "c166c11f035d3a97871a23bd32ca6aba"
 BACKEND_MODE = os.environ.get("RUNE_BACKEND", "local").strip().lower() or "local"
 API_BASE_URL = os.environ.get("RUNE_API_BASE_URL", "http://localhost:8080").strip() or "http://localhost:8080"
+API_TOKEN = os.environ.get("RUNE_API_TOKEN", "").strip() or None
+API_TENANT = os.environ.get("RUNE_API_TENANT", "default").strip() or "default"
 
 
 @app.callback()
@@ -61,6 +63,18 @@ def main(
         envvar="RUNE_API_BASE_URL",
         help="Base URL for HTTP backend mode",
     ),
+    api_token: str = typer.Option(
+        API_TOKEN or "",
+        "--api-token",
+        envvar="RUNE_API_TOKEN",
+        help="Bearer/API token for HTTP backend mode",
+    ),
+    api_tenant: str = typer.Option(
+        API_TENANT,
+        "--api-tenant",
+        envvar="RUNE_API_TENANT",
+        help="Tenant identifier for HTTP backend mode",
+    ),
     debug: bool = typer.Option(
         False,
         "--debug",
@@ -69,12 +83,14 @@ def main(
     ),
 ) -> None:
     """Configure global CLI options."""
-    global BACKEND_MODE, API_BASE_URL
+    global BACKEND_MODE, API_BASE_URL, API_TOKEN, API_TENANT
     normalized_backend = backend.strip().lower()
     if normalized_backend not in {"local", "http"}:
         raise typer.BadParameter("--backend must be either 'local' or 'http'")
     BACKEND_MODE = normalized_backend
     API_BASE_URL = api_base_url.strip() or "http://localhost:8080"
+    API_TOKEN = api_token.strip() or None
+    API_TENANT = api_tenant.strip() or "default"
     set_debug(debug)
 
 
@@ -199,7 +215,7 @@ def _print_ollama_models(ollama_url: str, models: list[str], running_models: set
 
 
 def _http_client() -> RuneApiClient:
-    return RuneApiClient(API_BASE_URL)
+    return RuneApiClient(API_BASE_URL, api_token=API_TOKEN, tenant_id=API_TENANT)
 
 
 def _run_http_job_with_progress(
@@ -300,6 +316,11 @@ def run_ollama_instance(
         "--ollama-url",
         help="Use an already running Ollama server URL when --vastai is not enabled",
     ),
+    idempotency_key: str | None = typer.Option(
+        None,
+        "--idempotency-key",
+        help="Optional idempotency key when using the HTTP backend",
+    ),
 ) -> None:
     """Provision an Ollama instance on Vast.ai, or use an existing server."""
     _enable_debug_if_requested(debug)
@@ -312,6 +333,39 @@ def run_ollama_instance(
         ollama_url=ollama_url,
     )
     console.print(Panel.fit("[bold blue]RUNE — Reliability Use-case Numeric Evaluator[/bold blue]"))
+
+    if BACKEND_MODE == "http":
+        try:
+            client = _http_client()
+            payload = _run_http_job_with_progress(
+                submit_description="Submitting ollama-instance job to HTTP backend...",
+                wait_description="Waiting for ollama-instance job",
+                submit_job=lambda: client.submit_ollama_instance_job(
+                    _request.to_dict(),
+                    idempotency_key=idempotency_key,
+                ),
+                client=client,
+            )
+        except RuntimeError as exc:
+            _print_error_and_exit(str(exc))
+
+        result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
+        mode = result.get("mode")
+        if mode == "existing":
+            server = ExistingOllamaServer(
+                url=str(result.get("ollama_url", ollama_url or "")),
+                model_name="<user-selected>",
+            )
+            _print_existing_ollama(server)
+            return
+        if mode == "vastai":
+            console.print(f"[green]Provisioned contract:[/green] {result.get('contract_id')}")
+            if result.get("ollama_url"):
+                console.print(f"[dim]Detected Ollama endpoint:[/dim] {result.get('ollama_url')}")
+            if result.get("model_name"):
+                console.print(f"[green]Selected model:[/green] {result.get('model_name')}")
+            return
+        _print_error_and_exit("HTTP backend finished but did not return an Ollama instance result")
 
     if not vastai:
         try:
@@ -438,6 +492,11 @@ def run_agentic_agent(
         "--kubeconfig",
         help="Path to kubeconfig file",
     ),
+    idempotency_key: str | None = typer.Option(
+        None,
+        "--idempotency-key",
+        help="Optional idempotency key when using the HTTP backend",
+    ),
 ) -> None:
     """Run an agentic system (HolmesGPT) against a Kubernetes cluster."""
     _enable_debug_if_requested(debug)
@@ -457,7 +516,10 @@ def run_agentic_agent(
             payload = _run_http_job_with_progress(
                 submit_description="Submitting agentic-agent job to HTTP backend...",
                 wait_description="Waiting for agentic-agent job",
-                submit_job=lambda: client.submit_agentic_agent_job(_request.to_dict()),
+                submit_job=lambda: client.submit_agentic_agent_job(
+                    _request.to_dict(),
+                    idempotency_key=idempotency_key,
+                ),
                 client=client,
             )
         except RuntimeError as exc:
@@ -549,6 +611,11 @@ def run_benchmark(
         "--vastai-stop-instance/--no-vastai-stop-instance",
         help="Destroy Vast.ai instance + related storage after agent execution and verify cleanup (enabled by default)",
     ),
+    idempotency_key: str | None = typer.Option(
+        None,
+        "--idempotency-key",
+        help="Optional idempotency key when using the HTTP backend",
+    ),
 ) -> None:
     """Run full benchmark: provision Ollama instance, then run agentic agent."""
     _enable_debug_if_requested(debug)
@@ -574,7 +641,10 @@ def run_benchmark(
             payload = _run_http_job_with_progress(
                 submit_description="Submitting benchmark job to HTTP backend...",
                 wait_description="Waiting for benchmark job",
-                submit_job=lambda: client.submit_benchmark_job(_request.to_dict()),
+                submit_job=lambda: client.submit_benchmark_job(
+                    _request.to_dict(),
+                    idempotency_key=idempotency_key,
+                ),
                 client=client,
             )
         except RuntimeError as exc:
