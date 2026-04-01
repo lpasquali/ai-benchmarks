@@ -10,7 +10,6 @@ permissions:
   contents: read
   issues: write
   pull-requests: write
-  security-events: write
 
 jobs:
   coverage:
@@ -240,12 +239,16 @@ jobs:
           set -euo pipefail
           docker run --rm ai-benchmarks:rune-ci-local --help >/dev/null
 
-      - name: Generate CycloneDX SBOM for container image
-        uses: anchore/sbom-action@v0
-        with:
-          image: ai-benchmarks:rune-ci-local
-          format: cyclonedx-json
-          output-file: sbom/rune-image.cdx.json
+      - name: Generate CycloneDX SBOM for container image (Syft)
+        run: |
+          set -euo pipefail
+          mkdir -p sbom
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}:/work" \
+            anchore/syft:v1.17.0 \
+            ai-benchmarks:rune-ci-local \
+            -o cyclonedx-json=/work/sbom/rune-image.cdx.json
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@v7
@@ -254,14 +257,14 @@ jobs:
           path: sbom/rune-image.cdx.json
           retention-days: 14
 
-      - name: Scan generated SBOM with Anchore Grype
-        uses: anchore/scan-action@v6
-        with:
-          sbom: sbom/rune-image.cdx.json
-          output-format: json
-          output-file: sbom/grype-results.json
-          severity-cutoff: low
-          fail-build: false
+      - name: Scan generated SBOM with Anchore Grype (container)
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "${PWD}:/work" \
+            anchore/grype:v0.82.0 \
+            sbom:/work/sbom/rune-image.cdx.json \
+            -o json > sbom/grype-results.json
 
       - name: Scan generated SBOM with Trivy (container)
         run: |
@@ -424,13 +427,7 @@ jobs:
           Path("sbom/security-summary.sarif").write_text(json.dumps(sarif, indent=2), encoding="utf-8")
           PY
 
-      - name: Upload Grype SARIF to code scanning
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: sbom/security-summary.sarif
-
-      - name: Upload Grype scan artifact
+      - name: Upload SBOM and scanner outputs
         if: always()
         uses: actions/upload-artifact@v7
         with:

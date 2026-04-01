@@ -13,10 +13,10 @@ What CI produces:
 
 How it is generated:
 - GitHub Actions workflow: .github/workflows/coverage.yml
-- SBOM generator action: anchore/sbom-action
-- SBOM vulnerability scanner actions:
-	- anchore/scan-action (Grype)
-	- aquasecurity/trivy-action (Trivy)
+- SBOM generator tool: Syft container (`anchore/syft`)
+- SBOM vulnerability scanner tools:
+	- Grype container (`anchore/grype`)
+	- Trivy container (`aquasec/trivy`)
 
 Policy gate:
 - Merge is blocked if any vulnerability with CVSS score > 8.8 is detected by either scanner.
