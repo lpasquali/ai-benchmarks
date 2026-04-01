@@ -263,15 +263,16 @@ jobs:
           severity-cutoff: low
           fail-build: false
 
-      - name: Scan generated SBOM with Trivy
-        uses: aquasecurity/trivy-action@0.31.0
-        with:
-          scan-type: sbom
-          input: sbom/rune-image.cdx.json
-          format: json
-          output: sbom/trivy-results.json
-          exit-code: '0'
-          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+      - name: Scan generated SBOM with Trivy (container)
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "${PWD}:/work" \
+            aquasec/trivy:0.57.1 \
+            sbom /work/sbom/rune-image.cdx.json \
+            --format json \
+            --output /work/sbom/trivy-results.json \
+            --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
 
       - name: Summarize scanner results and enforce CVSS threshold
         run: |
