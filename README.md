@@ -63,7 +63,12 @@ See [docs/API_COMPATIBILITY_PLAN.md](docs/API_COMPATIBILITY_PLAN.md) for the CLI
 - `--api-base-url http://host:port` (or `RUNE_API_BASE_URL` env var)
 
 Default mode is `local`, preserving the current in-process CLI behavior.
-In `http` mode, model-list commands can query a remote RUNE API.
+In `http` mode, the following commands can query/execute against a remote RUNE API:
+
+- `vastai-list-models`
+- `ollama-list-models`
+- `run-agentic-agent` (job submit/poll)
+- `run-benchmark` (job submit/poll)
 
 ### Shared agent options
 

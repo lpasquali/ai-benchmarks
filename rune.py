@@ -8,6 +8,7 @@ This file only handles CLI argument parsing, Rich output, and orchestration.
 
 from pathlib import Path
 import os
+from typing import Callable
 
 import typer
 from rich.console import Console
@@ -199,6 +200,32 @@ def _print_ollama_models(ollama_url: str, models: list[str], running_models: set
 
 def _http_client() -> RuneApiClient:
     return RuneApiClient(API_BASE_URL)
+
+
+def _run_http_job_with_progress(
+    *,
+    submit_description: str,
+    wait_description: str,
+    submit_job: Callable[[], str],
+    client: RuneApiClient,
+    timeout_seconds: int = 3600,
+    poll_interval_seconds: float = 2.0,
+) -> dict:
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
+        task = progress.add_task(submit_description, total=None)
+        job_id = submit_job()
+        progress.update(task, description=f"{wait_description} (job={job_id})")
+
+        def on_update(status: str, message: str | None) -> None:
+            detail = f": {message}" if message else ""
+            progress.update(task, description=f"{wait_description} [{status}]{detail}")
+
+        return client.wait_for_job(
+            job_id,
+            timeout_seconds=timeout_seconds,
+            poll_interval_seconds=poll_interval_seconds,
+            on_update=on_update,
+        )
 
 
 def _warmup_ollama_model(*, ollama_url: str, model_name: str, timeout_seconds: int) -> None:
@@ -424,6 +451,27 @@ def run_agentic_agent(
     )
     console.print(Panel.fit("[bold blue]RUNE — Agentic Agent Runner[/bold blue]"))
 
+    if BACKEND_MODE == "http":
+        try:
+            client = _http_client()
+            payload = _run_http_job_with_progress(
+                submit_description="Submitting agentic-agent job to HTTP backend...",
+                wait_description="Waiting for agentic-agent job",
+                submit_job=lambda: client.submit_agentic_agent_job(_request.to_dict()),
+                client=client,
+            )
+        except RuntimeError as exc:
+            _print_error_and_exit(str(exc))
+
+        result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
+        answer = result.get("answer") or payload.get("answer")
+        if not isinstance(answer, str) or not answer.strip():
+            _print_error_and_exit("HTTP backend finished but did not return an agent answer")
+
+        console.print("\n[bold green]Agent Answer[/bold green]")
+        console.print(answer)
+        return
+
     if ollama_url and ollama_warmup:
         _warmup_ollama_model(
             ollama_url=ollama_url,
@@ -519,6 +567,27 @@ def run_benchmark(
         vastai_stop_instance=vastai_stop_instance,
     )
     console.print(Panel.fit("[bold blue]RUNE — Full Benchmark Workflow[/bold blue]"))
+
+    if BACKEND_MODE == "http":
+        try:
+            client = _http_client()
+            payload = _run_http_job_with_progress(
+                submit_description="Submitting benchmark job to HTTP backend...",
+                wait_description="Waiting for benchmark job",
+                submit_job=lambda: client.submit_benchmark_job(_request.to_dict()),
+                client=client,
+            )
+        except RuntimeError as exc:
+            _print_error_and_exit(str(exc))
+
+        result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
+        answer = result.get("answer") or payload.get("answer")
+        if not isinstance(answer, str) or not answer.strip():
+            _print_error_and_exit("HTTP backend finished but did not return a benchmark answer")
+
+        console.print("\n[bold green]Agent Answer[/bold green]")
+        console.print(answer)
+        return
 
     selected_model_name = model
     selected_ollama_url = ollama_url

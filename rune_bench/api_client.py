@@ -2,6 +2,7 @@
 
 import json
 from dataclasses import dataclass
+import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
@@ -29,12 +30,25 @@ class RuneApiClient:
 
         return url.rstrip("/")
 
-    def _request(self, method: str, path: str, *, query: dict[str, str] | None = None) -> dict:
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        query: dict[str, str] | None = None,
+        body: dict | None = None,
+    ) -> dict:
         url = self.base_url + path
         if query:
             url += "?" + urlencode(query)
 
-        request = Request(url, method=method)
+        data = None
+        headers: dict[str, str] = {}
+        if body is not None:
+            data = json.dumps(body).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+
+        request = Request(url, method=method, headers=headers, data=data)
 
         try:
             with urlopen(request, timeout=20) as response:
@@ -71,3 +85,55 @@ class RuneApiClient:
         if not isinstance(payload.get("running_models"), list):
             raise RuntimeError("API payload missing 'running_models' list for Ollama models endpoint")
         return payload
+
+    def submit_agentic_agent_job(self, request_payload: dict) -> str:
+        payload = self._request("POST", "/v1/jobs/agentic-agent", body=request_payload)
+        job_id = payload.get("job_id")
+        if not isinstance(job_id, str) or not job_id.strip():
+            raise RuntimeError("API response missing 'job_id' for agentic-agent job")
+        return job_id
+
+    def submit_benchmark_job(self, request_payload: dict) -> str:
+        payload = self._request("POST", "/v1/jobs/benchmark", body=request_payload)
+        job_id = payload.get("job_id")
+        if not isinstance(job_id, str) or not job_id.strip():
+            raise RuntimeError("API response missing 'job_id' for benchmark job")
+        return job_id
+
+    def get_job_status(self, job_id: str) -> dict:
+        payload = self._request("GET", f"/v1/jobs/{job_id}")
+        status = payload.get("status")
+        if not isinstance(status, str) or not status.strip():
+            raise RuntimeError(f"API response missing 'status' for job {job_id}")
+        return payload
+
+    def wait_for_job(
+        self,
+        job_id: str,
+        *,
+        timeout_seconds: int = 3600,
+        poll_interval_seconds: float = 2.0,
+        on_update: callable | None = None,
+    ) -> dict:
+        deadline = time.monotonic() + timeout_seconds
+        last_status = ""
+
+        while time.monotonic() < deadline:
+            payload = self.get_job_status(job_id)
+            status = str(payload.get("status", "unknown")).strip().lower()
+            message = payload.get("message")
+            if isinstance(message, str) and on_update is not None and status != last_status:
+                on_update(status, message)
+            elif on_update is not None and status != last_status:
+                on_update(status, None)
+
+            last_status = status
+            if status in {"succeeded", "success", "completed"}:
+                return payload
+            if status in {"failed", "error", "cancelled", "canceled"}:
+                detail = payload.get("error") or payload.get("message") or f"status={status}"
+                raise RuntimeError(f"Job {job_id} failed: {detail}")
+
+            time.sleep(poll_interval_seconds)
+
+        raise RuntimeError(f"Timed out waiting for job {job_id} after {timeout_seconds}s")

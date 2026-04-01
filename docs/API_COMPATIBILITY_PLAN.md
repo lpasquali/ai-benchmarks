@@ -39,6 +39,12 @@ Status: in progress.
 2. Add CLI option/environment switch to use local or remote backend.
 3. Preserve Rich output and progress style in CLI by streaming job events.
 
+Implemented so far:
+
+- HTTP mode for `vastai-list-models` and `ollama-list-models`
+- HTTP mode for `run-agentic-agent` via async job submit/poll flow
+- HTTP mode for `run-benchmark` via async job submit/poll flow
+
 ### Phase 3 — Kubernetes readiness
 
 1. Add async job model and idempotency keys.
