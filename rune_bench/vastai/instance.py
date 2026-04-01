@@ -6,6 +6,7 @@ Ollama, and surfacing external connection details.
 
 import time
 from dataclasses import dataclass, field
+from typing import Callable
 
 from vastai import VastAI
 
@@ -94,7 +95,7 @@ class InstanceManager:
     def wait_until_running(
         self,
         contract_id: int | str,
-        on_poll: callable | None = None,
+        on_poll: Callable[[str], None] | None = None,
     ) -> dict:
         """Block until the instance reaches 'running' state.
 

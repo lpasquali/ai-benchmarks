@@ -8,6 +8,7 @@ This file only handles CLI argument parsing, Rich output, and orchestration.
 
 from pathlib import Path
 import os
+import socket
 from typing import Callable
 
 import typer
@@ -47,6 +48,7 @@ BACKEND_MODE = os.environ.get("RUNE_BACKEND", "local").strip().lower() or "local
 API_BASE_URL = os.environ.get("RUNE_API_BASE_URL", "http://localhost:8080").strip() or "http://localhost:8080"
 API_TOKEN = os.environ.get("RUNE_API_TOKEN", "").strip() or None
 API_TENANT = os.environ.get("RUNE_API_TENANT", "default").strip() or "default"
+VERIFY_SSL = not (os.environ.get("RUNE_INSECURE", "").strip().lower() in {"1", "true", "yes", "on"})
 
 
 @app.callback()
@@ -78,12 +80,20 @@ def main(
     debug: bool = typer.Option(
         False,
         "--debug",
+        envvar="RUNE_DEBUG",
         help="Show outbound client requests and API calls",
+        is_eager=True,
+    ),
+    insecure: bool = typer.Option(
+        False,
+        "--insecure",
+        envvar="RUNE_INSECURE",
+        help="Skip TLS certificate verification (for self-signed certs, e.g. in-cluster)",
         is_eager=True,
     ),
 ) -> None:
     """Configure global CLI options."""
-    global BACKEND_MODE, API_BASE_URL, API_TOKEN, API_TENANT
+    global BACKEND_MODE, API_BASE_URL, API_TOKEN, API_TENANT, VERIFY_SSL
     normalized_backend = backend.strip().lower()
     if normalized_backend not in {"local", "http"}:
         raise typer.BadParameter("--backend must be either 'local' or 'http'")
@@ -91,12 +101,44 @@ def main(
     API_BASE_URL = api_base_url.strip() or "http://localhost:8080"
     API_TOKEN = api_token.strip() or None
     API_TENANT = api_tenant.strip() or "default"
+    VERIFY_SSL = not insecure
     set_debug(debug)
 
 
 def _print_error_and_exit(message: str, code: int = 1) -> None:
     console.print(f"[red]{message}[/red]")
     raise typer.Exit(code)
+
+
+def _is_containerized() -> bool:
+    """Return True when running inside a Docker container or Kubernetes pod."""
+    return (
+        os.environ.get("KUBERNETES_SERVICE_HOST") is not None
+        or Path("/.dockerenv").exists()
+    )
+
+
+def _find_free_port() -> int:
+    """Bind to port 0 and let the OS pick a free ephemeral port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        return s.getsockname()[1]
+
+
+def _resolve_serve_port() -> int:
+    """Return the port the API server should bind to.
+
+    In a container (Docker / Kubernetes) use the conventional 8080 so
+    Service/Ingress rules work without surprises.  On a developer
+    workstation 8080 is often occupied, so we pick a random free port
+    instead.
+    """
+    if _is_containerized():
+        return 8080
+    port = _find_free_port()
+    console.print(f"[dim]Local mode: using random free port {port}[/dim]")
+    return port
 
 
 def _enable_debug_if_requested(debug: bool) -> None:
@@ -119,6 +161,12 @@ def _fetch_model_capabilities(ollama_url: str, model: str) -> OllamaModelCapabil
         return OllamaClient(ollama_url).get_model_capabilities(normalized)
     except RuntimeError:
         return None
+
+
+def _vastai_sdk() -> VastAI:
+    """Instantiate VastAI SDK reading the API key from the environment."""
+    api_key = os.environ.get("VAST_API_KEY", "")
+    return VastAI(api_key=api_key, raw=True)
 
 
 def _apply_model_limits(capabilities: OllamaModelCapabilities) -> None:
@@ -215,7 +263,7 @@ def _print_ollama_models(ollama_url: str, models: list[str], running_models: set
 
 
 def _http_client() -> RuneApiClient:
-    return RuneApiClient(API_BASE_URL, api_token=API_TOKEN, tenant_id=API_TENANT)
+    return RuneApiClient(API_BASE_URL, api_token=API_TOKEN, tenant_id=API_TENANT, verify_ssl=VERIFY_SSL)
 
 
 def _run_http_job_with_progress(
@@ -266,7 +314,7 @@ def _run_vastai_provisioning(
     max_dph: float,
     reliability: float,
 ) -> VastAIProvisioningResult:
-    sdk = VastAI(raw=True)
+    sdk = _vastai_sdk()
 
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as p:
         task = p.add_task("Provisioning on Vast.ai...", total=None)
@@ -289,6 +337,49 @@ def _run_vastai_provisioning(
             raise typer.Exit(0)
         except RuntimeError as exc:
             _print_error_and_exit(str(exc))
+    raise AssertionError("unreachable")
+
+
+@app.command("serve")
+def serve_api(
+    api_host: str = typer.Option(
+        "0.0.0.0",
+        "--host",
+        envvar="RUNE_API_HOST",
+        help="Host to bind API server to",
+    ),
+    api_port: int | None = typer.Option(
+        None,
+        "--port",
+        envvar="RUNE_API_PORT",
+        help="Port to bind API server to (default: 8080 in containers, random free port locally)",
+    ),
+    debug: bool = typer.Option(
+        False,
+        "--debug",
+        envvar="RUNE_DEBUG",
+        help="Show outbound client requests and API calls",
+    ),
+) -> None:
+    """Start the standalone RUNE API server."""
+    from rune_bench.api_server import RuneApiApplication
+
+    _enable_debug_if_requested(debug)
+
+    resolved_port = api_port if api_port is not None else _resolve_serve_port()
+    console.print(Panel.fit(
+        f"[bold blue]RUNE API Server[/bold blue]\nStarting on {api_host}:{resolved_port}"
+        + ("  [yellow](TLS verification disabled)[/yellow]" if not VERIFY_SSL else "")
+    ))
+
+    try:
+        app_server = RuneApiApplication.from_env()
+        app_server.serve(host=api_host, port=resolved_port)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Server stopped.[/yellow]")
+        raise typer.Exit(0)
+    except Exception as exc:
+        _print_error_and_exit(f"Server error: {exc}")
 
 
 @app.command("run-ollama-instance")
@@ -296,29 +387,34 @@ def run_ollama_instance(
     debug: bool = typer.Option(
         False,
         "--debug",
+        envvar="RUNE_DEBUG",
         help="Show outbound client requests and API calls",
     ),
     vastai: bool = typer.Option(
         False,
         "--vastai",
+        envvar="RUNE_VASTAI",
         help="Enable Vast.ai provisioning flow",
     ),
     template_hash: str = typer.Option(
         DEFAULT_VASTAI_TEMPLATE,
         "--vastai-template",
+        envvar="RUNE_VASTAI_TEMPLATE",
         help="Vast.ai template hash to use",
     ),
-    max_dph: float = typer.Option(3.0, "--vastai-max-dph", help="Maximum dollars per hour"),
-    min_dph: float = typer.Option(2.3, "--vastai-min-dph", help="Minimum dollars per hour"),
-    reliability: float = typer.Option(0.99, "--vastai-reliability", help="Minimum reliability score"),
+    max_dph: float = typer.Option(3.0, "--vastai-max-dph", envvar="RUNE_VASTAI_MAX_DPH", help="Maximum dollars per hour"),
+    min_dph: float = typer.Option(2.3, "--vastai-min-dph", envvar="RUNE_VASTAI_MIN_DPH", help="Minimum dollars per hour"),
+    reliability: float = typer.Option(0.99, "--vastai-reliability", envvar="RUNE_VASTAI_RELIABILITY", help="Minimum reliability score"),
     ollama_url: str | None = typer.Option(
         None,
         "--ollama-url",
+        envvar="RUNE_OLLAMA_URL",
         help="Use an already running Ollama server URL when --vastai is not enabled",
     ),
     idempotency_key: str | None = typer.Option(
         None,
         "--idempotency-key",
+        envvar="RUNE_IDEMPOTENCY_KEY",
         help="Optional idempotency key when using the HTTP backend",
     ),
 ) -> None:
@@ -349,21 +445,22 @@ def run_ollama_instance(
         except RuntimeError as exc:
             _print_error_and_exit(str(exc))
 
-        result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
-        mode = result.get("mode")
+        result_obj = payload.get("result")
+        http_result: dict[str, object] = result_obj if isinstance(result_obj, dict) else {}
+        mode = http_result.get("mode")
         if mode == "existing":
             server = ExistingOllamaServer(
-                url=str(result.get("ollama_url", ollama_url or "")),
+                url=str(http_result.get("ollama_url", ollama_url or "")),
                 model_name="<user-selected>",
             )
             _print_existing_ollama(server)
             return
         if mode == "vastai":
-            console.print(f"[green]Provisioned contract:[/green] {result.get('contract_id')}")
-            if result.get("ollama_url"):
-                console.print(f"[dim]Detected Ollama endpoint:[/dim] {result.get('ollama_url')}")
-            if result.get("model_name"):
-                console.print(f"[green]Selected model:[/green] {result.get('model_name')}")
+            console.print(f"[green]Provisioned contract:[/green] {http_result.get('contract_id')}")
+            if http_result.get("ollama_url"):
+                console.print(f"[dim]Detected Ollama endpoint:[/dim] {http_result.get('ollama_url')}")
+            if http_result.get("model_name"):
+                console.print(f"[green]Selected model:[/green] {http_result.get('model_name')}")
             return
         _print_error_and_exit("HTTP backend finished but did not return an Ollama instance result")
 
@@ -418,11 +515,13 @@ def ollama_list_models(
     debug: bool = typer.Option(
         False,
         "--debug",
+        envvar="RUNE_DEBUG",
         help="Show outbound client requests and API calls",
     ),
     ollama_url: str = typer.Option(
         ...,
         "--ollama-url",
+        envvar="RUNE_OLLAMA_URL",
         help="Ollama server URL to query for available models",
     ),
 ) -> None:
@@ -457,44 +556,52 @@ def run_agentic_agent(
     debug: bool = typer.Option(
         False,
         "--debug",
+        envvar="RUNE_DEBUG",
         help="Show outbound client requests and API calls",
     ),
     question: str = typer.Option(
         "What is unhealthy in this Kubernetes cluster?",
         "--question",
         "-q",
+        envvar="RUNE_QUESTION",
         help="Question to ask the agentic system",
     ),
     model: str = typer.Option(
         "llama3.1:8b",
         "--model",
         "-m",
+        envvar="RUNE_MODEL",
         help="Model to use for the agent",
     ),
     ollama_url: str | None = typer.Option(
         None,
         "--ollama-url",
+        envvar="RUNE_OLLAMA_URL",
         help="Ollama server URL (used for Ollama-backed models)",
     ),
     ollama_warmup: bool = typer.Option(
         True,
         "--ollama-warmup/--no-ollama-warmup",
+        envvar="RUNE_OLLAMA_WARMUP",
         help="Load the selected model into the Ollama server before starting Holmes",
     ),
     ollama_warmup_timeout: int = typer.Option(
         90,
         "--ollama-warmup-timeout",
+        envvar="RUNE_OLLAMA_WARMUP_TIMEOUT",
         min=1,
         help="Seconds to wait for the Ollama model to become ready",
     ),
     kubeconfig: Path = typer.Option(
         Path.home() / ".kube" / "config",
         "--kubeconfig",
+        envvar="RUNE_KUBECONFIG",
         help="Path to kubeconfig file",
     ),
     idempotency_key: str | None = typer.Option(
         None,
         "--idempotency-key",
+        envvar="RUNE_IDEMPOTENCY_KEY",
         help="Optional idempotency key when using the HTTP backend",
     ),
 ) -> None:
@@ -525,8 +632,9 @@ def run_agentic_agent(
         except RuntimeError as exc:
             _print_error_and_exit(str(exc))
 
-        result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
-        answer = result.get("answer") or payload.get("answer")
+        result_obj = payload.get("result")
+        http_result: dict[str, object] = result_obj if isinstance(result_obj, dict) else {}
+        answer = http_result.get("answer") or payload.get("answer")
         if not isinstance(answer, str) or not answer.strip():
             _print_error_and_exit("HTTP backend finished but did not return an agent answer")
 
@@ -558,62 +666,73 @@ def run_benchmark(
     debug: bool = typer.Option(
         False,
         "--debug",
+        envvar="RUNE_DEBUG",
         help="Show outbound client requests and API calls",
     ),
     vastai: bool = typer.Option(
         False,
         "--vastai",
+        envvar="RUNE_VASTAI",
         help="Enable Vast.ai provisioning flow (Phase 1)",
     ),
     template_hash: str = typer.Option(
         DEFAULT_VASTAI_TEMPLATE,
         "--vastai-template",
+        envvar="RUNE_VASTAI_TEMPLATE",
         help="Vast.ai template hash to use",
     ),
-    max_dph: float = typer.Option(3.0, "--vastai-max-dph", help="Maximum dollars per hour"),
-    min_dph: float = typer.Option(2.3, "--vastai-min-dph", help="Minimum dollars per hour"),
-    reliability: float = typer.Option(0.99, "--vastai-reliability", help="Minimum reliability score"),
+    max_dph: float = typer.Option(3.0, "--vastai-max-dph", envvar="RUNE_VASTAI_MAX_DPH", help="Maximum dollars per hour"),
+    min_dph: float = typer.Option(2.3, "--vastai-min-dph", envvar="RUNE_VASTAI_MIN_DPH", help="Minimum dollars per hour"),
+    reliability: float = typer.Option(0.99, "--vastai-reliability", envvar="RUNE_VASTAI_RELIABILITY", help="Minimum reliability score"),
     ollama_url: str | None = typer.Option(
         None,
         "--ollama-url",
+        envvar="RUNE_OLLAMA_URL",
         help="Existing Ollama server URL when --vastai is not enabled",
     ),
     question: str = typer.Option(
         "What is unhealthy in this Kubernetes cluster?",
         "--question",
         "-q",
+        envvar="RUNE_QUESTION",
         help="Question to ask the agentic system",
     ),
     model: str = typer.Option(
         "llama3.1:8b",
         "--model",
         "-m",
+        envvar="RUNE_MODEL",
         help="Model to use for the agent when --vastai is not enabled",
     ),
     ollama_warmup: bool = typer.Option(
         True,
         "--ollama-warmup/--no-ollama-warmup",
+        envvar="RUNE_OLLAMA_WARMUP",
         help="Load the selected model into the Ollama server before Holmes starts when using --ollama-url",
     ),
     ollama_warmup_timeout: int = typer.Option(
         90,
         "--ollama-warmup-timeout",
+        envvar="RUNE_OLLAMA_WARMUP_TIMEOUT",
         min=1,
         help="Seconds to wait for the Ollama model to become ready",
     ),
     kubeconfig: Path = typer.Option(
         Path.home() / ".kube" / "config",
         "--kubeconfig",
+        envvar="RUNE_KUBECONFIG",
         help="Path to kubeconfig file",
     ),
     vastai_stop_instance: bool = typer.Option(
         True,
         "--vastai-stop-instance/--no-vastai-stop-instance",
+        envvar="RUNE_VASTAI_STOP_INSTANCE",
         help="Destroy Vast.ai instance + related storage after agent execution and verify cleanup (enabled by default)",
     ),
     idempotency_key: str | None = typer.Option(
         None,
         "--idempotency-key",
+        envvar="RUNE_IDEMPOTENCY_KEY",
         help="Optional idempotency key when using the HTTP backend",
     ),
 ) -> None:
@@ -650,8 +769,9 @@ def run_benchmark(
         except RuntimeError as exc:
             _print_error_and_exit(str(exc))
 
-        result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
-        answer = result.get("answer") or payload.get("answer")
+        result_obj = payload.get("result")
+        http_result: dict[str, object] = result_obj if isinstance(result_obj, dict) else {}
+        answer = http_result.get("answer") or payload.get("answer")
         if not isinstance(answer, str) or not answer.strip():
             _print_error_and_exit("HTTP backend finished but did not return a benchmark answer")
 
@@ -681,7 +801,7 @@ def run_benchmark(
         if not selected_ollama_url:
             if vastai_stop_instance and vastai_contract_to_stop is not None:
                 try:
-                    teardown = stop_vastai_instance(VastAI(raw=True), vastai_contract_to_stop)
+                    teardown = stop_vastai_instance(_vastai_sdk(), vastai_contract_to_stop)
                     status = "verified" if teardown.verification_ok else "not fully verified"
                     console.print(f"[green]Destroyed Vast.ai contract:[/green] {vastai_contract_to_stop} ({status})")
                     if teardown.destroyed_volume_ids:
@@ -735,7 +855,7 @@ def run_benchmark(
     finally:
         if vastai and vastai_stop_instance and vastai_contract_to_stop is not None:
             try:
-                teardown = stop_vastai_instance(VastAI(raw=True), vastai_contract_to_stop)
+                teardown = stop_vastai_instance(_vastai_sdk(), vastai_contract_to_stop)
                 status = "verified" if teardown.verification_ok else "not fully verified"
                 console.print(f"[green]Destroyed Vast.ai contract:[/green] {vastai_contract_to_stop} ({status})")
                 if teardown.destroyed_volume_ids:
