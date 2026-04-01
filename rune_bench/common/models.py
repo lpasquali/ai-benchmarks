@@ -57,6 +57,17 @@ class ModelSelector:
             "Add a smaller model to the MODELS list or use a larger instance."
         )
 
+    def list_models(self) -> list[SelectedModel]:
+        """Return all configured Vast.ai candidate models with derived disk sizing."""
+        return [
+            SelectedModel(
+                name=m["name"],
+                vram_mb=m["vram_mb"],
+                required_disk_gb=self._calculate_disk(m["vram_mb"]),
+            )
+            for m in self._models
+        ]
+
     @staticmethod
     def _calculate_disk(vram_mb: int) -> int:
         """Disk = ceil(vram_gb * 1.15) + 32 GB base buffer."""

@@ -8,6 +8,8 @@ from dataclasses import dataclass
 
 from vastai import VastAI
 
+from rune_bench.debug import debug_log
+
 _HASH_FIELDS = ("id", "hash_id", "hash", "template_hash")
 
 
@@ -34,9 +36,14 @@ class TemplateLoader:
             RuntimeError: if the template is not found.
         """
         try:
+            debug_log("Vast.ai API call: show_templates raw=True")
             templates = self._sdk.show_templates(raw=True)
         except Exception as exc:
             raise RuntimeError(f"Failed to fetch Vast.ai templates: {exc}") from exc
+
+        debug_log(
+            f"Vast.ai API result: show_templates count={len(templates) if isinstance(templates, list) else '<non-list>'}"
+        )
 
         if not isinstance(templates, list):
             templates = []
@@ -47,6 +54,8 @@ class TemplateLoader:
                 f"Template '{template_hash}' not found. "
                 "Check the hash or run: python -m vastai show templates"
             )
+
+        debug_log(f"Vast.ai template selected: hash={template_hash} image={match.get('image') or match.get('docker_image')}")
 
         raw_env = str(match.get("env", "")).strip()
         final_env = f"{raw_env} -v /workspace".strip()

@@ -16,8 +16,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application files
 COPY . .
 
-# Ensure the provision script is executable
-RUN chmod +x provision.py
-
 # Define an entrypoint so the container runs as an executable CLI tool
-ENTRYPOINT ["python", "provision.py"]
+ENTRYPOINT ["python", "-m", "rune"]
