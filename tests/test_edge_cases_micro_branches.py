@@ -2,6 +2,7 @@ import runpy
 import sys
 import threading
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from urllib.error import HTTPError
@@ -143,6 +144,7 @@ def test_rune_remaining_branches(monkeypatch, tmp_path):
         return result
 
     monkeypatch.setattr(rune, "provision_vastai_ollama", fake_provision)
+    monkeypatch.setattr(rune, "_vastai_sdk", lambda: MagicMock())
     rune._run_vastai_provisioning(template_hash="t", min_dph=1, max_dph=2, reliability=0.9)
 
     # http run-ollama-instance RuntimeError branch
@@ -433,6 +435,7 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
     kubeconfig = tmp_path / "kubeconfig"
     kubeconfig.write_text("apiVersion: v1\n")
     monkeypatch.setattr(api_backend, "provision_vastai_ollama", lambda *_a, **_k: type("R", (), {"contract_id": 99, "ollama_url": "http://x", "model_name": "m"})())
+    monkeypatch.setattr(api_backend, "_vastai_sdk", lambda: MagicMock())
     monkeypatch.setattr(api_backend, "warmup_existing_ollama_model", lambda *_a, **_k: None)
     monkeypatch.setattr(api_backend, "HolmesRunner", lambda _p: type("R", (), {"ask": lambda self, **_k: "ok"})())
     stopped = []

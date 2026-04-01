@@ -13,6 +13,7 @@ class RuneApiClient:
     base_url: str
     api_token: str | None = None
     tenant_id: str | None = None
+    verify_ssl: bool = True
 
     def __post_init__(self) -> None:
         self.base_url = normalize_url(self.base_url, service_name="RUNE API")
@@ -47,6 +48,7 @@ class RuneApiClient:
             timeout_seconds=20,
             headers=headers,
             debug_prefix="RUNE API",
+            verify_ssl=self.verify_ssl,
         )
 
     def get_vastai_models(self) -> list[dict]:
