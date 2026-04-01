@@ -7,6 +7,8 @@ This file only handles CLI argument parsing, Rich output, and orchestration.
 """
 
 from pathlib import Path
+import os
+from typing import Callable
 
 import typer
 from rich.console import Console
@@ -16,6 +18,12 @@ from rich.table import Table
 from vastai import VastAI
 
 from rune_bench import HolmesRunner
+from rune_bench.api_client import RuneApiClient
+from rune_bench.api_contracts import (
+    RunAgenticAgentRequest,
+    RunBenchmarkRequest,
+    RunOllamaInstanceRequest,
+)
 from rune_bench.common import ModelSelector
 from rune_bench.debug import set_debug
 from rune_bench.ollama import OllamaClient, OllamaModelCapabilities, OllamaModelManager
@@ -35,10 +43,24 @@ app = typer.Typer(help="RUNE — Reliability Use-case Numeric Evaluator", add_co
 console = Console()
 
 DEFAULT_VASTAI_TEMPLATE = "c166c11f035d3a97871a23bd32ca6aba"
+BACKEND_MODE = os.environ.get("RUNE_BACKEND", "local").strip().lower() or "local"
+API_BASE_URL = os.environ.get("RUNE_API_BASE_URL", "http://localhost:8080").strip() or "http://localhost:8080"
 
 
 @app.callback()
 def main(
+    backend: str = typer.Option(
+        BACKEND_MODE,
+        "--backend",
+        envvar="RUNE_BACKEND",
+        help="Execution backend: local (default) or http",
+    ),
+    api_base_url: str = typer.Option(
+        API_BASE_URL,
+        "--api-base-url",
+        envvar="RUNE_API_BASE_URL",
+        help="Base URL for HTTP backend mode",
+    ),
     debug: bool = typer.Option(
         False,
         "--debug",
@@ -47,6 +69,12 @@ def main(
     ),
 ) -> None:
     """Configure global CLI options."""
+    global BACKEND_MODE, API_BASE_URL
+    normalized_backend = backend.strip().lower()
+    if normalized_backend not in {"local", "http"}:
+        raise typer.BadParameter("--backend must be either 'local' or 'http'")
+    BACKEND_MODE = normalized_backend
+    API_BASE_URL = api_base_url.strip() or "http://localhost:8080"
     set_debug(debug)
 
 
@@ -170,6 +198,36 @@ def _print_ollama_models(ollama_url: str, models: list[str], running_models: set
     console.print(table)
 
 
+def _http_client() -> RuneApiClient:
+    return RuneApiClient(API_BASE_URL)
+
+
+def _run_http_job_with_progress(
+    *,
+    submit_description: str,
+    wait_description: str,
+    submit_job: Callable[[], str],
+    client: RuneApiClient,
+    timeout_seconds: int = 3600,
+    poll_interval_seconds: float = 2.0,
+) -> dict:
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
+        task = progress.add_task(submit_description, total=None)
+        job_id = submit_job()
+        progress.update(task, description=f"{wait_description} (job={job_id})")
+
+        def on_update(status: str, message: str | None) -> None:
+            detail = f": {message}" if message else ""
+            progress.update(task, description=f"{wait_description} [{status}]{detail}")
+
+        return client.wait_for_job(
+            job_id,
+            timeout_seconds=timeout_seconds,
+            poll_interval_seconds=poll_interval_seconds,
+            on_update=on_update,
+        )
+
+
 def _warmup_ollama_model(*, ollama_url: str, model_name: str, timeout_seconds: int) -> None:
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
         progress.add_task(f"Loading Ollama model {model_name} and waiting until it is ready...", total=None)
@@ -245,6 +303,14 @@ def run_ollama_instance(
 ) -> None:
     """Provision an Ollama instance on Vast.ai, or use an existing server."""
     _enable_debug_if_requested(debug)
+    _request = RunOllamaInstanceRequest(
+        vastai=vastai,
+        template_hash=template_hash,
+        min_dph=min_dph,
+        max_dph=max_dph,
+        reliability=reliability,
+        ollama_url=ollama_url,
+    )
     console.print(Panel.fit("[bold blue]RUNE — Reliability Use-case Numeric Evaluator[/bold blue]"))
 
     if not vastai:
@@ -268,6 +334,28 @@ def run_ollama_instance(
 def vastai_list_models() -> None:
     """List the configured models used by the Vast.ai provisioning flow."""
     console.print(Panel.fit("[bold blue]RUNE — Configured Vast.ai Models[/bold blue]"))
+
+    if BACKEND_MODE == "http":
+        try:
+            models_payload = _http_client().get_vastai_models()
+        except RuntimeError as exc:
+            _print_error_and_exit(str(exc))
+
+        table = Table(title="Configured Vast.ai Models", show_header=True, header_style="bold magenta")
+        table.add_column("Model")
+        table.add_column("VRAM (MB)", justify="right")
+        table.add_column("Required Disk (GB)", justify="right")
+
+        for model in models_payload:
+            table.add_row(
+                str(model.get("name", "<unknown>")),
+                str(model.get("vram_mb", "<unknown>")),
+                str(model.get("required_disk_gb", "<unknown>")),
+            )
+
+        console.print(table)
+        return
+
     _print_vastai_models()
 
 
@@ -287,6 +375,18 @@ def ollama_list_models(
     """List the models exposed by an existing Ollama server."""
     _enable_debug_if_requested(debug)
     console.print(Panel.fit("[bold blue]RUNE — Existing Ollama Models[/bold blue]"))
+
+    if BACKEND_MODE == "http":
+        try:
+            payload = _http_client().get_ollama_models(ollama_url)
+            normalized_url = str(payload.get("ollama_url", ollama_url))
+            models = [str(m) for m in payload.get("models", [])]
+            running_models = {str(m) for m in payload.get("running_models", [])}
+        except RuntimeError as exc:
+            _print_error_and_exit(str(exc))
+
+        _print_ollama_models(normalized_url, models, running_models)
+        return
 
     try:
         normalized_url = use_existing_ollama_server(ollama_url, model_name="<n/a>").url
@@ -341,7 +441,36 @@ def run_agentic_agent(
 ) -> None:
     """Run an agentic system (HolmesGPT) against a Kubernetes cluster."""
     _enable_debug_if_requested(debug)
+    _request = RunAgenticAgentRequest.from_cli(
+        question=question,
+        model=model,
+        ollama_url=ollama_url,
+        ollama_warmup=ollama_warmup,
+        ollama_warmup_timeout=ollama_warmup_timeout,
+        kubeconfig=kubeconfig,
+    )
     console.print(Panel.fit("[bold blue]RUNE — Agentic Agent Runner[/bold blue]"))
+
+    if BACKEND_MODE == "http":
+        try:
+            client = _http_client()
+            payload = _run_http_job_with_progress(
+                submit_description="Submitting agentic-agent job to HTTP backend...",
+                wait_description="Waiting for agentic-agent job",
+                submit_job=lambda: client.submit_agentic_agent_job(_request.to_dict()),
+                client=client,
+            )
+        except RuntimeError as exc:
+            _print_error_and_exit(str(exc))
+
+        result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
+        answer = result.get("answer") or payload.get("answer")
+        if not isinstance(answer, str) or not answer.strip():
+            _print_error_and_exit("HTTP backend finished but did not return an agent answer")
+
+        console.print("\n[bold green]Agent Answer[/bold green]")
+        console.print(answer)
+        return
 
     if ollama_url and ollama_warmup:
         _warmup_ollama_model(
@@ -423,7 +552,42 @@ def run_benchmark(
 ) -> None:
     """Run full benchmark: provision Ollama instance, then run agentic agent."""
     _enable_debug_if_requested(debug)
+    _request = RunBenchmarkRequest.from_cli(
+        vastai=vastai,
+        template_hash=template_hash,
+        min_dph=min_dph,
+        max_dph=max_dph,
+        reliability=reliability,
+        ollama_url=ollama_url,
+        question=question,
+        model=model,
+        ollama_warmup=ollama_warmup,
+        ollama_warmup_timeout=ollama_warmup_timeout,
+        kubeconfig=kubeconfig,
+        vastai_stop_instance=vastai_stop_instance,
+    )
     console.print(Panel.fit("[bold blue]RUNE — Full Benchmark Workflow[/bold blue]"))
+
+    if BACKEND_MODE == "http":
+        try:
+            client = _http_client()
+            payload = _run_http_job_with_progress(
+                submit_description="Submitting benchmark job to HTTP backend...",
+                wait_description="Waiting for benchmark job",
+                submit_job=lambda: client.submit_benchmark_job(_request.to_dict()),
+                client=client,
+            )
+        except RuntimeError as exc:
+            _print_error_and_exit(str(exc))
+
+        result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
+        answer = result.get("answer") or payload.get("answer")
+        if not isinstance(answer, str) or not answer.strip():
+            _print_error_and_exit("HTTP backend finished but did not return a benchmark answer")
+
+        console.print("\n[bold green]Agent Answer[/bold green]")
+        console.print(answer)
+        return
 
     selected_model_name = model
     selected_ollama_url = ollama_url
