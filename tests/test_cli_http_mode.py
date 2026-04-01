@@ -76,16 +76,6 @@ def mock_rune_api_server():
                     self._write_json(200, {"status": "succeeded", "result": {"answer": "benchmark-http-answer"}})
                 return
 
-            if path == "/v1/jobs/ollama-1":
-                self._write_json(
-                    200,
-                    {
-                        "status": "succeeded",
-                        "result": {"mode": "existing", "ollama_url": "http://example:11434"},
-                    },
-                )
-                return
-
             self._write_json(404, {"error": f"Unknown path: {path}"})
 
         def do_POST(self):
@@ -94,10 +84,6 @@ def mock_rune_api_server():
 
             length = int(self.headers.get("Content-Length", "0"))
             _body = self.rfile.read(length) if length else b""
-
-            if path == "/v1/jobs/ollama-instance":
-                self._write_json(200, {"job_id": "ollama-1"})
-                return
 
             if path == "/v1/jobs/agentic-agent":
                 self._write_json(200, {"job_id": "agent-1"})
@@ -183,23 +169,3 @@ def test_cli_http_run_benchmark_job_flow(mock_rune_api_server):
 
     assert result.exit_code == 0
     assert "benchmark-http-answer" in result.stdout
-
-
-def test_cli_http_run_ollama_instance_job_flow(mock_rune_api_server):
-    runner = CliRunner()
-    result = runner.invoke(
-        rune.app,
-        [
-            "--backend",
-            "http",
-            "--api-base-url",
-            mock_rune_api_server,
-            "run-ollama-instance",
-            "--ollama-url",
-            "http://example:11434",
-        ],
-    )
-
-    assert result.exit_code == 0
-    assert "Existing server" in result.stdout
-    assert "http://example:11434" in result.stdout
