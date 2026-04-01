@@ -17,7 +17,8 @@ import rune_bench.ollama.models as ollama_models_module
 import rune_bench.workflows as workflows
 from rune_bench.agents.holmes import HolmesRunner
 from rune_bench.api_client import RuneApiClient
-from rune_bench.ollama.client import OllamaModelCapabilities
+from rune_bench.common import normalize_url
+from rune_bench.ollama.client import OllamaClient, OllamaModelCapabilities
 from rune_bench.ollama.client import OllamaClient
 from rune_bench.ollama.models import OllamaModelManager
 from rune_bench.vastai.instance import ConnectionDetails, InstanceManager, TeardownResult
@@ -55,8 +56,8 @@ def test_final_coverage_micro_branches(monkeypatch, tmp_path):
         def read(self):
             return b"{not-json"
 
-    monkeypatch.setattr(api_client_module, "urlopen", lambda *args, **kwargs: Response())
-    with pytest.raises(RuntimeError, match="invalid JSON"):
+    monkeypatch.setattr("rune_bench.common.http_client.urlopen", lambda *args, **kwargs: Response())
+    with pytest.raises(RuntimeError, match="Invalid JSON"):
         client._request("GET", "/v1/x")
 
     # ollama/models.py: warmup polling sleep branch
@@ -380,7 +381,7 @@ def test_holmes_and_ollama_remaining_branches(monkeypatch, tmp_path):
 
     # Ollama invalid URL branch
     with pytest.raises(RuntimeError):
-        OllamaClient._normalize_url("http://")
+        normalize_url("http://", service_name="Ollama")
 
     client = OllamaClient("http://x:11434")
 
@@ -391,7 +392,7 @@ def test_holmes_and_ollama_remaining_branches(monkeypatch, tmp_path):
         def read(self):
             return b""
 
-    monkeypatch.setattr("rune_bench.ollama.client.urlopen", lambda *_a, **_k: (_ for _ in ()).throw(NoDetailHttpError()))
+    monkeypatch.setattr("rune_bench.common.http_client.urlopen", lambda *_a, **_k: (_ for _ in ()).throw(NoDetailHttpError()))
     with pytest.raises(RuntimeError, match="HTTP 500"):
         client._make_request("/x", method="GET", payload=None, action="act")
 
@@ -578,7 +579,7 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
 
 def test_api_client_remaining_lines(monkeypatch):
     with pytest.raises(RuntimeError):
-        rune.RuneApiClient._normalize_url("http://")
+        normalize_url("http://", service_name="RUNE API")
 
     client = rune.RuneApiClient("http://x:8080")
 
@@ -589,10 +590,10 @@ def test_api_client_remaining_lines(monkeypatch):
         def read(self):
             return b"detail"
 
-    monkeypatch.setattr("rune_bench.api_client.urlopen", lambda *_a, **_k: (_ for _ in ()).throw(DetailHttpError()))
+    monkeypatch.setattr("rune_bench.common.http_client.urlopen", lambda *_a, **_k: (_ for _ in ()).throw(DetailHttpError()))
     with pytest.raises(RuntimeError, match="detail"):
         client._request("GET", "/x")
 
-    monkeypatch.setattr("rune_bench.api_client.urlopen", lambda *_a, **_k: (_ for _ in ()).throw(TimeoutError("late")))
+    monkeypatch.setattr("rune_bench.common.http_client.urlopen", lambda *_a, **_k: (_ for _ in ()).throw(TimeoutError("late")))
     with pytest.raises(RuntimeError, match="late"):
         client._request("GET", "/x")

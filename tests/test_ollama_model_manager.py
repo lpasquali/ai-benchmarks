@@ -5,6 +5,7 @@ import pytest
 
 import rune_bench.api_backend as api_backend
 import rune_bench.workflows as workflows
+from rune_bench.common import make_http_request
 from rune_bench.common.models import ModelSelector
 from rune_bench.ollama.client import OllamaClient, OllamaModelCapabilities
 from rune_bench.ollama.models import OllamaModelManager
@@ -44,7 +45,7 @@ def test_ollama_client_make_request_and_helpers(monkeypatch):
         captured["method"] = request.get_method()
         return DummyResponse()
 
-    monkeypatch.setattr("rune_bench.ollama.client.urlopen", fake_urlopen)
+    monkeypatch.setattr("rune_bench.common.http_client.urlopen", fake_urlopen)
 
     client = OllamaClient("localhost:11434")
     assert client.get_available_models() == ["a", "b"]
@@ -92,11 +93,11 @@ def test_ollama_client_make_request_error_paths(monkeypatch):
     def raise_http(*_args, **_kwargs):
         raise FakeHTTPError()
 
-    monkeypatch.setattr("rune_bench.ollama.client.urlopen", raise_http)
+    monkeypatch.setattr("rune_bench.common.http_client.urlopen", raise_http)
     with pytest.raises(RuntimeError, match="server exploded"):
         client._make_request("/api/tags", method="GET", payload=None, action="act")
 
-    monkeypatch.setattr("rune_bench.ollama.client.urlopen", lambda *_args, **_kwargs: (_ for _ in ()).throw(URLError("nope")))
+    monkeypatch.setattr("rune_bench.common.http_client.urlopen", lambda *_args, **_kwargs: (_ for _ in ()).throw(URLError("nope")))
     with pytest.raises(RuntimeError, match="nope"):
         client._make_request("/api/tags", method="GET", payload=None, action="act")
 
@@ -110,16 +111,16 @@ def test_ollama_client_make_request_error_paths(monkeypatch):
         def read(self):
             return b"not-json"
 
-    monkeypatch.setattr("rune_bench.ollama.client.urlopen", lambda *_args, **_kwargs: BadJsonResponse())
-    with pytest.raises(RuntimeError, match="invalid JSON"):
+    monkeypatch.setattr("rune_bench.common.http_client.urlopen", lambda *_args, **_kwargs: BadJsonResponse())
+    with pytest.raises(RuntimeError, match="Invalid JSON"):
         client._make_request("/api/tags", method="GET", payload=None, action="act")
 
     class ListResponse(BadJsonResponse):
         def read(self):
             return b"[]"
 
-    monkeypatch.setattr("rune_bench.ollama.client.urlopen", lambda *_args, **_kwargs: ListResponse())
-    with pytest.raises(RuntimeError, match="unexpected JSON payload"):
+    monkeypatch.setattr("rune_bench.common.http_client.urlopen", lambda *_args, **_kwargs: ListResponse())
+    with pytest.raises(RuntimeError, match="Unexpected JSON payload"):
         client._make_request("/api/tags", method="GET", payload=None, action="act")
 
 
