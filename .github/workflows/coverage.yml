@@ -24,7 +24,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apt install -y libjpeg-dev
+          sudo apt-get install -y libjpeg-dev
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest pytest-cov
