@@ -16,7 +16,7 @@ app = typer.Typer(help="AI Benchmarks Vast.ai Provisioning CLI", add_completion=
 console = Console()
 vast_sdk = VastAI(raw=True)
 
-DEFAULT_TEMPLATE = "c166c11f035d3a97871a23bd32ca6aba"
+DEFAULT_VASTAI_TEMPLATE = "c166c11f035d3a97871a23bd32ca6aba"
 
 MODELS = [
     {"name": "llama3.1:405b", "vram_mb": 260000},
@@ -84,7 +84,12 @@ def _run_holmesgpt_after_provision(selected_model: str, question: str, kubeconfi
 
 @app.command("provision")
 def provision_instance(
-    template_hash: str = typer.Option(DEFAULT_TEMPLATE, "--template", "-t", help="Template hash to use"),
+    template_hash: str = typer.Option(
+        DEFAULT_VASTAI_TEMPLATE,
+        "--template",
+        "-t",
+        help="Vast.ai template hash to use",
+    ),
     max_dph: float = typer.Option(3.0, help="Maximum dollars per hour"),
     min_dph: float = typer.Option(2.3, help="Minimum dollars per hour"),
     reliability: float = typer.Option(0.99, help="Minimum reliability score"),

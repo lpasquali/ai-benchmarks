@@ -8,6 +8,8 @@ from dataclasses import dataclass
 
 from vastai import VastAI
 
+from rune_bench.debug import debug_log
+
 
 @dataclass
 class Offer:
@@ -41,6 +43,9 @@ class OfferFinder:
             f"dph>={min_dph} dph<={max_dph}"
         )
         try:
+            debug_log(
+                f"Vast.ai API call: search_offers query={query!r} order={self.DEFAULT_ORDER!r} disable_bundling=True"
+            )
             results = self._sdk.search_offers(
                 query=query,
                 order=self.DEFAULT_ORDER,
@@ -49,6 +54,10 @@ class OfferFinder:
             )
         except Exception as exc:
             raise RuntimeError(f"Vast.ai offer search failed: {exc}") from exc
+
+        debug_log(
+            f"Vast.ai API result: search_offers count={len(results) if isinstance(results, list) else '<non-list>'}"
+        )
 
         if not isinstance(results, list) or not results:
             raise RuntimeError("No matching offers found for the given constraints.")

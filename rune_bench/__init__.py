@@ -1,7 +1,7 @@
 """
-provisioner — modular Vast.ai GPU provisioning library.
+rune_bench — modular benchmarking toolkit for RUNE.
 
-Exposes the top-level classes used by provision.py:
+Exposes the top-level classes used by rune.py:
     OfferFinder      — Block 1: search and select the best GPU offer
     ModelSelector    — Block 2+3: pick the best-fitting model and calculate disk size
     TemplateLoader   — Block 4: load and extract Vast.ai template configuration
@@ -9,11 +9,9 @@ Exposes the top-level classes used by provision.py:
     HolmesRunner     — Block 10: run HolmesGPT against a Kubernetes cluster
 """
 
-from .holmes import HolmesRunner
-from .instance import InstanceManager
-from .models import ModelSelector
-from .offer import OfferFinder
-from .template import TemplateLoader
+from .agents import HolmesRunner
+from .common import ModelSelector
+from .vastai import InstanceManager, OfferFinder, TemplateLoader
 
 __all__ = [
     "OfferFinder",
