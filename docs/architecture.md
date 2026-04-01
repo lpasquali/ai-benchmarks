@@ -4,7 +4,7 @@
 
 RUNE is organized in layers:
 
-- CLI layer: [rune.py](../rune.py)
+- CLI layer: [rune/__init__.py](../rune/__init__.py)
   - Typer commands
   - Rich rendering
   - interactive confirmation prompt
@@ -113,4 +113,4 @@ run-benchmark
 - removes duplicated provisioning logic between commands
 - keeps CLI focused on UX, not business orchestration
 - enables easier unit testing of workflows
-- keeps future providers/agents extensible without bloating `rune.py`
+- keeps future providers/agents extensible without bloating `rune/__init__.py`

@@ -12,8 +12,11 @@ RUNE orchestrates benchmarkable DevOps/SRE operations, with optional Vast.ai pro
 
 ```text
 ai-benchmarks/
-├── rune.py                  # Thin Typer CLI (commands, prompts, Rich output)
-├── provision.py             # CLI shim forwarding to rune.py
+├── rune/
+│   ├── __init__.py          # Thin Typer CLI (commands, prompts, Rich output)
+│   ├── __main__.py          # Package entrypoint (python -m rune)
+│   └── api.py               # API server entrypoint (python -m rune.api)
+├── provision.py             # CLI shim forwarding to rune package
 ├── rune_bench/
 │   ├── __init__.py
 │   ├── workflows.py         # Reusable orchestration workflows (no Typer/Rich)
@@ -47,7 +50,7 @@ See [docs/API_COMPATIBILITY_PLAN.md](docs/API_COMPATIBILITY_PLAN.md) for the CLI
 
 ## RUNE Commands
 
-`rune.py` provides five commands:
+`python -m rune` provides five commands:
 
 - `run-ollama-instance`: `--vastai` enabled runs the Vast.ai provisioning workflow; without `--vastai`, use `--ollama-url` existing server mode.
 - `run-agentic-agent`: run HolmesGPT-only analysis against Kubernetes.
@@ -61,14 +64,42 @@ See [docs/API_COMPATIBILITY_PLAN.md](docs/API_COMPATIBILITY_PLAN.md) for the CLI
 
 - `--backend local|http` (or `RUNE_BACKEND` env var)
 - `--api-base-url http://host:port` (or `RUNE_API_BASE_URL` env var)
+- `--api-token ...` (or `RUNE_API_TOKEN` env var)
+- `--api-tenant ...` (or `RUNE_API_TENANT` env var)
+- `--idempotency-key ...` on async HTTP job commands
 
 Default mode is `local`, preserving the current in-process CLI behavior.
 In `http` mode, the following commands can query/execute against a remote RUNE API:
 
 - `vastai-list-models`
 - `ollama-list-models`
+- `run-ollama-instance` (job submit/poll)
 - `run-agentic-agent` (job submit/poll)
 - `run-benchmark` (job submit/poll)
+
+### API server mode
+
+Run the in-repo server with persistent SQLite-backed jobs:
+
+```bash
+export RUNE_API_TOKENS='default:dev-token'
+export RUNE_API_DB_PATH=.rune-api/jobs.db
+python -m rune.api
+```
+
+Development-only unauthenticated mode is also available:
+
+```bash
+export RUNE_API_AUTH_DISABLED=1
+python -m rune.api
+```
+
+Server-side controls:
+
+- persistent async jobs in SQLite
+- tenant-scoped job lookup via `X-Tenant-ID`
+- token auth via `Authorization: Bearer ...` or `X-API-Key`
+- idempotent POST job creation via `Idempotency-Key`
 
 ### Shared agent options
 
@@ -134,28 +165,28 @@ docker run -it --rm \
 pip install -r requirements.txt
 
 # Existing server mode
-./rune.py run-ollama-instance --ollama-url http://localhost:11434
+python -m rune run-ollama-instance --ollama-url http://localhost:11434
 
 # Vast.ai mode
-./rune.py run-ollama-instance --vastai
+python -m rune run-ollama-instance --vastai
 
 # Show the configured Vast.ai model shortlist
-./rune.py vastai-list-models
+python -m rune vastai-list-models
 
 # Show models exposed by an existing Ollama server
-./rune.py ollama-list-models --ollama-url http://localhost:11434
+python -m rune ollama-list-models --ollama-url http://localhost:11434
 
 # Agent-only mode
-./rune.py run-agentic-agent --question "What is unhealthy?"
+python -m rune run-agentic-agent --question "What is unhealthy?"
 
 # Full benchmark (existing server phase 1)
-./rune.py run-benchmark --ollama-url http://localhost:11434 --model llama3.1:8b
+python -m rune run-benchmark --ollama-url http://localhost:11434 --model llama3.1:8b
 
 # Full benchmark without pre-loading the Ollama model
-./rune.py run-benchmark --ollama-url http://localhost:11434 --model llama3.1:8b --no-ollama-warmup
+python -m rune run-benchmark --ollama-url http://localhost:11434 --model llama3.1:8b --no-ollama-warmup
 
 # Full benchmark (Vast.ai phase 1)
-./rune.py run-benchmark --vastai --question "What is unhealthy?"
+python -m rune run-benchmark --vastai --question "What is unhealthy?"
 ```
 
 ## Testing
@@ -170,6 +201,19 @@ pip install -r requirements.txt
 python -m pytest -q
 ```
 
+Coverage is enforced at a minimum of 97% via pytest configuration.
+
+Coverage table columns mean:
+
+- `Stmts`: executable Python statements in the file
+- `Miss`: statements not executed by tests
+- `Cover`: percentage covered (`(Stmts - Miss) / Stmts`)
+- `Missing`: uncovered line numbers/ranges (for example `144-146` means lines 144, 145, 146)
+
+For a more graphical report, open the generated HTML output at:
+
+- `htmlcov/index.html`
+
 ### Manual tests (cost-incurring)
 
 Vast.ai instance creation/destruction paths should be validated manually,
@@ -178,7 +222,7 @@ because they can incur real costs.
 Example manual run:
 
 ```bash
-./rune.py run-benchmark --vastai --question "What is unhealthy?"
+python -m rune run-benchmark --vastai --question "What is unhealthy?"
 ```
 
 ## Contributing
