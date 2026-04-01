@@ -41,6 +41,23 @@ spec:
               - key: kubeconfig
                 path: config
         {{- end }}
+        {{- if and .Values.cloud.gcp.existingSecret (not .Values.cloud.externalSecrets.enabled) }}
+        - name: gcp-credentials
+          secret:
+            secretName: {{ .Values.cloud.gcp.existingSecret }}
+        {{- else if and .Values.cloud.externalSecrets.enabled .Values.cloud.externalSecrets.gcp.secretPath }}
+        - name: gcp-credentials
+          secret:
+            secretName: {{ include "rune.fullname" . }}-gcp-eso
+        {{- end }}
+        {{- if .Values.cloud.remoteKubernetes.enabled }}
+        - name: remote-kubeconfig
+          secret:
+            secretName: {{ .Values.cloud.remoteKubernetes.existingSecret }}
+            items:
+              - key: kubeconfig
+                path: config
+        {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -140,6 +157,129 @@ spec:
               mountPath: /root/.kube
               readOnly: true
             {{- end }}
+            {{- if or .Values.cloud.gcp.existingSecret .Values.cloud.externalSecrets.enabled }}
+            - name: gcp-credentials
+              mountPath: {{ .Values.cloud.gcp.credentialsMountPath }}
+              readOnly: true
+            {{- end }}
+            {{- if .Values.cloud.remoteKubernetes.enabled }}
+            - name: remote-kubeconfig
+              mountPath: {{ .Values.cloud.remoteKubernetes.mountPath }}
+              readOnly: true
+            {{- end }}
+                      # --- AWS credentials ---
+                      {{- $awsSecret := .Values.cloud.aws.existingSecret -}}
+                      {{- if .Values.cloud.externalSecrets.enabled }}{{- $awsSecret = printf "%s-aws-eso" (include "rune.fullname" .) }}{{- end }}
+                      {{- if $awsSecret }}
+                      - name: AWS_ACCESS_KEY_ID
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ $awsSecret }}
+                            key: AWS_ACCESS_KEY_ID
+                            optional: true
+                      - name: AWS_SECRET_ACCESS_KEY
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ $awsSecret }}
+                            key: AWS_SECRET_ACCESS_KEY
+                            optional: true
+                      - name: AWS_SESSION_TOKEN
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ $awsSecret }}
+                            key: AWS_SESSION_TOKEN
+                            optional: true
+                      - name: AWS_DEFAULT_REGION
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ $awsSecret }}
+                            key: AWS_DEFAULT_REGION
+                            optional: true
+                      {{- else if .Values.cloud.aws.accessKeyId }}
+                      - name: AWS_ACCESS_KEY_ID
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ include "rune.fullname" . }}-cloud-secrets
+                            key: AWS_ACCESS_KEY_ID
+                      - name: AWS_SECRET_ACCESS_KEY
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ include "rune.fullname" . }}-cloud-secrets
+                            key: AWS_SECRET_ACCESS_KEY
+                      {{- if .Values.cloud.aws.sessionToken }}
+                      - name: AWS_SESSION_TOKEN
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ include "rune.fullname" . }}-cloud-secrets
+                            key: AWS_SESSION_TOKEN
+                      {{- end }}
+                      {{- end }}
+                      {{- if .Values.cloud.aws.region }}
+                      - name: AWS_DEFAULT_REGION
+                        value: {{ .Values.cloud.aws.region | quote }}
+                      {{- end }}
+                      # --- Azure credentials ---
+                      {{- $azSecret := .Values.cloud.azure.existingSecret -}}
+                      {{- if .Values.cloud.externalSecrets.enabled }}{{- $azSecret = printf "%s-azure-eso" (include "rune.fullname" .) }}{{- end }}
+                      {{- if $azSecret }}
+                      - name: AZURE_CLIENT_ID
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ $azSecret }}
+                            key: AZURE_CLIENT_ID
+                            optional: true
+                      - name: AZURE_CLIENT_SECRET
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ $azSecret }}
+                            key: AZURE_CLIENT_SECRET
+                            optional: true
+                      - name: AZURE_TENANT_ID
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ $azSecret }}
+                            key: AZURE_TENANT_ID
+                            optional: true
+                      - name: AZURE_SUBSCRIPTION_ID
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ $azSecret }}
+                            key: AZURE_SUBSCRIPTION_ID
+                            optional: true
+                      {{- else if .Values.cloud.azure.clientSecret }}
+                      - name: AZURE_CLIENT_SECRET
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ include "rune.fullname" . }}-cloud-secrets
+                            key: AZURE_CLIENT_SECRET
+                      {{- end }}
+                      {{- if .Values.cloud.azure.tenantId }}
+                      - name: AZURE_TENANT_ID
+                        value: {{ .Values.cloud.azure.tenantId | quote }}
+                      {{- end }}
+                      {{- if .Values.cloud.azure.subscriptionId }}
+                      - name: AZURE_SUBSCRIPTION_ID
+                        value: {{ .Values.cloud.azure.subscriptionId | quote }}
+                      {{- end }}
+                      {{- if .Values.cloud.azure.clientId }}
+                      - name: AZURE_CLIENT_ID
+                        value: {{ .Values.cloud.azure.clientId | quote }}
+                      {{- end }}
+                      # --- GCP credentials ---
+                      {{- if or .Values.cloud.gcp.existingSecret .Values.cloud.externalSecrets.enabled }}
+                      - name: GOOGLE_APPLICATION_CREDENTIALS
+                        value: {{ printf "%s/credentials.json" .Values.cloud.gcp.credentialsMountPath | quote }}
+                      {{- end }}
+                      {{- if .Values.cloud.gcp.project }}
+                      - name: GOOGLE_CLOUD_PROJECT
+                        value: {{ .Values.cloud.gcp.project | quote }}
+                      {{- end }}
+                      # --- Remote kubeconfig ---
+                      {{- if .Values.cloud.remoteKubernetes.enabled }}
+                      - name: KUBECONFIG
+                        value: {{ printf "%s/config" .Values.cloud.remoteKubernetes.mountPath | quote }}
+                      {{- end }}
+                      # --- Extra arbitrary env vars ---
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

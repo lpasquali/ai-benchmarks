@@ -1,4 +1,8 @@
 {{- if .Values.rbac.create -}}
+{{- $verbs := list "get" "list" "watch" -}}
+{{- if not .Values.rbac.readOnly -}}
+{{- $verbs = list "get" "list" "watch" "create" "update" "patch" "delete" -}}
+{{- end -}}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -6,76 +10,119 @@ metadata:
   labels:
     {{- include "rune.labels" . | nindent 4 }}
 rules:
-  # Core Kubernetes resources needed by HolmesGPT to investigate cluster health
+  # ── Core ──────────────────────────────────────────────────────────────────
   - apiGroups: [""]
     resources:
       - pods
       - pods/log
+      - pods/status
+      - pods/exec
       - nodes
+      - nodes/metrics
+      - nodes/stats
       - services
       - endpoints
+      - endpointslices
       - events
       - namespaces
       - persistentvolumeclaims
       - persistentvolumes
       - configmaps
       - replicationcontrollers
+      - resourcequotas
+      - limitranges
       - serviceaccounts
-    verbs:
-      {{- if .Values.rbac.readOnly }}
-      - get
-      - list
-      - watch
-      {{- else }}
-      - get
-      - list
-      - watch
-      - create
-      - update
-      - patch
-      - delete
-      {{- end }}
+      - secrets
+    verbs: {{ $verbs | toJson }}
+
+  # ── Apps ──────────────────────────────────────────────────────────────────
   - apiGroups: ["apps"]
     resources:
       - deployments
       - replicasets
       - statefulsets
       - daemonsets
-    verbs:
-      {{- if .Values.rbac.readOnly }}
-      - get
-      - list
-      - watch
-      {{- else }}
-      - get
-      - list
-      - watch
-      - update
-      - patch
-      {{- end }}
+      - controllerrevisions
+    verbs: {{ $verbs | toJson }}
+
+  # ── Batch ─────────────────────────────────────────────────────────────────
   - apiGroups: ["batch"]
     resources:
       - jobs
       - cronjobs
-    verbs:
-      - get
-      - list
-      - watch
+    verbs: {{ $verbs | toJson }}
+
+  # ── Networking ────────────────────────────────────────────────────────────
   - apiGroups: ["networking.k8s.io"]
     resources:
       - ingresses
+      - ingressclasses
       - networkpolicies
-    verbs:
-      - get
-      - list
-      - watch
+    verbs: {{ $verbs | toJson }}
+
+  # ── Autoscaling ───────────────────────────────────────────────────────────
+  - apiGroups: ["autoscaling"]
+    resources:
+      - horizontalpodautoscalers
+    verbs: ["get", "list", "watch"]
+
+  # ── Policy ────────────────────────────────────────────────────────────────
+  - apiGroups: ["policy"]
+    resources:
+      - poddisruptionbudgets
+    verbs: ["get", "list", "watch"]
+
+  # ── Storage ───────────────────────────────────────────────────────────────
+  - apiGroups: ["storage.k8s.io"]
+    resources:
+      - storageclasses
+      - volumeattachments
+      - csidrivers
+      - csinodes
+    verbs: ["get", "list", "watch"]
+
+  # ── RBAC (read-only introspection) ────────────────────────────────────────
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources:
+      - clusterroles
+      - clusterrolebindings
+      - roles
+      - rolebindings
+    verbs: ["get", "list", "watch"]
+
+  # ── Certificates ─────────────────────────────────────────────────────────
+  - apiGroups: ["certificates.k8s.io"]
+    resources:
+      - certificatesigningrequests
+    verbs: ["get", "list", "watch"]
+
+  # ── Admission webhooks (read-only) ────────────────────────────────────────
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources:
+      - mutatingwebhookconfigurations
+      - validatingwebhookconfigurations
+    verbs: ["get", "list", "watch"]
+
+  # ── CRDs / API discovery ──────────────────────────────────────────────────
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources:
+      - customresourcedefinitions
+    verbs: ["get", "list", "watch"]
+
+  # ── Metrics ───────────────────────────────────────────────────────────────
   - apiGroups: ["metrics.k8s.io"]
     resources:
       - pods
       - nodes
-    verbs:
-      - get
-      - list
+    verbs: ["get", "list"]
+
+  # ── Non-resource URLs ─────────────────────────────────────────────────────
+  - nonResourceURLs:
+      - /healthz
+      - /livez
+      - /readyz
+      - /metrics
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
