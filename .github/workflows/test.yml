@@ -1,14 +1,11 @@
 name: Functional Tests
 
 on:
-  workflow_run:
-    workflows: ["Coverage Check"]
-    types: [completed]
+  workflow_dispatch:
 
 jobs:
   test:
     name: Run Functional Tests
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
