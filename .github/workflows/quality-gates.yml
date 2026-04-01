@@ -21,8 +21,6 @@ jobs:
           cache: 'pip'
       - name: Coverage
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libjpeg-dev
           python -m venv .venv
           . .venv/bin/activate
           pip install --upgrade pip
@@ -54,8 +52,6 @@ jobs:
           python-version: '3.14'
           cache: 'pip'
       - run: |
-          sudo apt-get update
-          sudo apt-get install -y libjpeg-dev
           python -m venv .venv
           . .venv/bin/activate
           pip install --upgrade pip
@@ -87,8 +83,6 @@ jobs:
           python-version: '3.14'
           cache: 'pip'
       - run: |
-          sudo apt-get update
-          sudo apt-get install -y libjpeg-dev
           python -m venv .venv
           . .venv/bin/activate
           pip install --upgrade pip
@@ -122,8 +116,6 @@ jobs:
           python-version: '3.14'
           cache: 'pip'
       - run: |
-          sudo apt-get update
-          sudo apt-get install -y libjpeg-dev
           python -m venv .venv
           . .venv/bin/activate
           pip install --upgrade pip
@@ -172,8 +164,6 @@ jobs:
           python-version: '3.14'
           cache: 'pip'
       - run: |
-          sudo apt-get update
-          sudo apt-get install -y libjpeg-dev
           python -m venv .venv
           . .venv/bin/activate
           pip install --upgrade pip
