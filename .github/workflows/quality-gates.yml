@@ -1,0 +1,289 @@
+name: Quality Gates (Concept Grouped)
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  coverage-python:
+    name: Concept/Coverage/Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+      - name: Coverage
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt pytest pytest-cov pytest-xdist
+          .venv/bin/python -m pytest --cov --cov-report=term-missing:skip-covered --cov-fail-under=97
+
+  coverage-go:
+    name: Concept/Coverage/Go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.23'
+          cache: true
+          cache-dependency-path: rune-operator/go.sum
+      - run: |
+          cd rune-operator
+          go test ./... -coverprofile=coverage.out -covermode=atomic
+
+  feature-python:
+    name: Concept/Feature/Python
+    needs: [coverage-python]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+      - run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt pytest pytest-xdist
+          .venv/bin/python -m pytest -p no:cov -o addopts='' tests/ -m "not regression" -v --tb=short
+
+  feature-go:
+    name: Concept/Feature/Go
+    needs: [coverage-go]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.23'
+          cache: true
+          cache-dependency-path: rune-operator/go.sum
+      - run: |
+          cd rune-operator
+          go test ./... -v
+
+  linting-python:
+    name: Concept/Linting/Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+      - run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt ruff mypy
+          .venv/bin/ruff check .
+          .venv/bin/mypy rune rune_bench
+
+  linting-go:
+    name: Concept/Linting/Go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.23'
+          cache: true
+          cache-dependency-path: rune-operator/go.sum
+      - run: |
+          cd rune-operator
+          test -z "$(gofmt -l .)"
+          go vet ./...
+
+  smoke-cli-api:
+    name: Concept/CLI-and-API-Smoke/Python+Containers
+    needs: [feature-python]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+      - run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt pytest
+          .venv/bin/python -m pytest -p no:cov -o addopts='' tests/test_cli_http_mode.py tests/test_api_server.py -v --tb=short
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: ai-benchmarks:rune-ci-local
+      - run: |
+          docker run --rm ai-benchmarks:rune-ci-local --help >/dev/null
+
+  smoke-operator-container:
+    name: Concept/CLI-and-API-Smoke/Go-Operator-Container
+    needs: [feature-go]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: ./rune-operator
+          file: ./rune-operator/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: ai-benchmarks:rune-operator-ci
+      - run: |
+          docker run --rm ai-benchmarks:rune-operator-ci --help >/dev/null || true
+
+  regression-python:
+    name: Concept/Regression/Python
+    needs: [feature-python]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+      - run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt pytest
+          .venv/bin/python -m pytest -p no:cov -o addopts='' -m regression tests/ -v --tb=short
+
+  regression-go:
+    name: Concept/Regression/Go
+    needs: [feature-go]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.23'
+          cache: true
+          cache-dependency-path: rune-operator/go.sum
+      - run: |
+          cd rune-operator
+          go test ./... -run Regression -v
+
+  security-sbom:
+    name: Concept/Security/SBOM-and-CVE-Policy
+    needs: [feature-python, feature-go, linting-python, linting-go]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - name: Build images
+        run: |
+          docker build -t ai-benchmarks:rune-ci-local -f Dockerfile .
+          docker build -t ai-benchmarks:rune-operator-ci -f rune-operator/Dockerfile rune-operator
+      - name: Generate SBOMs and scan
+        run: |
+          set -euo pipefail
+          mkdir -p sbom
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "${PWD}:/work" anchore/syft:v1.17.0 ai-benchmarks:rune-ci-local -o cyclonedx-json=/work/sbom/rune-image.cdx.json
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "${PWD}:/work" anchore/syft:v1.17.0 ai-benchmarks:rune-operator-ci -o cyclonedx-json=/work/sbom/operator-image.cdx.json
+          docker run --rm -v "${PWD}:/work" anchore/grype:v0.82.0 sbom:/work/sbom/rune-image.cdx.json -o json > sbom/rune-grype.json
+          docker run --rm -v "${PWD}:/work" anchore/grype:v0.82.0 sbom:/work/sbom/operator-image.cdx.json -o json > sbom/operator-grype.json
+          docker run --rm -v "${PWD}:/work" aquasec/trivy:0.57.1 sbom /work/sbom/rune-image.cdx.json --format json --output /work/sbom/rune-trivy.json --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          docker run --rm -v "${PWD}:/work" aquasec/trivy:0.57.1 sbom /work/sbom/operator-image.cdx.json --format json --output /work/sbom/operator-trivy.json --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+      - name: Enforce CVSS > 8.8 block policy
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          threshold = 8.8
+          findings = []
+          for f in Path('sbom').glob('*.json'):
+              data = json.loads(f.read_text(encoding='utf-8'))
+              if 'matches' in data:
+                  for m in data.get('matches', []):
+                      vuln = m.get('vulnerability', {})
+                      scores = []
+                      for c in vuln.get('cvss', []) or []:
+                          metrics = c.get('metrics', {})
+                          for k in ('baseScore', 'base_score'):
+                              try:
+                                  scores.append(float(metrics.get(k, 0) or 0))
+                              except Exception:
+                                  pass
+                      findings.append((vuln.get('id', 'UNKNOWN'), max(scores) if scores else 0.0, f.name))
+              elif 'Results' in data:
+                  for r in data.get('Results', []) or []:
+                      for v in r.get('Vulnerabilities', []) or []:
+                          score = 0.0
+                          for vendor in ('nvd', 'redhat', 'ghsa'):
+                              try:
+                                  score = max(score, float(v.get('CVSS', {}).get(vendor, {}).get('V3Score', 0) or 0))
+                              except Exception:
+                                  pass
+                          findings.append((v.get('VulnerabilityID', 'UNKNOWN'), score, f.name))
+          blocked = [x for x in findings if x[1] > threshold]
+          print(f'total findings: {len(findings)}')
+          print(f'blocked findings (>{threshold}): {len(blocked)}')
+          for row in blocked[:20]:
+              print(f'BLOCK: {row[0]} score={row[1]} source={row[2]}')
+          if blocked:
+              raise SystemExit(1)
+          PY
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: sbom-security-outputs
+          path: sbom/
+          retention-days: 14
+
+  merge-gate:
+    name: Merge Gate
+    if: always()
+    needs:
+      - coverage-python
+      - coverage-go
+      - feature-python
+      - feature-go
+      - linting-python
+      - linting-go
+      - smoke-cli-api
+      - smoke-operator-container
+      - regression-python
+      - regression-go
+      - security-sbom
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all concept gates passed
+        env:
+          NEEDS_JSON: ${{ toJson(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          data = json.loads(os.environ['NEEDS_JSON'])
+          failed = [(k, v.get('result')) for k, v in data.items() if v.get('result') != 'success']
+          for k, v in data.items():
+              print(f'{k}: {v.get("result")}')
+          if failed:
+              print('Merge blocked due to failing concept gates:')
+              for item in failed:
+                  print(f'- {item[0]}: {item[1]}')
+              raise SystemExit(1)
+          print('All concept gates passed.')
+          PY
