@@ -33,6 +33,13 @@ go mod tidy
 go build ./...
 ```
 
+## Build operator container image (separate from RUNE image)
+
+```bash
+cd rune-operator
+docker build -t ai-benchmarks:rune-operator .
+```
+
 ## Run locally
 
 ```bash
