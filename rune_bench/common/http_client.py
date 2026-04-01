@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import ssl
+import warnings
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
@@ -55,6 +57,7 @@ def make_http_request(
     timeout_seconds: int = 30,
     headers: dict[str, str] | None = None,
     debug_prefix: str = "HTTP",
+    verify_ssl: bool = True,
 ) -> dict[str, Any]:
     """Execute an HTTP request and return parsed JSON response.
     
@@ -66,6 +69,7 @@ def make_http_request(
         timeout_seconds: Request timeout in seconds
         headers: Optional custom headers (Content-Type is auto-added for payloads)
         debug_prefix: Prefix for debug log messages
+        verify_ssl: If False, skip TLS certificate verification (for self-signed certs)
         
     Returns:
         Parsed JSON response as dict
@@ -82,13 +86,24 @@ def make_http_request(
 
     request = Request(url, data=data, headers=request_headers, method=method)
 
+    ssl_context: ssl.SSLContext | None = None
+    if not verify_ssl:
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        warnings.warn(
+            f"TLS certificate verification is disabled for {url}. "
+            "Do not use this in production.",
+            stacklevel=3,
+        )
+
     debug_log(
         f"{debug_prefix} request: method={method} url={url} action={action} "
         f"payload={json.dumps(payload, sort_keys=True) if payload is not None else '<none>'}"
     )
 
     try:
-        with urlopen(request, timeout=timeout_seconds) as response:
+        with urlopen(request, timeout=timeout_seconds, context=ssl_context) as response:
             raw = response.read().decode("utf-8")
             debug_log(
                 f"{debug_prefix} response: method={method} url={url} status={getattr(response, 'status', '<unknown>')} "

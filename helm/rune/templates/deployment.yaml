@@ -1,0 +1,607 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "rune.fullname" . }}
+  labels:
+    {{- include "rune.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "rune.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "rune.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "rune.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- $awsSecretName := .Values.cloud.aws.existingSecret -}}
+      {{- if and .Values.cloud.externalSecrets.enabled .Values.cloud.externalSecrets.aws.secretPath }}
+      {{- $awsSecretName = printf "%s-aws-eso" (include "rune.fullname" .) -}}
+      {{- end }}
+      {{- $azureSecretName := .Values.cloud.azure.existingSecret -}}
+      {{- if and .Values.cloud.externalSecrets.enabled .Values.cloud.externalSecrets.azure.secretPath }}
+      {{- $azureSecretName = printf "%s-azure-eso" (include "rune.fullname" .) -}}
+      {{- end }}
+      {{- $gcpSecretName := .Values.cloud.gcp.existingSecret -}}
+      {{- if and .Values.cloud.externalSecrets.enabled .Values.cloud.externalSecrets.gcp.secretPath }}
+      {{- $gcpSecretName = printf "%s-gcp-eso" (include "rune.fullname" .) -}}
+      {{- end }}
+      volumes:
+        {{- if .Values.rune.kubeconfigSecret }}
+        - name: kubeconfig
+          secret:
+            secretName: {{ .Values.rune.kubeconfigSecret }}
+            items:
+              - key: kubeconfig
+                path: config
+        {{- end }}
+        {{- if $gcpSecretName }}
+        - name: gcp-credentials
+          secret:
+            secretName: {{ $gcpSecretName }}
+        {{- end }}
+        {{- if and .Values.cloud.remoteKubernetes.enabled .Values.cloud.remoteKubernetes.existingSecret }}
+        - name: remote-kubeconfig
+          secret:
+            secretName: {{ .Values.cloud.remoteKubernetes.existingSecret }}
+            items:
+              - key: kubeconfig
+                path: config
+        {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ include "rune.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["serve"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.rune.api.port | int }}
+              protocol: TCP
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          env:
+            # --- Backend / API server ---
+            - name: RUNE_BACKEND
+              value: {{ .Values.rune.backend | quote }}
+            - name: RUNE_API_HOST
+              value: {{ .Values.rune.api.host | quote }}
+            - name: RUNE_API_PORT
+              value: {{ .Values.rune.api.port | quote }}
+            {{- if .Values.rune.api.baseUrl }}
+            - name: RUNE_API_BASE_URL
+              value: {{ .Values.rune.api.baseUrl | quote }}
+            {{- end }}
+            - name: RUNE_API_TENANT
+              value: {{ .Values.rune.api.tenant | quote }}
+            - name: RUNE_API_AUTH_DISABLED
+              value: {{ .Values.rune.api.authDisabled | quote }}
+            {{- if and .Values.rune.api.tokens (not .Values.rune.existingSecret) }}
+            - name: RUNE_API_TOKENS
+              value: {{ .Values.rune.api.tokens | quote }}
+            {{- end }}
+
+            # --- Debug ---
+            - name: RUNE_DEBUG
+              value: {{ .Values.rune.debug | quote }}
+
+            # --- Vast.ai ---
+            - name: RUNE_VASTAI
+              value: {{ .Values.rune.vastai.enabled | quote }}
+            - name: RUNE_VASTAI_TEMPLATE
+              value: {{ .Values.rune.vastai.template | quote }}
+            - name: RUNE_VASTAI_MIN_DPH
+              value: {{ .Values.rune.vastai.minDph | quote }}
+            - name: RUNE_VASTAI_MAX_DPH
+              value: {{ .Values.rune.vastai.maxDph | quote }}
+            - name: RUNE_VASTAI_RELIABILITY
+              value: {{ .Values.rune.vastai.reliability | quote }}
+            - name: RUNE_VASTAI_STOP_INSTANCE
+              value: {{ .Values.rune.vastai.stopInstance | quote }}
+            {{- if and .Values.rune.vastai.apiKey (not .Values.rune.existingSecret) }}
+            - name: VAST_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rune.fullname" . }}-cloud-secrets
+                  key: VAST_API_KEY
+            {{- end }}
+
+            # --- Ollama ---
+            - name: RUNE_OLLAMA_URL
+              value: {{ .Values.rune.ollama.url | quote }}
+            - name: RUNE_OLLAMA_WARMUP
+              value: {{ .Values.rune.ollama.warmup | quote }}
+            - name: RUNE_OLLAMA_WARMUP_TIMEOUT
+              value: {{ .Values.rune.ollama.warmupTimeout | quote }}
+
+            # --- Agent / Benchmark ---
+            - name: RUNE_QUESTION
+              value: {{ .Values.rune.question | quote }}
+            - name: RUNE_MODEL
+              value: {{ .Values.rune.model | quote }}
+            {{- if .Values.rune.idempotencyKey }}
+            - name: RUNE_IDEMPOTENCY_KEY
+              value: {{ .Values.rune.idempotencyKey | quote }}
+            {{- end }}
+
+            # --- Kubeconfig path ---
+            {{- if .Values.rune.kubeconfigSecret }}
+            - name: RUNE_KUBECONFIG
+              value: /root/.kube/config
+            {{- else if .Values.rune.kubeconfig }}
+            - name: RUNE_KUBECONFIG
+              value: {{ .Values.rune.kubeconfig | quote }}
+            {{- end }}
+
+            # --- AWS credentials ---
+            {{- if $awsSecretName }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $awsSecretName }}
+                  key: AWS_ACCESS_KEY_ID
+                  optional: true
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $awsSecretName }}
+                  key: AWS_SECRET_ACCESS_KEY
+                  optional: true
+            - name: AWS_SESSION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $awsSecretName }}
+                  key: AWS_SESSION_TOKEN
+                  optional: true
+            - name: AWS_DEFAULT_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $awsSecretName }}
+                  key: AWS_DEFAULT_REGION
+                  optional: true
+            {{- else if .Values.cloud.aws.accessKeyId }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rune.fullname" . }}-cloud-secrets
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rune.fullname" . }}-cloud-secrets
+                  key: AWS_SECRET_ACCESS_KEY
+            {{- if .Values.cloud.aws.sessionToken }}
+            - name: AWS_SESSION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rune.fullname" . }}-cloud-secrets
+                  key: AWS_SESSION_TOKEN
+            {{- end }}
+            {{- end }}
+            {{- if .Values.cloud.aws.region }}
+            - name: AWS_DEFAULT_REGION
+              value: {{ .Values.cloud.aws.region | quote }}
+            {{- end }}
+
+            # --- Azure credentials ---
+            {{- if $azureSecretName }}
+            - name: AZURE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $azureSecretName }}
+                  key: AZURE_CLIENT_ID
+                  optional: true
+            - name: AZURE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $azureSecretName }}
+                  key: AZURE_CLIENT_SECRET
+                  optional: true
+            - name: AZURE_TENANT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $azureSecretName }}
+                  key: AZURE_TENANT_ID
+                  optional: true
+            - name: AZURE_SUBSCRIPTION_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $azureSecretName }}
+                  key: AZURE_SUBSCRIPTION_ID
+                  optional: true
+            {{- else if .Values.cloud.azure.clientSecret }}
+            - name: AZURE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rune.fullname" . }}-cloud-secrets
+                  key: AZURE_CLIENT_SECRET
+            {{- end }}
+            {{- if .Values.cloud.azure.clientId }}
+            - name: AZURE_CLIENT_ID
+              value: {{ .Values.cloud.azure.clientId | quote }}
+            {{- end }}
+            {{- if .Values.cloud.azure.tenantId }}
+            - name: AZURE_TENANT_ID
+              value: {{ .Values.cloud.azure.tenantId | quote }}
+            {{- end }}
+            {{- if .Values.cloud.azure.subscriptionId }}
+            - name: AZURE_SUBSCRIPTION_ID
+              value: {{ .Values.cloud.azure.subscriptionId | quote }}
+            {{- end }}
+
+            # --- GCP credentials ---
+            {{- if $gcpSecretName }}
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: {{ printf "%s/credentials.json" .Values.cloud.gcp.credentialsMountPath | quote }}
+            {{- end }}
+            {{- if .Values.cloud.gcp.project }}
+            - name: GOOGLE_CLOUD_PROJECT
+              value: {{ .Values.cloud.gcp.project | quote }}
+            {{- end }}
+
+            # --- Remote kubeconfig ---
+            {{- if and .Values.cloud.remoteKubernetes.enabled .Values.cloud.remoteKubernetes.existingSecret }}
+            - name: KUBECONFIG
+              value: {{ printf "%s/config" .Values.cloud.remoteKubernetes.mountPath | quote }}
+            {{- end }}
+
+            # --- Extra arbitrary env vars ---
+            {{- with .Values.rune.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- if or .Values.rune.existingSecret .Values.rune.extraEnvFrom }}
+          envFrom:
+            {{- if .Values.rune.existingSecret }}
+            - secretRef:
+                name: {{ .Values.rune.existingSecret }}
+            {{- end }}
+            {{- with .Values.rune.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          volumeMounts:
+            {{- if .Values.rune.kubeconfigSecret }}
+            - name: kubeconfig
+              mountPath: /root/.kube
+              readOnly: true
+            {{- end }}
+            {{- if $gcpSecretName }}
+            - name: gcp-credentials
+              mountPath: {{ .Values.cloud.gcp.credentialsMountPath }}
+              readOnly: true
+            {{- end }}
+            {{- if and .Values.cloud.remoteKubernetes.enabled .Values.cloud.remoteKubernetes.existingSecret }}
+            - name: remote-kubeconfig
+              mountPath: {{ .Values.cloud.remoteKubernetes.mountPath }}
+              readOnly: true
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "rune.fullname" . }}
+  labels:
+    {{- include "rune.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "rune.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # Roll the deployment whenever the ConfigMap changes.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "rune.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "rune.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      volumes:
+        {{- if .Values.rune.kubeconfigSecret }}
+        - name: kubeconfig
+          secret:
+            secretName: {{ .Values.rune.kubeconfigSecret }}
+            items:
+              - key: kubeconfig
+                path: config
+        {{- end }}
+        {{- if and .Values.cloud.gcp.existingSecret (not .Values.cloud.externalSecrets.enabled) }}
+        - name: gcp-credentials
+          secret:
+            secretName: {{ .Values.cloud.gcp.existingSecret }}
+        {{- else if and .Values.cloud.externalSecrets.enabled .Values.cloud.externalSecrets.gcp.secretPath }}
+        - name: gcp-credentials
+          secret:
+            secretName: {{ include "rune.fullname" . }}-gcp-eso
+        {{- end }}
+        {{- if .Values.cloud.remoteKubernetes.enabled }}
+        - name: remote-kubeconfig
+          secret:
+            secretName: {{ .Values.cloud.remoteKubernetes.existingSecret }}
+            items:
+              - key: kubeconfig
+                path: config
+        {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ include "rune.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["serve"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.rune.api.port | int }}
+              protocol: TCP
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          env:
+            # --- Backend / API server ---
+            - name: RUNE_BACKEND
+              value: {{ .Values.rune.backend | quote }}
+            - name: RUNE_API_HOST
+              value: {{ .Values.rune.api.host | quote }}
+            - name: RUNE_API_PORT
+              value: {{ .Values.rune.api.port | quote }}
+            {{- if .Values.rune.api.baseUrl }}
+            - name: RUNE_API_BASE_URL
+              value: {{ .Values.rune.api.baseUrl | quote }}
+            {{- end }}
+            - name: RUNE_API_TENANT
+              value: {{ .Values.rune.api.tenant | quote }}
+            - name: RUNE_API_AUTH_DISABLED
+              value: {{ .Values.rune.api.authDisabled | quote }}
+            {{- if and .Values.rune.api.tokens (not .Values.rune.existingSecret) }}
+            - name: RUNE_API_TOKENS
+              value: {{ .Values.rune.api.tokens | quote }}
+            {{- end }}
+            # --- Debug ---
+            - name: RUNE_DEBUG
+              value: {{ .Values.rune.debug | quote }}
+            # --- Vast.ai ---
+            - name: RUNE_VASTAI
+              value: {{ .Values.rune.vastai.enabled | quote }}
+            - name: RUNE_VASTAI_TEMPLATE
+              value: {{ .Values.rune.vastai.template | quote }}
+            - name: RUNE_VASTAI_MIN_DPH
+              value: {{ .Values.rune.vastai.minDph | quote }}
+            - name: RUNE_VASTAI_MAX_DPH
+              value: {{ .Values.rune.vastai.maxDph | quote }}
+            - name: RUNE_VASTAI_RELIABILITY
+              value: {{ .Values.rune.vastai.reliability | quote }}
+            - name: RUNE_VASTAI_STOP_INSTANCE
+              value: {{ .Values.rune.vastai.stopInstance | quote }}
+            {{- if and .Values.rune.vastai.apiKey (not .Values.rune.existingSecret) }}
+            - name: VAST_API_KEY
+              value: {{ .Values.rune.vastai.apiKey | quote }}
+            {{- end }}
+            # --- Ollama ---
+            - name: RUNE_OLLAMA_URL
+              value: {{ .Values.rune.ollama.url | quote }}
+            - name: RUNE_OLLAMA_WARMUP
+              value: {{ .Values.rune.ollama.warmup | quote }}
+            - name: RUNE_OLLAMA_WARMUP_TIMEOUT
+              value: {{ .Values.rune.ollama.warmupTimeout | quote }}
+            # --- Agent / Benchmark ---
+            - name: RUNE_QUESTION
+              value: {{ .Values.rune.question | quote }}
+            - name: RUNE_MODEL
+              value: {{ .Values.rune.model | quote }}
+            {{- if .Values.rune.idempotencyKey }}
+            - name: RUNE_IDEMPOTENCY_KEY
+              value: {{ .Values.rune.idempotencyKey | quote }}
+            {{- end }}
+            # --- Kubeconfig path ---
+            {{- if .Values.rune.kubeconfigSecret }}
+            - name: RUNE_KUBECONFIG
+              value: /root/.kube/config
+            {{- else if .Values.rune.kubeconfig }}
+            - name: RUNE_KUBECONFIG
+              value: {{ .Values.rune.kubeconfig | quote }}
+            {{- end }}
+            # --- Extra arbitrary env vars ---
+            {{- with .Values.rune.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- if or .Values.rune.existingSecret .Values.rune.extraEnvFrom }}
+          envFrom:
+            {{- if .Values.rune.existingSecret }}
+            - secretRef:
+                name: {{ .Values.rune.existingSecret }}
+            {{- end }}
+            {{- with .Values.rune.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          volumeMounts:
+            {{- if .Values.rune.kubeconfigSecret }}
+            - name: kubeconfig
+              mountPath: /root/.kube
+              readOnly: true
+            {{- end }}
+            {{- if or .Values.cloud.gcp.existingSecret .Values.cloud.externalSecrets.enabled }}
+            - name: gcp-credentials
+              mountPath: {{ .Values.cloud.gcp.credentialsMountPath }}
+              readOnly: true
+            {{- end }}
+            {{- if .Values.cloud.remoteKubernetes.enabled }}
+            - name: remote-kubeconfig
+              mountPath: {{ .Values.cloud.remoteKubernetes.mountPath }}
+              readOnly: true
+            {{- end }}
+                      # --- AWS credentials ---
+                      {{- $awsSecret := .Values.cloud.aws.existingSecret -}}
+                      {{- if .Values.cloud.externalSecrets.enabled }}{{- $awsSecret = printf "%s-aws-eso" (include "rune.fullname" .) }}{{- end }}
+                      {{- if $awsSecret }}
+                      - name: AWS_ACCESS_KEY_ID
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ $awsSecret }}
+                            key: AWS_ACCESS_KEY_ID
+                            optional: true
+                      - name: AWS_SECRET_ACCESS_KEY
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ $awsSecret }}
+                            key: AWS_SECRET_ACCESS_KEY
+                            optional: true
+                      - name: AWS_SESSION_TOKEN
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ $awsSecret }}
+                            key: AWS_SESSION_TOKEN
+                            optional: true
+                      - name: AWS_DEFAULT_REGION
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ $awsSecret }}
+                            key: AWS_DEFAULT_REGION
+                            optional: true
+                      {{- else if .Values.cloud.aws.accessKeyId }}
+                      - name: AWS_ACCESS_KEY_ID
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ include "rune.fullname" . }}-cloud-secrets
+                            key: AWS_ACCESS_KEY_ID
+                      - name: AWS_SECRET_ACCESS_KEY
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ include "rune.fullname" . }}-cloud-secrets
+                            key: AWS_SECRET_ACCESS_KEY
+                      {{- if .Values.cloud.aws.sessionToken }}
+                      - name: AWS_SESSION_TOKEN
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ include "rune.fullname" . }}-cloud-secrets
+                            key: AWS_SESSION_TOKEN
+                      {{- end }}
+                      {{- end }}
+                      {{- if .Values.cloud.aws.region }}
+                      - name: AWS_DEFAULT_REGION
+                        value: {{ .Values.cloud.aws.region | quote }}
+                      {{- end }}
+                      # --- Azure credentials ---
+                      {{- $azSecret := .Values.cloud.azure.existingSecret -}}
+                      {{- if .Values.cloud.externalSecrets.enabled }}{{- $azSecret = printf "%s-azure-eso" (include "rune.fullname" .) }}{{- end }}
+                      {{- if $azSecret }}
+                      - name: AZURE_CLIENT_ID
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ $azSecret }}
+                            key: AZURE_CLIENT_ID
+                            optional: true
+                      - name: AZURE_CLIENT_SECRET
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ $azSecret }}
+                            key: AZURE_CLIENT_SECRET
+                            optional: true
+                      - name: AZURE_TENANT_ID
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ $azSecret }}
+                            key: AZURE_TENANT_ID
+                            optional: true
+                      - name: AZURE_SUBSCRIPTION_ID
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ $azSecret }}
+                            key: AZURE_SUBSCRIPTION_ID
+                            optional: true
+                      {{- else if .Values.cloud.azure.clientSecret }}
+                      - name: AZURE_CLIENT_SECRET
+                        valueFrom:
+                          secretKeyRef:
+                            name: {{ include "rune.fullname" . }}-cloud-secrets
+                            key: AZURE_CLIENT_SECRET
+                      {{- end }}
+                      {{- if .Values.cloud.azure.tenantId }}
+                      - name: AZURE_TENANT_ID
+                        value: {{ .Values.cloud.azure.tenantId | quote }}
+                      {{- end }}
+                      {{- if .Values.cloud.azure.subscriptionId }}
+                      - name: AZURE_SUBSCRIPTION_ID
+                        value: {{ .Values.cloud.azure.subscriptionId | quote }}
+                      {{- end }}
+                      {{- if .Values.cloud.azure.clientId }}
+                      - name: AZURE_CLIENT_ID
+                        value: {{ .Values.cloud.azure.clientId | quote }}
+                      {{- end }}
+                      # --- GCP credentials ---
+                      {{- if or .Values.cloud.gcp.existingSecret .Values.cloud.externalSecrets.enabled }}
+                      - name: GOOGLE_APPLICATION_CREDENTIALS
+                        value: {{ printf "%s/credentials.json" .Values.cloud.gcp.credentialsMountPath | quote }}
+                      {{- end }}
+                      {{- if .Values.cloud.gcp.project }}
+                      - name: GOOGLE_CLOUD_PROJECT
+                        value: {{ .Values.cloud.gcp.project | quote }}
+                      {{- end }}
+                      # --- Remote kubeconfig ---
+                      {{- if .Values.cloud.remoteKubernetes.enabled }}
+                      - name: KUBECONFIG
+                        value: {{ printf "%s/config" .Values.cloud.remoteKubernetes.mountPath | quote }}
+                      {{- end }}
+                      # --- Extra arbitrary env vars ---
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

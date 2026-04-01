@@ -100,6 +100,7 @@ def test_fetch_and_warmup_helpers(monkeypatch):
 def test_run_vastai_provisioning_helper(monkeypatch):
     test_console = Console(record=True)
     monkeypatch.setattr(rune, "console", test_console)
+    monkeypatch.setattr(rune, "_vastai_sdk", lambda: MagicMock())
     monkeypatch.setattr(rune, "provision_vastai_ollama", lambda *_args, **_kwargs: _result())
     assert rune._run_vastai_provisioning(template_hash="t", min_dph=1, max_dph=2, reliability=0.9).contract_id == 7
 
@@ -252,6 +253,7 @@ def test_run_benchmark_paths(monkeypatch, tmp_path):
     assert "bench-local" in test_console.export_text()
 
     monkeypatch.setattr(rune, "_run_vastai_provisioning", lambda **_kwargs: _result())
+    monkeypatch.setattr(rune, "_vastai_sdk", lambda: MagicMock())
     monkeypatch.setattr(rune, "HolmesRunner", lambda _path: type("R", (), {"ask": lambda self, **_: "bench-vastai"})())
     monkeypatch.setattr(rune, "stop_vastai_instance", lambda *_args, **_kwargs: TeardownResult(contract_id=7, destroyed_instance=True, destroyed_volume_ids=[], verification_ok=False, verification_message="warn"))
     rune.run_benchmark(debug=False, vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url=None, question="q", model="m", ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)

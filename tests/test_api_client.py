@@ -76,7 +76,7 @@ def test_request_adds_auth_tenant_and_idempotency_headers(monkeypatch):
         def read(self):
             return b'{"ok": true}'
 
-    def fake_urlopen(request, timeout):
+    def fake_urlopen(request, timeout, context=None):
         captured["headers"] = dict(request.header_items())
         captured["timeout"] = timeout
         return DummyResponse()

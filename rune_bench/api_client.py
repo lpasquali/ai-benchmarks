@@ -3,6 +3,7 @@
 import os
 from dataclasses import dataclass
 import time
+from typing import Callable
 from urllib.parse import urlencode
 
 from rune_bench.common import make_http_request, normalize_url
@@ -13,6 +14,7 @@ class RuneApiClient:
     base_url: str
     api_token: str | None = None
     tenant_id: str | None = None
+    verify_ssl: bool = True
 
     def __post_init__(self) -> None:
         self.base_url = normalize_url(self.base_url, service_name="RUNE API")
@@ -47,6 +49,7 @@ class RuneApiClient:
             timeout_seconds=20,
             headers=headers,
             debug_prefix="RUNE API",
+            verify_ssl=self.verify_ssl,
         )
 
     def get_vastai_models(self) -> list[dict]:
@@ -113,7 +116,7 @@ class RuneApiClient:
         *,
         timeout_seconds: int = 3600,
         poll_interval_seconds: float = 2.0,
-        on_update: callable | None = None,
+        on_update: Callable[[str, str | None], None] | None = None,
     ) -> dict:
         deadline = time.monotonic() + timeout_seconds
         last_status = ""

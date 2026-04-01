@@ -8,7 +8,7 @@ import threading
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Callable
+from typing import Callable, TypeAlias
 from urllib.parse import parse_qs, urlparse
 
 from rune_bench.api_backend import (
@@ -24,6 +24,27 @@ from rune_bench.api_contracts import (
     RunOllamaInstanceRequest,
 )
 from rune_bench.job_store import JobRecord, JobStore
+
+BackendRequest: TypeAlias = RunAgenticAgentRequest | RunBenchmarkRequest | RunOllamaInstanceRequest
+BackendHandler: TypeAlias = Callable[[BackendRequest], dict]
+
+
+def _run_agentic_backend(request: BackendRequest) -> dict:
+    if not isinstance(request, RunAgenticAgentRequest):
+        raise RuntimeError("invalid request type for agentic-agent backend")
+    return run_agentic_agent(request)
+
+
+def _run_benchmark_backend(request: BackendRequest) -> dict:
+    if not isinstance(request, RunBenchmarkRequest):
+        raise RuntimeError("invalid request type for benchmark backend")
+    return run_benchmark(request)
+
+
+def _run_ollama_instance_backend(request: BackendRequest) -> dict:
+    if not isinstance(request, RunOllamaInstanceRequest):
+        raise RuntimeError("invalid request type for ollama-instance backend")
+    return run_ollama_instance(request)
 
 
 @dataclass(frozen=True)
@@ -57,14 +78,14 @@ class RuneApiApplication:
         *,
         store: JobStore,
         security: ApiSecurityConfig,
-        backend_functions: dict[str, Callable[[object], dict]] | None = None,
+        backend_functions: dict[str, BackendHandler] | None = None,
     ) -> None:
         self.store = store
         self.security = security
         self.backend_functions = backend_functions or {
-            "agentic-agent": lambda request: run_agentic_agent(request),
-            "benchmark": lambda request: run_benchmark(request),
-            "ollama-instance": lambda request: run_ollama_instance(request),
+            "agentic-agent": _run_agentic_backend,
+            "benchmark": _run_benchmark_backend,
+            "ollama-instance": _run_ollama_instance_backend,
         }
         self.store.mark_incomplete_jobs_failed()
 
@@ -217,6 +238,7 @@ class RuneApiApplication:
         self.store.update_job(job_id, status="succeeded", result_payload=result, message="job completed")
 
     def _dispatch(self, kind: str, payload: dict) -> dict:
+        request: BackendRequest
         if kind == "agentic-agent":
             request = RunAgenticAgentRequest(**payload)
         elif kind == "benchmark":
@@ -240,7 +262,7 @@ class RuneApiApplication:
 
 
 def _job_to_payload(job: JobRecord) -> dict:
-    payload = {
+    payload: dict[str, object] = {
         "job_id": job.job_id,
         "tenant_id": job.tenant_id,
         "kind": job.kind,
