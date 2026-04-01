@@ -1,15 +1,16 @@
 import pytest
 
 from rune_bench.api_client import RuneApiClient
+from rune_bench.common import normalize_url
 
 
 def test_normalize_url_accepts_host_without_scheme():
-    assert RuneApiClient._normalize_url("localhost:8080") == "http://localhost:8080"
+    assert normalize_url("localhost:8080", service_name="RUNE API") == "http://localhost:8080"
 
 
 def test_normalize_url_rejects_invalid():
     with pytest.raises(RuntimeError):
-        RuneApiClient._normalize_url(None)
+        normalize_url(None, service_name="RUNE API")
 
 
 def test_get_vastai_models_validates_payload(monkeypatch):
@@ -80,7 +81,7 @@ def test_request_adds_auth_tenant_and_idempotency_headers(monkeypatch):
         captured["timeout"] = timeout
         return DummyResponse()
 
-    monkeypatch.setattr("rune_bench.api_client.urlopen", fake_urlopen)
+    monkeypatch.setattr("rune_bench.common.http_client.urlopen", fake_urlopen)
 
     client = RuneApiClient("http://api:8080", api_token="secret", tenant_id="tenant-a")
     payload = client._request("POST", "/v1/jobs/benchmark", body={"x": 1}, idempotency_key="idem-1")
