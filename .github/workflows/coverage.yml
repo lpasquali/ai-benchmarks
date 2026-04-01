@@ -441,3 +441,39 @@ jobs:
             sbom/security-summary.txt
             sbom/security-summary.sarif
           retention-days: 14
+
+  merge-gate:
+    name: Merge Gate
+    needs:
+      - coverage
+      - test
+      - docker-build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate upstream job results
+        env:
+          NEEDS_JSON: ${{ toJson(needs) }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+
+          needs = json.loads(os.environ["NEEDS_JSON"])
+          failed = []
+
+          for name, payload in needs.items():
+              result = payload.get("result")
+              print(f"{name}: {result}")
+              if result != "success":
+                  failed.append((name, result))
+
+          if failed:
+              print("\nMerge blocked because one or more required CI jobs did not succeed:")
+              for name, result in failed:
+                  print(f"- {name}: {result}")
+              raise SystemExit(1)
+
+          print("\nAll required CI jobs succeeded. Merge gate passed.")
+          PY
