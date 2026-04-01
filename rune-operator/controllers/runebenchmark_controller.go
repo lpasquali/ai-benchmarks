@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/robfig/cron/v3"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	corev1 "k8s.io/api/core/v1"
@@ -19,7 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"github.com/robfig/cron/v3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -134,9 +134,9 @@ func (r *RuneBenchmarkReconciler) executeBenchmark(ctx context.Context, obj *ben
 	record := benchv1alpha1.RunRecord{SubmittedAt: metav1.Now(), Status: "submitted"}
 
 	payload := map[string]any{
-		"workflow": obj.Spec.Workflow,
-		"question": obj.Spec.Question,
-		"model":    obj.Spec.Model,
+		"workflow":   obj.Spec.Workflow,
+		"question":   obj.Spec.Question,
+		"model":      obj.Spec.Model,
 		"ollama_url": obj.Spec.OllamaURL,
 	}
 	body, _ := json.Marshal(payload)

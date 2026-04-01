@@ -7,9 +7,9 @@ import (
 )
 
 var (
-	GroupVersion = schema.GroupVersion{Group: "bench.rune.ai", Version: "v1alpha1"}
+	GroupVersion  = schema.GroupVersion{Group: "bench.rune.ai", Version: "v1alpha1"}
 	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}
-	AddToScheme = SchemeBuilder.AddToScheme
+	AddToScheme   = SchemeBuilder.AddToScheme
 )
 
 func ConditionReady(status metav1.ConditionStatus, reason, message string, generation int64) metav1.Condition {

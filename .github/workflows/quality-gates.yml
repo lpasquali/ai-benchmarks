@@ -1,4 +1,4 @@
-name: Quality Gates (Concept Grouped)
+name: Quality Gates (RuneGate Grouped)
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   coverage-python:
-    name: Concept/Coverage/Python
+    name: RuneGate/Coverage/Python
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -21,14 +21,16 @@ jobs:
           cache: 'pip'
       - name: Coverage
         run: |
+          sudo apt-get update
+          sudo apt-get install -y libjpeg-dev
           python -m venv .venv
           . .venv/bin/activate
           pip install --upgrade pip
-          pip install -r requirements.txt pytest pytest-cov pytest-xdist
+          pip install --prefer-binary -r requirements.txt pytest pytest-cov pytest-xdist
           .venv/bin/python -m pytest --cov --cov-report=term-missing:skip-covered --cov-fail-under=97
 
   coverage-go:
-    name: Concept/Coverage/Go
+    name: RuneGate/Coverage/Go
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -42,7 +44,7 @@ jobs:
           go test ./... -coverprofile=coverage.out -covermode=atomic
 
   feature-python:
-    name: Concept/Feature/Python
+    name: RuneGate/Feature/Python
     needs: [coverage-python]
     runs-on: ubuntu-latest
     steps:
@@ -52,14 +54,16 @@ jobs:
           python-version: '3.14'
           cache: 'pip'
       - run: |
+          sudo apt-get update
+          sudo apt-get install -y libjpeg-dev
           python -m venv .venv
           . .venv/bin/activate
           pip install --upgrade pip
-          pip install -r requirements.txt pytest pytest-xdist
+          pip install --prefer-binary -r requirements.txt pytest pytest-xdist
           .venv/bin/python -m pytest -p no:cov -o addopts='' tests/ -m "not regression" -v --tb=short
 
   feature-go:
-    name: Concept/Feature/Go
+    name: RuneGate/Feature/Go
     needs: [coverage-go]
     runs-on: ubuntu-latest
     steps:
@@ -74,7 +78,7 @@ jobs:
           go test ./... -v
 
   linting-python:
-    name: Concept/Linting/Python
+    name: RuneGate/Linting/Python
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -83,15 +87,17 @@ jobs:
           python-version: '3.14'
           cache: 'pip'
       - run: |
+          sudo apt-get update
+          sudo apt-get install -y libjpeg-dev
           python -m venv .venv
           . .venv/bin/activate
           pip install --upgrade pip
-          pip install -r requirements.txt ruff mypy
-          .venv/bin/ruff check .
+          pip install --prefer-binary -r requirements.txt ruff mypy
+          .venv/bin/ruff check rune rune_bench
           .venv/bin/mypy rune rune_bench
 
   linting-go:
-    name: Concept/Linting/Go
+    name: RuneGate/Linting/Go
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -106,7 +112,7 @@ jobs:
           go vet ./...
 
   smoke-cli-api:
-    name: Concept/CLI-and-API-Smoke/Python+Containers
+    name: RuneGate/CLI-and-API-Smoke/Python+Containers
     needs: [feature-python]
     runs-on: ubuntu-latest
     steps:
@@ -116,10 +122,12 @@ jobs:
           python-version: '3.14'
           cache: 'pip'
       - run: |
+          sudo apt-get update
+          sudo apt-get install -y libjpeg-dev
           python -m venv .venv
           . .venv/bin/activate
           pip install --upgrade pip
-          pip install -r requirements.txt pytest
+          pip install --prefer-binary -r requirements.txt pytest
           .venv/bin/python -m pytest -p no:cov -o addopts='' tests/test_cli_http_mode.py tests/test_api_server.py -v --tb=short
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
@@ -132,10 +140,10 @@ jobs:
           push: false
           tags: ai-benchmarks:rune-ci-local
       - run: |
-          docker run --rm ai-benchmarks:rune-ci-local --help >/dev/null
+          docker run --rm ai-benchmarks:rune-ci-local vastai-list-models >/dev/null
 
   smoke-operator-container:
-    name: Concept/CLI-and-API-Smoke/Go-Operator-Container
+    name: RuneGate/CLI-and-API-Smoke/Go-Operator-Container
     needs: [feature-go]
     runs-on: ubuntu-latest
     steps:
@@ -154,7 +162,7 @@ jobs:
           docker run --rm ai-benchmarks:rune-operator-ci --help >/dev/null || true
 
   regression-python:
-    name: Concept/Regression/Python
+    name: RuneGate/Regression/Python
     needs: [feature-python]
     runs-on: ubuntu-latest
     steps:
@@ -164,14 +172,16 @@ jobs:
           python-version: '3.14'
           cache: 'pip'
       - run: |
+          sudo apt-get update
+          sudo apt-get install -y libjpeg-dev
           python -m venv .venv
           . .venv/bin/activate
           pip install --upgrade pip
-          pip install -r requirements.txt pytest
+          pip install --prefer-binary -r requirements.txt pytest
           .venv/bin/python -m pytest -p no:cov -o addopts='' -m regression tests/ -v --tb=short
 
   regression-go:
-    name: Concept/Regression/Go
+    name: RuneGate/Regression/Go
     needs: [feature-go]
     runs-on: ubuntu-latest
     steps:
@@ -186,7 +196,7 @@ jobs:
           go test ./... -run Regression -v
 
   security-sbom:
-    name: Concept/Security/SBOM-and-CVE-Policy
+    name: RuneGate/Security/SBOM-and-CVE-Policy
     needs: [feature-python, feature-go, linting-python, linting-go]
     runs-on: ubuntu-latest
     steps:
@@ -281,9 +291,9 @@ jobs:
           for k, v in data.items():
               print(f'{k}: {v.get("result")}')
           if failed:
-              print('Merge blocked due to failing concept gates:')
+              print('Merge blocked due to failing RuneGate checks:')
               for item in failed:
                   print(f'- {item[0]}: {item[1]}')
               raise SystemExit(1)
-          print('All concept gates passed.')
+          print('All RuneGate checks passed.')
           PY
