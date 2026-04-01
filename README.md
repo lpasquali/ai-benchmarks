@@ -57,6 +57,14 @@ See [docs/API_COMPATIBILITY_PLAN.md](docs/API_COMPATIBILITY_PLAN.md) for the CLI
 
 ## CLI Options Summary
 
+### Backend selection
+
+- `--backend local|http` (or `RUNE_BACKEND` env var)
+- `--api-base-url http://host:port` (or `RUNE_API_BASE_URL` env var)
+
+Default mode is `local`, preserving the current in-process CLI behavior.
+In `http` mode, model-list commands can query a remote RUNE API.
+
 ### Shared agent options
 
 - `--question`, `-q`

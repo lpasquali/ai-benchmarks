@@ -24,12 +24,16 @@ Target API operations:
 
 ### Phase 1 — Contracts + CLI adapter seam (first implementation)
 
+Status: completed.
+
 1. Add stable request/response contracts for each CLI operation.
 2. Add a local backend adapter that executes the existing in-process workflow.
 3. Keep CLI behavior identical; transport stays local by default.
 4. Add tests for contracts and mapping from CLI inputs.
 
 ### Phase 2 — HTTP backend (opt-in)
+
+Status: in progress.
 
 1. Add API transport client implementation using the same contracts.
 2. Add CLI option/environment switch to use local or remote backend.

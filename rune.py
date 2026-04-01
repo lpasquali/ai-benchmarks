@@ -7,6 +7,7 @@ This file only handles CLI argument parsing, Rich output, and orchestration.
 """
 
 from pathlib import Path
+import os
 
 import typer
 from rich.console import Console
@@ -16,6 +17,7 @@ from rich.table import Table
 from vastai import VastAI
 
 from rune_bench import HolmesRunner
+from rune_bench.api_client import RuneApiClient
 from rune_bench.api_contracts import (
     RunAgenticAgentRequest,
     RunBenchmarkRequest,
@@ -40,10 +42,24 @@ app = typer.Typer(help="RUNE — Reliability Use-case Numeric Evaluator", add_co
 console = Console()
 
 DEFAULT_VASTAI_TEMPLATE = "c166c11f035d3a97871a23bd32ca6aba"
+BACKEND_MODE = os.environ.get("RUNE_BACKEND", "local").strip().lower() or "local"
+API_BASE_URL = os.environ.get("RUNE_API_BASE_URL", "http://localhost:8080").strip() or "http://localhost:8080"
 
 
 @app.callback()
 def main(
+    backend: str = typer.Option(
+        BACKEND_MODE,
+        "--backend",
+        envvar="RUNE_BACKEND",
+        help="Execution backend: local (default) or http",
+    ),
+    api_base_url: str = typer.Option(
+        API_BASE_URL,
+        "--api-base-url",
+        envvar="RUNE_API_BASE_URL",
+        help="Base URL for HTTP backend mode",
+    ),
     debug: bool = typer.Option(
         False,
         "--debug",
@@ -52,6 +68,12 @@ def main(
     ),
 ) -> None:
     """Configure global CLI options."""
+    global BACKEND_MODE, API_BASE_URL
+    normalized_backend = backend.strip().lower()
+    if normalized_backend not in {"local", "http"}:
+        raise typer.BadParameter("--backend must be either 'local' or 'http'")
+    BACKEND_MODE = normalized_backend
+    API_BASE_URL = api_base_url.strip() or "http://localhost:8080"
     set_debug(debug)
 
 
@@ -175,6 +197,10 @@ def _print_ollama_models(ollama_url: str, models: list[str], running_models: set
     console.print(table)
 
 
+def _http_client() -> RuneApiClient:
+    return RuneApiClient(API_BASE_URL)
+
+
 def _warmup_ollama_model(*, ollama_url: str, model_name: str, timeout_seconds: int) -> None:
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
         progress.add_task(f"Loading Ollama model {model_name} and waiting until it is ready...", total=None)
@@ -281,6 +307,28 @@ def run_ollama_instance(
 def vastai_list_models() -> None:
     """List the configured models used by the Vast.ai provisioning flow."""
     console.print(Panel.fit("[bold blue]RUNE — Configured Vast.ai Models[/bold blue]"))
+
+    if BACKEND_MODE == "http":
+        try:
+            models_payload = _http_client().get_vastai_models()
+        except RuntimeError as exc:
+            _print_error_and_exit(str(exc))
+
+        table = Table(title="Configured Vast.ai Models", show_header=True, header_style="bold magenta")
+        table.add_column("Model")
+        table.add_column("VRAM (MB)", justify="right")
+        table.add_column("Required Disk (GB)", justify="right")
+
+        for model in models_payload:
+            table.add_row(
+                str(model.get("name", "<unknown>")),
+                str(model.get("vram_mb", "<unknown>")),
+                str(model.get("required_disk_gb", "<unknown>")),
+            )
+
+        console.print(table)
+        return
+
     _print_vastai_models()
 
 
@@ -300,6 +348,18 @@ def ollama_list_models(
     """List the models exposed by an existing Ollama server."""
     _enable_debug_if_requested(debug)
     console.print(Panel.fit("[bold blue]RUNE — Existing Ollama Models[/bold blue]"))
+
+    if BACKEND_MODE == "http":
+        try:
+            payload = _http_client().get_ollama_models(ollama_url)
+            normalized_url = str(payload.get("ollama_url", ollama_url))
+            models = [str(m) for m in payload.get("models", [])]
+            running_models = {str(m) for m in payload.get("running_models", [])}
+        except RuntimeError as exc:
+            _print_error_and_exit(str(exc))
+
+        _print_ollama_models(normalized_url, models, running_models)
+        return
 
     try:
         normalized_url = use_existing_ollama_server(ollama_url, model_name="<n/a>").url
