@@ -32,19 +32,29 @@ jobs:
           python-version: '3.14'
           cache: 'pip'
 
+      - name: Restore virtualenv cache
+        id: cache-venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/coverage.yml') }}
+
       - name: Install dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
         run: |
           sudo apt-get install -y libjpeg-dev
+          python -m venv .venv
+          . .venv/bin/activate
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-cov
+          pip install pytest pytest-cov pytest-xdist
 
       - name: Run tests with coverage
-        run: pytest --cov --cov-report=term-missing:skip-covered --cov-fail-under=97
+        run: .venv/bin/python -m pytest --cov --cov-report=term-missing:skip-covered --cov-fail-under=97
 
       - name: Generate coverage report
         if: always()
-        run: coverage report
+        run: .venv/bin/python -m coverage report
 
       - name: Upload coverage to artifacts
         if: always()
@@ -61,7 +71,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             try {
-              const output = require('child_process').execSync('coverage report', { encoding: 'utf-8' });
+              const output = require('child_process').execSync('.venv/bin/python -m coverage report', { encoding: 'utf-8' });
               const lines = output.split('\n');
               const totalLine = lines.find((line) => line.trim().startsWith('TOTAL'));
               if (!totalLine) {
@@ -109,37 +119,47 @@ jobs:
           python-version: '3.14'
           cache: 'pip'
 
+      - name: Restore virtualenv cache
+        id: cache-venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/coverage.yml') }}
+
       - name: Install dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
         run: |
+          python -m venv .venv
+          . .venv/bin/activate
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest pytest-xdist
 
       - name: Run unit tests
-        run: pytest tests/ -v --tb=short -x
+        run: .venv/bin/python -m pytest tests/ -v --tb=short -x
 
       - name: Run CLI integration tests
-        run: pytest tests/test_rune_cli_integration.py -v --tb=short
+        run: .venv/bin/python -m pytest tests/test_rune_cli_integration.py -v --tb=short
 
       - name: Run API tests
-        run: pytest tests/test_api_*.py -v --tb=short
+        run: .venv/bin/python -m pytest tests/test_api_*.py -v --tb=short
 
       - name: Run model manager tests
-        run: pytest tests/test_ollama_model_manager.py -v --tb=short
+        run: .venv/bin/python -m pytest tests/test_ollama_model_manager.py -v --tb=short
 
       - name: Run Vast.ai integration tests (mocked)
-        run: pytest tests/test_vastai_instance_manager.py tests/test_vastai_mocked.py -v --tb=short
+        run: .venv/bin/python -m pytest tests/test_vastai_instance_manager.py tests/test_vastai_mocked.py -v --tb=short
 
       - name: Run error path tests
-        run: pytest tests/test_comprehensive_error_paths.py -v --tb=short
+        run: .venv/bin/python -m pytest tests/test_comprehensive_error_paths.py -v --tb=short
 
       - name: Run edge case tests
-        run: pytest tests/test_edge_cases_micro_branches.py -v --tb=short
+        run: .venv/bin/python -m pytest tests/test_edge_cases_micro_branches.py -v --tb=short
 
       - name: Generate test report
         if: always()
         run: |
-          pytest tests/ --tb=short -v --junit-xml=test-results.xml 2>&1 || true
+          .venv/bin/python -m pytest tests/ --tb=short -v --junit-xml=test-results.xml 2>&1 || true
 
       - name: Upload test results
         if: always()
@@ -150,14 +170,13 @@ jobs:
           retention-days: 7
 
       - name: Report test status
-        if: failure()
+        if: always()
         run: |
-          echo "❌ Functional tests failed"
-          exit 1
-
-      - name: Report test success
-        if: success()
-        run: echo "✅ All functional tests passed"
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ All functional tests passed"
+          else
+            echo "❌ Functional tests failed (see the first failed pytest step above)"
+          fi
 
   docker-build:
     name: Docker Build Check
