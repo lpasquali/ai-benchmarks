@@ -85,7 +85,7 @@ class OllamaClient:
         if not isinstance(models, list):
             raise RuntimeError(f"Ollama server at {self.base_url} returned an unexpected /api/tags payload")
 
-        names = [item.get("name") for item in models if isinstance(item, dict) and isinstance(item.get("name"), str)]
+        names = [name for item in models if isinstance(item, dict) and isinstance((name := item.get("name")), str)]
         return sorted(names)
 
     def get_running_models(self) -> set[str]:
