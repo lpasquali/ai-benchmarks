@@ -43,6 +43,7 @@ ai-benchmarks/
 ```
 
 See [docs/architecture.md](docs/architecture.md) for workflow details, including the Ollama module design.
+See [docs/API_COMPATIBILITY_PLAN.md](docs/API_COMPATIBILITY_PLAN.md) for the CLI-to-API compatibility roadmap.
 
 ## RUNE Commands
 

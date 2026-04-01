@@ -16,6 +16,11 @@ from rich.table import Table
 from vastai import VastAI
 
 from rune_bench import HolmesRunner
+from rune_bench.api_contracts import (
+    RunAgenticAgentRequest,
+    RunBenchmarkRequest,
+    RunOllamaInstanceRequest,
+)
 from rune_bench.common import ModelSelector
 from rune_bench.debug import set_debug
 from rune_bench.ollama import OllamaClient, OllamaModelCapabilities, OllamaModelManager
@@ -245,6 +250,14 @@ def run_ollama_instance(
 ) -> None:
     """Provision an Ollama instance on Vast.ai, or use an existing server."""
     _enable_debug_if_requested(debug)
+    _request = RunOllamaInstanceRequest(
+        vastai=vastai,
+        template_hash=template_hash,
+        min_dph=min_dph,
+        max_dph=max_dph,
+        reliability=reliability,
+        ollama_url=ollama_url,
+    )
     console.print(Panel.fit("[bold blue]RUNE — Reliability Use-case Numeric Evaluator[/bold blue]"))
 
     if not vastai:
@@ -341,6 +354,14 @@ def run_agentic_agent(
 ) -> None:
     """Run an agentic system (HolmesGPT) against a Kubernetes cluster."""
     _enable_debug_if_requested(debug)
+    _request = RunAgenticAgentRequest.from_cli(
+        question=question,
+        model=model,
+        ollama_url=ollama_url,
+        ollama_warmup=ollama_warmup,
+        ollama_warmup_timeout=ollama_warmup_timeout,
+        kubeconfig=kubeconfig,
+    )
     console.print(Panel.fit("[bold blue]RUNE — Agentic Agent Runner[/bold blue]"))
 
     if ollama_url and ollama_warmup:
@@ -423,6 +444,20 @@ def run_benchmark(
 ) -> None:
     """Run full benchmark: provision Ollama instance, then run agentic agent."""
     _enable_debug_if_requested(debug)
+    _request = RunBenchmarkRequest.from_cli(
+        vastai=vastai,
+        template_hash=template_hash,
+        min_dph=min_dph,
+        max_dph=max_dph,
+        reliability=reliability,
+        ollama_url=ollama_url,
+        question=question,
+        model=model,
+        ollama_warmup=ollama_warmup,
+        ollama_warmup_timeout=ollama_warmup_timeout,
+        kubeconfig=kubeconfig,
+        vastai_stop_instance=vastai_stop_instance,
+    )
     console.print(Panel.fit("[bold blue]RUNE — Full Benchmark Workflow[/bold blue]"))
 
     selected_model_name = model
