@@ -183,3 +183,114 @@ rune:
   extraEnvFrom: []
   # - secretRef:
   #     name: my-rune-secret
+
+# ---------------------------------------------------------------------------
+# Cloud Provider Credentials
+# ---------------------------------------------------------------------------
+# SECURITY NOTE: Never commit real secrets to version control.
+#
+# Three auth methods are supported for every provider — use the most secure
+# one available in your environment:
+#
+#   Method 1 — Workload Identity / IRSA / Pod Identity  (RECOMMENDED, zero secrets)
+#              Annotate serviceAccount.annotations. No credentials in the pod.
+#
+#   Method 2 — Reference an existing Kubernetes Secret  (SECURE)
+#              Set existingSecret; create it out-of-band with `kubectl create secret`.
+#              The Deployment mounts individual keys via secretKeyRef.
+#
+#   Method 3 — Inline values                            (DEV ONLY)
+#              Set values below. A Kubernetes Secret named <release>-cloud-secrets
+#              is created from them. Encrypt this file with helm-secrets + SOPS/age
+#              before committing: `helm secrets encrypt secrets.values.yaml`.
+#              See helm/rune/secret.values.example.yaml for a template.
+# ---------------------------------------------------------------------------
+cloud:
+
+  # ── AWS ──────────────────────────────────────────────────────────────────
+  aws:
+    # --- Method 1: IRSA (EKS) or EKS Pod Identity — annotate the SA ---
+    # serviceAccount:
+    #   annotations:
+    #     eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/rune-role
+
+    # --- Method 2: Existing Kubernetes Secret ---
+    # kubectl create secret generic rune-aws \
+    #   --from-literal=AWS_ACCESS_KEY_ID=AKIA... \
+    #   --from-literal=AWS_SECRET_ACCESS_KEY=wJalrX... \
+    #   --from-literal=AWS_DEFAULT_REGION=us-east-1
+    existingSecret: ""   # name of the Secret; leave empty for Method 1 or 3
+
+    # --- Method 3: Inline (dev only — encrypt with helm-secrets + SOPS) ---
+    region: ""                # AWS_DEFAULT_REGION
+    accessKeyId: ""           # AWS_ACCESS_KEY_ID       [INSECURE: use existingSecret]
+    secretAccessKey: ""       # AWS_SECRET_ACCESS_KEY   [INSECURE: use existingSecret]
+    sessionToken: ""          # AWS_SESSION_TOKEN        optional, for STS temp creds
+
+  # ── Azure ─────────────────────────────────────────────────────────────────
+  azure:
+    # --- Method 1: Azure Workload Identity (AKS) ---
+    # serviceAccount:
+    #   annotations:
+    #     azure.workload.identity/client-id: <MANAGED_IDENTITY_CLIENT_ID>
+    # podLabels:
+    #   azure.workload.identity/use: "true"
+
+    # --- Method 2: Existing Kubernetes Secret ---
+    # kubectl create secret generic rune-azure \
+    #   --from-literal=AZURE_CLIENT_ID=xxx \
+    #   --from-literal=AZURE_CLIENT_SECRET=xxx \
+    #   --from-literal=AZURE_TENANT_ID=xxx \
+    #   --from-literal=AZURE_SUBSCRIPTION_ID=xxx
+    existingSecret: ""   # name of the Secret
+
+    # --- Method 3: Inline (dev only) ---
+    tenantId: ""              # AZURE_TENANT_ID
+    subscriptionId: ""        # AZURE_SUBSCRIPTION_ID
+    clientId: ""              # AZURE_CLIENT_ID
+    clientSecret: ""          # AZURE_CLIENT_SECRET     [INSECURE: use existingSecret]
+
+  # ── GCP / Google Cloud ────────────────────────────────────────────────────
+  gcp:
+    # --- Method 1: Workload Identity (GKE) ---
+    # serviceAccount:
+    #   annotations:
+    #     iam.gke.io/gcp-service-account: rune@PROJECT.iam.gserviceaccount.com
+
+    # --- Method 2: Service-account key JSON as a Kubernetes Secret ---
+    # kubectl create secret generic rune-gcp \
+    #   --from-file=credentials.json=/path/to/sa-key.json
+    existingSecret: ""        # Secret must contain key: credentials.json
+    credentialsMountPath: "/var/secrets/gcp"  # mounted inside the container
+
+    # --- Method 3: Inline project reference (combine with existingSecret for key) ---
+    project: ""               # GOOGLE_CLOUD_PROJECT / GCLOUD_PROJECT
+
+  # ── Remote / External Kubernetes Cluster ─────────────────────────────────
+  # Use this to grant Holmes access to a cluster other than the one it runs in.
+  # The in-cluster ServiceAccount is always available; this is additive.
+  remoteKubernetes:
+    enabled: false
+    # kubectl create secret generic rune-remote-kubeconfig \
+    #   --from-file=kubeconfig=/path/to/remote-kubeconfig.yaml
+    existingSecret: ""        # Secret must contain key: kubeconfig
+    mountPath: "/var/secrets/kubeconfig"
+
+  # ── External Secrets Operator (ESO) ──────────────────────────────────────
+  # When enabled, ESO ExternalSecret resources are created to pull credentials
+  # automatically from a cloud secret store and keep them rotated.
+  # Requires: https://external-secrets.io installed in the cluster.
+  externalSecrets:
+    enabled: false
+    # Name and kind of the (Cluster)SecretStore to use.
+    secretStoreName: "cluster-secret-store"
+    secretStoreKind: "ClusterSecretStore"   # or "SecretStore"
+    refreshInterval: "1h"
+    # Remote key paths in your secret store.
+    # Each path must contain all the key/value pairs for that provider.
+    aws:
+      secretPath: "rune/aws-credentials"      # keys: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION
+    azure:
+      secretPath: "rune/azure-credentials"    # keys: AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
+    gcp:
+      secretPath: "rune/gcp-credentials"      # key: credentials.json (raw JSON content)
