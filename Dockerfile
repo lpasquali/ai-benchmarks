@@ -7,7 +7,7 @@ WORKDIR /app
 # Install system dependencies (if any are needed, e.g., for certain Python packages)
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libjpeg-dev \
+    libjpeg-dev zlib\
     && rm -rf /var/lib/apt/lists/*  
 
 # Upgrade pip to the latest version
