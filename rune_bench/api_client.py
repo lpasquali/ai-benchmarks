@@ -1,6 +1,7 @@
 """HTTP client for RUNE API backend mode."""
 
 import json
+import os
 from dataclasses import dataclass
 import time
 from urllib.error import HTTPError, URLError
@@ -11,9 +12,13 @@ from urllib.request import Request, urlopen
 @dataclass
 class RuneApiClient:
     base_url: str
+    api_token: str | None = None
+    tenant_id: str | None = None
 
     def __post_init__(self) -> None:
         self.base_url = self._normalize_url(self.base_url)
+        self.api_token = (self.api_token or os.environ.get("RUNE_API_TOKEN") or "").strip() or None
+        self.tenant_id = (self.tenant_id or os.environ.get("RUNE_API_TENANT") or "default").strip() or "default"
 
     @staticmethod
     def _normalize_url(url: str | None) -> str:
@@ -37,16 +42,22 @@ class RuneApiClient:
         *,
         query: dict[str, str] | None = None,
         body: dict | None = None,
+        idempotency_key: str | None = None,
     ) -> dict:
         url = self.base_url + path
         if query:
             url += "?" + urlencode(query)
 
         data = None
-        headers: dict[str, str] = {}
+        headers: dict[str, str] = {"X-Tenant-ID": self.tenant_id or "default"}
+        if self.api_token:
+            headers["Authorization"] = f"Bearer {self.api_token}"
+            headers["X-API-Key"] = self.api_token
         if body is not None:
             data = json.dumps(body).encode("utf-8")
             headers["Content-Type"] = "application/json"
+        if idempotency_key:
+            headers["Idempotency-Key"] = idempotency_key
 
         request = Request(url, method=method, headers=headers, data=data)
 
@@ -86,18 +97,40 @@ class RuneApiClient:
             raise RuntimeError("API payload missing 'running_models' list for Ollama models endpoint")
         return payload
 
-    def submit_agentic_agent_job(self, request_payload: dict) -> str:
-        payload = self._request("POST", "/v1/jobs/agentic-agent", body=request_payload)
+    def submit_agentic_agent_job(self, request_payload: dict, *, idempotency_key: str | None = None) -> str:
+        payload = self._request(
+            "POST",
+            "/v1/jobs/agentic-agent",
+            body=request_payload,
+            idempotency_key=idempotency_key,
+        )
         job_id = payload.get("job_id")
         if not isinstance(job_id, str) or not job_id.strip():
             raise RuntimeError("API response missing 'job_id' for agentic-agent job")
         return job_id
 
-    def submit_benchmark_job(self, request_payload: dict) -> str:
-        payload = self._request("POST", "/v1/jobs/benchmark", body=request_payload)
+    def submit_benchmark_job(self, request_payload: dict, *, idempotency_key: str | None = None) -> str:
+        payload = self._request(
+            "POST",
+            "/v1/jobs/benchmark",
+            body=request_payload,
+            idempotency_key=idempotency_key,
+        )
         job_id = payload.get("job_id")
         if not isinstance(job_id, str) or not job_id.strip():
             raise RuntimeError("API response missing 'job_id' for benchmark job")
+        return job_id
+
+    def submit_ollama_instance_job(self, request_payload: dict, *, idempotency_key: str | None = None) -> str:
+        payload = self._request(
+            "POST",
+            "/v1/jobs/ollama-instance",
+            body=request_payload,
+            idempotency_key=idempotency_key,
+        )
+        job_id = payload.get("job_id")
+        if not isinstance(job_id, str) or not job_id.strip():
+            raise RuntimeError("API response missing 'job_id' for ollama-instance job")
         return job_id
 
     def get_job_status(self, job_id: str) -> dict:

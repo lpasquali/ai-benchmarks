@@ -54,6 +54,44 @@ def test_submit_benchmark_job_returns_job_id(monkeypatch):
     assert job_id == "job-987"
 
 
+def test_submit_ollama_instance_job_returns_job_id(monkeypatch):
+    client = RuneApiClient("http://api:8080")
+    monkeypatch.setattr(client, "_request", lambda *_args, **_kwargs: {"job_id": "job-654"})
+
+    job_id = client.submit_ollama_instance_job({"vastai": False})
+    assert job_id == "job-654"
+
+
+def test_request_adds_auth_tenant_and_idempotency_headers(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class DummyResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return b'{"ok": true}'
+
+    def fake_urlopen(request, timeout):
+        captured["headers"] = dict(request.header_items())
+        captured["timeout"] = timeout
+        return DummyResponse()
+
+    monkeypatch.setattr("rune_bench.api_client.urlopen", fake_urlopen)
+
+    client = RuneApiClient("http://api:8080", api_token="secret", tenant_id="tenant-a")
+    payload = client._request("POST", "/v1/jobs/benchmark", body={"x": 1}, idempotency_key="idem-1")
+
+    assert payload == {"ok": True}
+    assert captured["headers"]["Authorization"] == "Bearer secret"
+    assert captured["headers"]["X-api-key"] == "secret"
+    assert captured["headers"]["X-tenant-id"] == "tenant-a"
+    assert captured["headers"]["Idempotency-key"] == "idem-1"
+
+
 def test_wait_for_job_returns_on_success(monkeypatch):
     client = RuneApiClient("http://api:8080")
     statuses = iter([
