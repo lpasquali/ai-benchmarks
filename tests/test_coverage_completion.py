@@ -7,7 +7,9 @@ import typer
 
 import rune
 import rune_bench.api_backend as api_backend
+import rune_bench.api_server as api_server
 from rune_bench.common import make_http_request
+from rune_bench.api_contracts import RunAgenticAgentRequest, RunBenchmarkRequest, RunOllamaInstanceRequest
 from rune_bench.ollama.client import OllamaClient
 
 
@@ -132,3 +134,102 @@ def test_ollama_client_invalid_url_branch(monkeypatch):
     monkeypatch.setattr("rune_bench.ollama.client.normalize_url", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("bad")))
     with pytest.raises(RuntimeError, match="Missing or invalid Ollama URL"):
         OllamaClient("bad-url")
+
+
+def test_api_server_backend_type_guards():
+    agentic = RunAgenticAgentRequest(
+        question="q",
+        model="m",
+        ollama_url="http://localhost:11434",
+        ollama_warmup=False,
+        ollama_warmup_timeout=1,
+        kubeconfig="/tmp/k",
+    )
+    benchmark = RunBenchmarkRequest(
+        vastai=False,
+        template_hash="t",
+        min_dph=1.0,
+        max_dph=2.0,
+        reliability=0.99,
+        ollama_url="http://localhost:11434",
+        question="q",
+        model="m",
+        ollama_warmup=False,
+        ollama_warmup_timeout=1,
+        kubeconfig="/tmp/k",
+        vastai_stop_instance=False,
+    )
+    ollama = RunOllamaInstanceRequest(
+        vastai=False,
+        template_hash="t",
+        min_dph=1.0,
+        max_dph=2.0,
+        reliability=0.99,
+        ollama_url="http://localhost:11434",
+    )
+
+    with pytest.raises(RuntimeError, match="agentic-agent"):
+        api_server._run_agentic_backend(benchmark)
+    with pytest.raises(RuntimeError, match="benchmark"):
+        api_server._run_benchmark_backend(ollama)
+    with pytest.raises(RuntimeError, match="ollama-instance"):
+        api_server._run_ollama_instance_backend(agentic)
+
+
+def test_api_server_backend_success_paths(monkeypatch):
+    agentic = RunAgenticAgentRequest(
+        question="q",
+        model="m",
+        ollama_url="http://localhost:11434",
+        ollama_warmup=False,
+        ollama_warmup_timeout=1,
+        kubeconfig="/tmp/k",
+    )
+    benchmark = RunBenchmarkRequest(
+        vastai=False,
+        template_hash="t",
+        min_dph=1.0,
+        max_dph=2.0,
+        reliability=0.99,
+        ollama_url="http://localhost:11434",
+        question="q",
+        model="m",
+        ollama_warmup=False,
+        ollama_warmup_timeout=1,
+        kubeconfig="/tmp/k",
+        vastai_stop_instance=False,
+    )
+    ollama = RunOllamaInstanceRequest(
+        vastai=False,
+        template_hash="t",
+        min_dph=1.0,
+        max_dph=2.0,
+        reliability=0.99,
+        ollama_url="http://localhost:11434",
+    )
+
+    monkeypatch.setattr(api_server, "run_agentic_agent", lambda req: {"kind": "agentic", "q": req.question})
+    monkeypatch.setattr(api_server, "run_benchmark", lambda req: {"kind": "benchmark", "m": req.model})
+    monkeypatch.setattr(api_server, "run_ollama_instance", lambda req: {"kind": "ollama", "url": req.ollama_url})
+
+    assert api_server._run_agentic_backend(agentic)["kind"] == "agentic"
+    assert api_server._run_benchmark_backend(benchmark)["kind"] == "benchmark"
+    assert api_server._run_ollama_instance_backend(ollama)["kind"] == "ollama"
+
+
+def test_workflow_normalize_ollama_url_success(monkeypatch):
+    from rune_bench import workflows
+
+    class DummyClient:
+        def __init__(self, _url: str):
+            self.base_url = "http://normalized:11434"
+
+    monkeypatch.setattr(workflows, "OllamaClient", DummyClient)
+    assert workflows.normalize_ollama_url("localhost:11434") == "http://normalized:11434"
+
+
+def test_workflow_normalize_ollama_url_missing():
+    from rune_bench import workflows
+
+    with pytest.raises(RuntimeError, match="Missing Ollama URL"):
+        workflows.normalize_ollama_url(None)

@@ -47,11 +47,8 @@ def normalize_ollama_url(ollama_url: str | None) -> str:
     """
     if ollama_url is None:
         raise RuntimeError("Missing Ollama URL")
-    try:
-        client = OllamaClient(ollama_url)
-        return client.base_url
-    except RuntimeError:
-        raise
+    client = OllamaClient(ollama_url)
+    return client.base_url
 
 
 def use_existing_ollama_server(ollama_url: str | None, model_name: str) -> ExistingOllamaServer:

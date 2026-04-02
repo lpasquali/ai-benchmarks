@@ -1,4 +1,4 @@
 typer>=0.9
 rich>=13.7
 holmesgpt>=0.23.0
-git+https://github.com/lpasquali/vast-sdk@update/latest-dependencies
+git+https://github.com/lpasquali/vast-sdk@087786d1e0bf031ddba90fe65d60d869ddce6831

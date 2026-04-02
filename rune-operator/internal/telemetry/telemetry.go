@@ -14,6 +14,11 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
+var newOTLPTraceExporter = otlptracegrpc.New
+var shutdownTracerProvider = func(tp *sdktrace.TracerProvider, ctx context.Context) error {
+	return tp.Shutdown(ctx)
+}
+
 func SetupOTel(serviceName string) func() {
 	ctx := context.Background()
 	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
@@ -21,7 +26,7 @@ func SetupOTel(serviceName string) func() {
 		return func() {}
 	}
 
-	exporter, err := otlptracegrpc.New(ctx)
+	exporter, err := newOTLPTraceExporter(ctx)
 	if err != nil {
 		log.Printf("otel exporter setup failed: %v", err)
 		return func() {}
@@ -41,7 +46,7 @@ func SetupOTel(serviceName string) func() {
 	return func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := tp.Shutdown(shutdownCtx); err != nil {
+		if err := shutdownTracerProvider(tp, shutdownCtx); err != nil {
 			log.Printf("otel shutdown failed: %v", err)
 		}
 	}
