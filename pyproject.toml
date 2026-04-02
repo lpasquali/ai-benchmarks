@@ -25,8 +25,7 @@ dependencies = [
     "typer>=0.9",
     "rich>=13.7",
     "holmesgpt>=0.23.0",
-    "vastai",
-    "anyio>=4.4",
+    "git+https://github.com/lpasquali/vast-sdk@update/latest-dependencies",
 ]
 
 [project.optional-dependencies]
@@ -42,9 +41,9 @@ dev = [
 rune = "rune.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/lpasquali/ai-benchmarks"
-Repository = "https://github.com/lpasquali/ai-benchmarks"
-Issues = "https://github.com/lpasquali/ai-benchmarks/issues"
+Homepage = "https://github.com/lpasquali/rune"
+Repository = "https://github.com/lpasquali/rune"
+Issues = "https://github.com/lpasquali/rune/issues"
 
 [tool.setuptools.packages.find]
 include = ["rune*", "rune_bench*"]
