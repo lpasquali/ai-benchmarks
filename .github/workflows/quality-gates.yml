@@ -89,8 +89,8 @@ jobs:
           tags: rune:rune-ci-local
       - run: |
           set -euo pipefail
-          docker run -d --rm --name rune-smoke -e RUNE_API_AUTH_DISABLED=1 -p 18080:8080 rune:rune-ci-local
-          trap 'docker logs rune-smoke | tail -200 || true; docker rm -f rune-smoke >/dev/null 2>&1 || true' EXIT
+          docker run -d --name rune-smoke -e RUNE_API_AUTH_DISABLED=1 -p 18080:8080 rune:rune-ci-local
+          trap 'echo "=== rune-smoke container logs ==="; docker logs rune-smoke 2>&1 | tail -200 || true; docker rm -f rune-smoke >/dev/null 2>&1 || true' EXIT
           ready=0
           for i in {1..60}; do
             if ! docker ps --format '{{.Names}}' | grep -qx rune-smoke; then

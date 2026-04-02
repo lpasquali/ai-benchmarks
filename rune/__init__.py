@@ -46,7 +46,7 @@ def _get_holmes_runner():
     """Lazy loader for HolmesRunner to allow API-only deployments."""
     global HolmesRunner
     if HolmesRunner is None:
-        from rune_bench import HolmesRunner as _HolmesRunner
+        from rune_bench.agents.holmes import HolmesRunner as _HolmesRunner
         HolmesRunner = _HolmesRunner
     return HolmesRunner
 
