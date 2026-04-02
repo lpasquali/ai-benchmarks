@@ -299,44 +299,57 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.14'
-      - name: Bandit — Python SAST (IEC 62443 4-1 ML4 SI-1 / SVV-1)
-        run: |
-          pip install bandit
-          bandit -r rune rune_bench -ll -f json -o bandit-results.json || true
-          python3 - <<'PY'
-          import json, sys
-          data = json.loads(open('bandit-results.json').read())
-          findings = data.get('results', [])
-          blocking = [r for r in findings if r['issue_severity'] == 'HIGH' and r['issue_confidence'] == 'HIGH']
-          for r in findings:
-              print(f"[{r['issue_severity']}/{r['issue_confidence']}] {r['issue_text']} ({r['test_id']}) @ {r['filename']}:{r['line_number']}")
-          if blocking:
-              print(f'\nBlocking: {len(blocking)} HIGH/HIGH Bandit finding(s)')
-              sys.exit(1)
-          print(f'Total Bandit findings: {len(findings)}, blocking: 0')
-          PY
       - uses: actions/setup-go@v6
         with:
           go-version: '1.23'
           cache: true
           cache-dependency-path: rune-operator/go.sum
-      - name: gosec — Go SAST (IEC 62443 4-1 ML4 SI-1)
+      - name: Bandit + gosec aggregate gate (IEC 62443 4-1 ML4 SI-1 / SVV-1)
         run: |
+          set -euo pipefail
+          rc=0
+
+          pip install bandit
+          bandit -r rune rune_bench -ll -f json -o bandit-results.json || rc=1
+
           go install github.com/securego/gosec/v2/cmd/gosec@latest
-          cd rune-operator && gosec -fmt json -out ../gosec-results.json -severity high ./... || true
+          (cd rune-operator && gosec -fmt json -out ../gosec-results.json -severity high ./...) || rc=1
+
           python3 - <<'PY'
-          import json, sys
+          import json
           from pathlib import Path
-          path = Path('gosec-results.json')
-          if not path.exists():
-              print('gosec-results.json not found, skipping'); sys.exit(0)
-          issues = json.loads(path.read_text()).get('Issues') or []
-          blocking = [i for i in issues if i.get('severity') == 'HIGH' and i.get('confidence') == 'HIGH']
-          for i in issues:
-              print(f"[{i.get('severity')}/{i.get('confidence')}] {i.get('details')} @ {i.get('file')}:{i.get('line')}")
-          if blocking:
-              print(f'\nBlocking: {len(blocking)} HIGH/HIGH gosec finding(s)'); sys.exit(1)
-          print(f'Total gosec issues: {len(issues)}, blocking: 0')
+
+          bandit_path = Path('bandit-results.json')
+          gosec_path = Path('gosec-results.json')
+
+          bandit_findings = []
+          if bandit_path.exists():
+              bandit_findings = (json.loads(bandit_path.read_text(encoding='utf-8')).get('results') or [])
+
+          gosec_findings = []
+          if gosec_path.exists():
+              gosec_findings = (json.loads(gosec_path.read_text(encoding='utf-8')).get('Issues') or [])
+
+          bandit_block = [r for r in bandit_findings if r.get('issue_severity') == 'HIGH' and r.get('issue_confidence') == 'HIGH']
+          gosec_block = [i for i in gosec_findings if i.get('severity') == 'HIGH' and i.get('confidence') == 'HIGH']
+
+          print(f'Bandit findings: {len(bandit_findings)} | blocking(HIGH/HIGH): {len(bandit_block)}')
+          for r in bandit_block[:20]:
+              print(f"BANDIT BLOCK: {r.get('issue_text')} ({r.get('test_id')}) @ {r.get('filename')}:{r.get('line_number')}")
+
+          print(f'gosec findings: {len(gosec_findings)} | blocking(HIGH/HIGH): {len(gosec_block)}')
+          for i in gosec_block[:20]:
+              print(f"GOSEC BLOCK: {i.get('details')} @ {i.get('file')}:{i.get('line')}")
+
+          summary = Path('sast-summary.txt')
+          summary.write_text(
+              f"Bandit findings={len(bandit_findings)} blocking={len(bandit_block)}\n"
+              f"gosec findings={len(gosec_findings)} blocking={len(gosec_block)}\n",
+              encoding='utf-8',
+          )
+
+          if bandit_block or gosec_block:
+              raise SystemExit(1)
           PY
       - uses: actions/upload-artifact@v7
         if: always()
@@ -345,6 +358,7 @@ jobs:
           path: |
             bandit-results.json
             gosec-results.json
+            sast-summary.txt
           retention-days: 14
 
   security-secrets:
@@ -369,12 +383,28 @@ jobs:
           python-version: '3.14'
       - name: pip-licenses — dependency license audit (IEC 62443 4-1 ML4 SM-2)
         run: |
+          set -euo pipefail
+          rc=0
+
           python -m venv .venv
           . .venv/bin/activate
           pip install --upgrade pip
-          pip install --prefer-binary -r requirements.txt pip-licenses
-          pip-licenses --format=json --output-file=licenses-python.json
-          pip-licenses --fail-on "GNU General Public License v3 (GPLv3);GNU Affero General Public License v3 (AGPLv3)"
+          pip install --prefer-binary -r requirements.txt pip-licenses || rc=1
+
+          if [ "$rc" -eq 0 ]; then
+            pip-licenses --format=json --output-file=licenses-python.json || rc=1
+          fi
+
+          # Always produce artifact for diagnostics.
+          if [ ! -f licenses-python.json ]; then
+            printf '[]\n' > licenses-python.json
+          fi
+
+          if [ "$rc" -eq 0 ]; then
+            pip-licenses --fail-on "GNU General Public License v3 (GPLv3);GNU Affero General Public License v3 (AGPLv3)" || rc=1
+          fi
+
+          exit "$rc"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
