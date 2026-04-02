@@ -26,7 +26,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.13'
+          python-version: '3.14'
           cache: 'pip'
 
       - name: Restore virtualenv cache
@@ -34,7 +34,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .venv
-          key: venv-${{ runner.os }}-py3.13-${{ hashFiles('requirements.txt', '.github/workflows/coverage.yml') }}
+          key: venv-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/coverage.yml') }}
 
       - name: Install dependencies
         if: steps.cache-venv.outputs.cache-hit != 'true'
@@ -113,7 +113,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.13'
+          python-version: '3.14'
           cache: 'pip'
 
       - name: Restore virtualenv cache
@@ -121,7 +121,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .venv
-          key: venv-${{ runner.os }}-py3.13-${{ hashFiles('requirements.txt', '.github/workflows/coverage.yml') }}
+          key: venv-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/coverage.yml') }}
 
       - name: Install dependencies
         if: steps.cache-venv.outputs.cache-hit != 'true'
