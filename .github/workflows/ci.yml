@@ -34,7 +34,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .venv
-          key: venv-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/coverage.yml') }}
+          key: venv-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/ci.yml') }}
 
       - name: Install dependencies
         if: steps.cache-venv.outputs.cache-hit != 'true'
@@ -121,7 +121,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .venv
-          key: venv-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/coverage.yml') }}
+          key: venv-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/ci.yml') }}
 
       - name: Install dependencies
         if: steps.cache-venv.outputs.cache-hit != 'true'
