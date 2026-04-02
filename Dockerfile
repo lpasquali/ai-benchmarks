@@ -1,5 +1,5 @@
 # Use an official Python runtime as a parent image, slim version for smaller size
-FROM python:3.14-slim
+FROM python:3.13-slim
 
 # Set working directory inside the container
 WORKDIR /app
@@ -42,7 +42,7 @@ RUN pip install --no-cache-dir awscli
 # to a mounted service-account JSON path, or use Workload Identity on GKE.
 
 # Copy the rest of the application files
-COPY rune rune_bench .
+COPY rune rune_bench ./
 
 # Environment variables with defaults for RUNE configuration
 # Backend and API configuration
