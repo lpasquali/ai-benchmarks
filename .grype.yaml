@@ -1,0 +1,19 @@
+# Grype configuration — IEC 62443 4-1 ML4 / DM-4
+#
+# This file controls Grype's raw output format only.
+# The actual blocking policy (fix-state + CVSS threshold) is enforced
+# by the Python gate script in the security-sbom CI job.
+#
+# Unfixable CVEs with CVSS 8.8-8.9 appear in the SBOM artifact and must be
+# tracked via the project VEX register (security/vex-register.md) with a
+# documented risk acceptance and patch SLA.
+
+output: json
+
+# Set to a non-empty list to suppress known non-applicable CVEs.
+# Each entry REQUIRES an approved justification in security/vex-register.md.
+# Format:
+#   - id: CVE-YYYY-NNNNN
+#     namespace: nvd
+#     reason: "<VEX justification text>"
+ignore: []

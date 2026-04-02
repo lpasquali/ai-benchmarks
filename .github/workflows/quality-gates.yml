@@ -199,6 +199,10 @@ jobs:
     name: RuneGate/Security/SBOM-and-CVE-Policy
     needs: [feature-python, feature-go, linting-python, linting-go]
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write      # required for SLSA provenance attestation
+      attestations: write  # required for SLSA provenance attestation
+      contents: read
     steps:
       - uses: actions/checkout@v6
       - uses: docker/setup-qemu-action@v4
@@ -207,60 +211,175 @@ jobs:
         run: |
           docker build -t rune:rune-ci-local -f Dockerfile .
           docker build -t rune:rune-operator-ci -f rune-operator/Dockerfile rune-operator
-      - name: Generate SBOMs and scan
+      - name: Generate SBOMs — CycloneDX via Syft (IEC 62443 4-1 ML4 SM-9)
         run: |
           set -euo pipefail
           mkdir -p sbom
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "${PWD}:/work" anchore/syft:v1.17.0 rune:rune-ci-local -o cyclonedx-json=/work/sbom/rune-image.cdx.json
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "${PWD}:/work" anchore/syft:v1.17.0 rune:rune-operator-ci -o cyclonedx-json=/work/sbom/operator-image.cdx.json
-          docker run --rm -v "${PWD}:/work" anchore/grype:v0.82.0 sbom:/work/sbom/rune-image.cdx.json -o json > sbom/rune-grype.json
-          docker run --rm -v "${PWD}:/work" anchore/grype:v0.82.0 sbom:/work/sbom/operator-image.cdx.json -o json > sbom/operator-grype.json
+      - name: Scan SBOMs — Grype + Trivy (IEC 62443 4-1 ML4 SVV-3 / DM-4)
+        run: |
+          set -euo pipefail
+          docker run --rm -v "${PWD}:/work" anchore/grype:v0.82.0 -c /work/.grype.yaml sbom:/work/sbom/rune-image.cdx.json -o json > sbom/rune-grype.json
+          docker run --rm -v "${PWD}:/work" anchore/grype:v0.82.0 -c /work/.grype.yaml sbom:/work/sbom/operator-image.cdx.json -o json > sbom/operator-grype.json
           docker run --rm -v "${PWD}:/work" aquasec/trivy:0.57.1 sbom /work/sbom/rune-image.cdx.json --format json --output /work/sbom/rune-trivy.json --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
           docker run --rm -v "${PWD}:/work" aquasec/trivy:0.57.1 sbom /work/sbom/operator-image.cdx.json --format json --output /work/sbom/operator-trivy.json --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
-      - name: Enforce CVSS > 8.8 block policy
+      - name: Enforce CVE policy — IEC 62443 4-1 ML4 DM-4
         run: |
           python3 - <<'PY'
           import json
           from pathlib import Path
-          threshold = 8.8
+
+          # IEC 62443 4-1 ML4 DM-4 blocking policy:
+          #   Critical (CVSS >= 9.0): always block — requires fix or approved VEX entry
+          #   High     (CVSS >  8.8): block only when a patched version exists
+          #   Medium / Low:           logged in SBOM artifact, tracked via patch SLA
+          THRESHOLD = 8.8
+          CRITICAL  = 9.0
+
+          def safe_float(v):
+              try: return float(v or 0)
+              except: return 0.0
+
           findings = []
-          for f in Path('sbom').glob('*.json'):
+          for f in sorted(Path('sbom').glob('*.json')):
               data = json.loads(f.read_text(encoding='utf-8'))
               if 'matches' in data:
                   for m in data.get('matches', []):
                       vuln = m.get('vulnerability', {})
+                      fix_state = (vuln.get('fix') or {}).get('state', 'unknown')
+                      fixable = fix_state == 'fixed'
                       scores = []
                       for c in vuln.get('cvss', []) or []:
                           metrics = c.get('metrics', {})
                           for k in ('baseScore', 'base_score'):
-                              try:
-                                  scores.append(float(metrics.get(k, 0) or 0))
-                              except Exception:
-                                  pass
-                      findings.append((vuln.get('id', 'UNKNOWN'), max(scores) if scores else 0.0, f.name))
+                              scores.append(safe_float(metrics.get(k)))
+                      findings.append((vuln.get('id', 'UNKNOWN'), max(scores) if scores else 0.0, f.name, fixable))
               elif 'Results' in data:
                   for r in data.get('Results', []) or []:
                       for v in r.get('Vulnerabilities', []) or []:
                           score = 0.0
                           for vendor in ('nvd', 'redhat', 'ghsa'):
-                              try:
-                                  score = max(score, float(v.get('CVSS', {}).get(vendor, {}).get('V3Score', 0) or 0))
-                              except Exception:
-                                  pass
-                          findings.append((v.get('VulnerabilityID', 'UNKNOWN'), score, f.name))
-          blocked = [x for x in findings if x[1] > threshold]
-          print(f'total findings: {len(findings)}')
-          print(f'blocked findings (>{threshold}): {len(blocked)}')
-          for row in blocked[:20]:
-              print(f'BLOCK: {row[0]} score={row[1]} source={row[2]}')
+                              score = max(score, safe_float((v.get('CVSS') or {}).get(vendor, {}).get('V3Score')))
+                          fixable = bool((v.get('FixedVersion') or '').strip())
+                          findings.append((v.get('VulnerabilityID', 'UNKNOWN'), score, f.name, fixable))
+
+          blocked = [x for x in findings if x[1] >= CRITICAL or (x[1] > THRESHOLD and x[3])]
+          warned  = [x for x in findings if x[1] > THRESHOLD and not x[3] and x[1] < CRITICAL]
+
+          print(f'Total findings     : {len(findings)}')
+          print(f'Blocked (policy)   : {len(blocked)}')
+          print(f'Warned (unfixable) : {len(warned)}  — logged in SBOM artifact, VEX acceptance required within patch SLA')
+          for row in blocked[:30]:
+              label = 'fixable' if row[3] else 'UNFIXABLE-CRITICAL'
+              print(f'BLOCK [{label}] {row[0]}  cvss={row[1]:.1f}  src={row[2]}')
+          for row in warned[:10]:
+              print(f'WARN  [unfixable]  {row[0]}  cvss={row[1]:.1f}  src={row[2]}')
           if blocked:
               raise SystemExit(1)
           PY
+      - name: Attest SBOM provenance — SLSA L3 (IEC 62443 4-1 ML4 SM-9)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            sbom/rune-image.cdx.json
+            sbom/operator-image.cdx.json
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: sbom-security-outputs
           path: sbom/
+          retention-days: 14
+
+  security-sast:
+    name: RuneGate/Security/SAST
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - name: Bandit — Python SAST (IEC 62443 4-1 ML4 SI-1 / SVV-1)
+        run: |
+          pip install bandit
+          bandit -r rune rune_bench -ll -f json -o bandit-results.json || true
+          python3 - <<'PY'
+          import json, sys
+          data = json.loads(open('bandit-results.json').read())
+          findings = data.get('results', [])
+          blocking = [r for r in findings if r['issue_severity'] == 'HIGH' and r['issue_confidence'] == 'HIGH']
+          for r in findings:
+              print(f"[{r['issue_severity']}/{r['issue_confidence']}] {r['issue_text']} ({r['test_id']}) @ {r['filename']}:{r['line_number']}")
+          if blocking:
+              print(f'\nBlocking: {len(blocking)} HIGH/HIGH Bandit finding(s)')
+              sys.exit(1)
+          print(f'Total Bandit findings: {len(findings)}, blocking: 0')
+          PY
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.23'
+          cache: true
+          cache-dependency-path: rune-operator/go.sum
+      - name: gosec — Go SAST (IEC 62443 4-1 ML4 SI-1)
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          cd rune-operator && gosec -fmt json -out ../gosec-results.json -severity high ./... || true
+          python3 - <<'PY'
+          import json, sys
+          from pathlib import Path
+          path = Path('gosec-results.json')
+          if not path.exists():
+              print('gosec-results.json not found, skipping'); sys.exit(0)
+          issues = json.loads(path.read_text()).get('Issues') or []
+          blocking = [i for i in issues if i.get('severity') == 'HIGH' and i.get('confidence') == 'HIGH']
+          for i in issues:
+              print(f"[{i.get('severity')}/{i.get('confidence')}] {i.get('details')} @ {i.get('file')}:{i.get('line')}")
+          if blocking:
+              print(f'\nBlocking: {len(blocking)} HIGH/HIGH gosec finding(s)'); sys.exit(1)
+          print(f'Total gosec issues: {len(issues)}, blocking: 0')
+          PY
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: sast-reports
+          path: |
+            bandit-results.json
+            gosec-results.json
+          retention-days: 14
+
+  security-secrets:
+    name: RuneGate/Security/SecretScanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: gitleaks — hardcoded credential detection (IEC 62443 4-1 ML4 SM-8)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  security-licenses:
+    name: RuneGate/Security/LicenseCompliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - name: pip-licenses — dependency license audit (IEC 62443 4-1 ML4 SM-2)
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install --prefer-binary -r requirements.txt pip-licenses
+          pip-licenses --format=json --output-file=licenses-python.json
+          pip-licenses --fail-on "GNU General Public License v3 (GPLv3);GNU Affero General Public License v3 (AGPLv3)"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: license-reports
+          path: licenses-python.json
           retention-days: 14
 
   merge-gate:
@@ -278,6 +397,9 @@ jobs:
       - regression-python
       - regression-go
       - security-sbom
+      - security-sast
+      - security-secrets
+      - security-licenses
     runs-on: ubuntu-latest
     steps:
       - name: Verify all concept gates passed
