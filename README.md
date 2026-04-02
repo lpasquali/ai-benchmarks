@@ -1,17 +1,17 @@
-# ai-benchmarks
+# rune
 
 A collection of benchmarks, evaluation scripts, and reproducible test suites for comparing AI models, LLMs, and inference frameworks.
 
 ## Setup & Provisioning
 
-`ai-benchmarks` includes **RUNE** — Reliability Use-case Numeric Evaluator.
+`rune` includes **RUNE** — Reliability Use-case Numeric Evaluator.
 
 RUNE orchestrates benchmarkable DevOps/SRE operations, with optional Vast.ai provisioning for Ollama and agentic investigation via HolmesGPT.
 
 ## Repository Layout
 
 ```text
-ai-benchmarks/
+rune/
 ├── rune/
 │   ├── __init__.py          # Thin Typer CLI (commands, prompts, Rich output)
 │   ├── __main__.py          # Package entrypoint (python -m rune)

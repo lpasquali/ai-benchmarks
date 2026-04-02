@@ -10,8 +10,8 @@ keywords:
   - ollama
   - llm
   - reliability
-home: https://github.com/lpasquali/ai-benchmarks
+home: https://github.com/lpasquali/rune
 sources:
-  - https://github.com/lpasquali/ai-benchmarks
+  - https://github.com/lpasquali/rune
 maintainers:
   - name: luca

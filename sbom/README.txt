@@ -1,4 +1,4 @@
-SBOM artifacts for ai-benchmarks
+SBOM artifacts for rune
 ================================
 
 Standard location:

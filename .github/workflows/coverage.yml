@@ -202,7 +202,7 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: false
-          tags: ai-benchmarks:rune-ci
+          tags: rune:rune-ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -214,13 +214,13 @@ jobs:
           platforms: linux/amd64
           load: true
           push: false
-          tags: ai-benchmarks:rune-ci-local
+          tags: rune:rune-ci-local
           cache-from: type=gha
 
       - name: Smoke test container startup and health endpoint
         run: |
           set -euo pipefail
-          docker run -d --rm --name rune-ci-smoke -p 18080:8080 ai-benchmarks:rune-ci-local
+          docker run -d --rm --name rune-ci-smoke -p 18080:8080 rune:rune-ci-local
           for i in {1..30}; do
             if curl -fsS http://127.0.0.1:18080/healthz >/dev/null; then
               break
@@ -234,7 +234,7 @@ jobs:
       - name: Smoke test CLI entrypoint in container
         run: |
           set -euo pipefail
-          docker run --rm ai-benchmarks:rune-ci-local --help >/dev/null
+          docker run --rm rune:rune-ci-local --help >/dev/null
 
       - name: Generate CycloneDX SBOM for container image (Syft)
         run: |
@@ -244,7 +244,7 @@ jobs:
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v "${PWD}:/work" \
             anchore/syft:v1.17.0 \
-            ai-benchmarks:rune-ci-local \
+            rune:rune-ci-local \
             -o cyclonedx-json=/work/sbom/rune-image.cdx.json
 
       - name: Upload SBOM artifact
@@ -398,7 +398,7 @@ jobs:
                       "tool": {
                           "driver": {
                               "name": "SBOM policy gate",
-                              "informationUri": "https://github.com/lpasquali/ai-benchmarks",
+                              "informationUri": "https://github.com/lpasquali/rune",
                               "rules": [
                                   {
                                       "id": "SBOM-CVSS-THRESHOLD",

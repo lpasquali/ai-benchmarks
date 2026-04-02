@@ -1,6 +1,6 @@
-# Contributing to ai-benchmarks
+# Contributing to rune
 
-First off, thank you for considering contributing to ai-benchmarks! It's people like you that make ai-benchmarks such a great tool.
+First off, thank you for considering contributing to rune! It's people like you that make rune such a great tool.
 
 ## Where do I go from here?
 
@@ -8,7 +8,7 @@ If you've noticed a bug or have a feature request, make one! It's generally best
 
 ## Fork & create a branch
 
-If this is something you think you can fix, then fork ai-benchmarks and create a branch with a descriptive name.
+If this is something you think you can fix, then fork rune and create a branch with a descriptive name.
 
 ## Get the test suite running
 
@@ -25,7 +25,7 @@ If you're adding a new benchmark suite, ensure it is fully reproducible and clea
 
 ## Make a Pull Request
 
-At this point, you should switch back to your master branch and make sure it's up to date with ai-benchmarks' master branch. Tests should pass on your branch.
+At this point, you should switch back to your master branch and make sure it's up to date with rune's master branch. Tests should pass on your branch.
 
 ## Code of Conduct
 

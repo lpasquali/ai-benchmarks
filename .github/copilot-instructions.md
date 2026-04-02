@@ -1,4 +1,4 @@
-# Copilot instructions for ai-benchmarks (RUNE)
+# Copilot instructions for rune (RUNE)
 
 ## Architecture and boundaries
 - Treat [rune/__init__.py](../rune/__init__.py) as a thin CLI layer only (Typer args, Rich output, progress UI).

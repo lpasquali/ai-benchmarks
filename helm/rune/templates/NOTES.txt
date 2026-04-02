@@ -35,7 +35,7 @@ CONNECTING TO THE API
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 RUNNING RUNE AS A CLIENT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  pip install rune-bench   # or: pip install -e /path/to/ai-benchmarks
+  pip install rune-bench   # or: pip install -e /path/to/rune
 
   rune --backend http --api-base-url "$RUNE_API_BASE_URL" \
        run-benchmark --question "What is unhealthy in this cluster?"
@@ -117,5 +117,5 @@ CLOUD CREDENTIAL SETUP (choose the most secure method available)
     cloud.externalSecrets.gcp.secretPath=rune/gcp-credentials
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-DOCS  https://github.com/lpasquali/ai-benchmarks
+DOCS  https://github.com/lpasquali/rune
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

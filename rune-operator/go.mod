@@ -1,4 +1,4 @@
-module github.com/lpasquali/ai-benchmarks/rune-operator
+module github.com/lpasquali/rune/rune-operator
 
 go 1.23
 

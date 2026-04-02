@@ -130,10 +130,10 @@ jobs:
           platforms: linux/amd64
           load: true
           push: false
-          tags: ai-benchmarks:rune-ci-local
+          tags: rune:rune-ci-local
       - run: |
           set -euo pipefail
-          docker run -d --rm --name rune-smoke -p 18080:8080 ai-benchmarks:rune-ci-local
+          docker run -d --rm --name rune-smoke -p 18080:8080 rune:rune-ci-local
           for i in {1..40}; do
             if curl -fsS http://127.0.0.1:18080/healthz >/dev/null; then
               break
@@ -159,9 +159,9 @@ jobs:
           platforms: linux/amd64
           load: true
           push: false
-          tags: ai-benchmarks:rune-operator-ci
+          tags: rune:rune-operator-ci
       - run: |
-          docker run --rm ai-benchmarks:rune-operator-ci --help >/dev/null || true
+          docker run --rm rune:rune-operator-ci --help >/dev/null || true
 
   regression-python:
     name: RuneGate/Regression/Python
@@ -205,14 +205,14 @@ jobs:
       - uses: docker/setup-buildx-action@v4
       - name: Build images
         run: |
-          docker build -t ai-benchmarks:rune-ci-local -f Dockerfile .
-          docker build -t ai-benchmarks:rune-operator-ci -f rune-operator/Dockerfile rune-operator
+          docker build -t rune:rune-ci-local -f Dockerfile .
+          docker build -t rune:rune-operator-ci -f rune-operator/Dockerfile rune-operator
       - name: Generate SBOMs and scan
         run: |
           set -euo pipefail
           mkdir -p sbom
-          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "${PWD}:/work" anchore/syft:v1.17.0 ai-benchmarks:rune-ci-local -o cyclonedx-json=/work/sbom/rune-image.cdx.json
-          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "${PWD}:/work" anchore/syft:v1.17.0 ai-benchmarks:rune-operator-ci -o cyclonedx-json=/work/sbom/operator-image.cdx.json
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "${PWD}:/work" anchore/syft:v1.17.0 rune:rune-ci-local -o cyclonedx-json=/work/sbom/rune-image.cdx.json
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "${PWD}:/work" anchore/syft:v1.17.0 rune:rune-operator-ci -o cyclonedx-json=/work/sbom/operator-image.cdx.json
           docker run --rm -v "${PWD}:/work" anchore/grype:v0.82.0 sbom:/work/sbom/rune-image.cdx.json -o json > sbom/rune-grype.json
           docker run --rm -v "${PWD}:/work" anchore/grype:v0.82.0 sbom:/work/sbom/operator-image.cdx.json -o json > sbom/operator-grype.json
           docker run --rm -v "${PWD}:/work" aquasec/trivy:0.57.1 sbom /work/sbom/rune-image.cdx.json --format json --output /work/sbom/rune-trivy.json --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL

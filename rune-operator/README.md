@@ -37,7 +37,7 @@ go build ./...
 
 ```bash
 cd rune-operator
-docker build -t ai-benchmarks:rune-operator .
+docker build -t rune:rune-operator .
 ```
 
 ## Run locally

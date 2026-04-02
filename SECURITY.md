@@ -1,6 +1,6 @@
 # Security Policy
 
-We take the security of `ai-benchmarks` very seriously.
+We take the security of `rune` very seriously.
 
 ## Supported Versions
 
@@ -13,7 +13,7 @@ Currently, only the main branch (`master` or `main`) and the latest tagged relea
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability within `ai-benchmarks`, please do **not** open a public issue.
+If you discover a security vulnerability within `rune`, please do **not** open a public issue.
 
 Instead, please send an e-mail to **[luca@bucaniere.us]**.
 
