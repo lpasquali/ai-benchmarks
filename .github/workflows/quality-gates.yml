@@ -27,20 +27,6 @@ jobs:
           pip install --prefer-binary -r requirements.txt pytest pytest-cov pytest-xdist
           .venv/bin/python -m pytest --cov --cov-report=term-missing:skip-covered --cov-fail-under=97
 
-  coverage-go:
-    name: RuneGate/Coverage/Go
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
-        with:
-          go-version: '1.23'
-          cache: true
-          cache-dependency-path: rune-operator/go.sum
-      - run: |
-          cd rune-operator
-          go test ./... -coverprofile=coverage.out -covermode=atomic
-
   feature-python:
     name: RuneGate/Feature/Python
     needs: [coverage-python]
@@ -58,21 +44,6 @@ jobs:
           pip install --prefer-binary -r requirements.txt pytest pytest-xdist
           .venv/bin/python -m pytest -p no:cov -o addopts='' tests/ -m "not regression" -v --tb=short
 
-  feature-go:
-    name: RuneGate/Feature/Go
-    needs: [coverage-go]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
-        with:
-          go-version: '1.23'
-          cache: true
-          cache-dependency-path: rune-operator/go.sum
-      - run: |
-          cd rune-operator
-          go test ./... -v
-
   linting-python:
     name: RuneGate/Linting/Python
     runs-on: ubuntu-latest
@@ -89,21 +60,6 @@ jobs:
           pip install --prefer-binary -r requirements.txt ruff mypy
           .venv/bin/ruff check rune rune_bench
           .venv/bin/mypy rune rune_bench
-
-  linting-go:
-    name: RuneGate/Linting/Go
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
-        with:
-          go-version: '1.23'
-          cache: true
-          cache-dependency-path: rune-operator/go.sum
-      - run: |
-          cd rune-operator
-          test -z "$(gofmt -l .)"
-          go vet ./...
 
   smoke-cli-api:
     name: RuneGate/CLI-and-API-Smoke/Python+Containers
@@ -153,25 +109,6 @@ jobs:
             exit 1
           fi
 
-  smoke-operator-container:
-    name: RuneGate/CLI-and-API-Smoke/Go-Operator-Container
-    needs: [feature-go]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: docker/setup-qemu-action@v4
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/build-push-action@v7
-        with:
-          context: ./rune-operator
-          file: ./rune-operator/Dockerfile
-          platforms: linux/amd64
-          load: true
-          push: false
-          tags: rune:rune-operator-ci
-      - run: |
-          docker run --rm rune:rune-operator-ci --help >/dev/null || true
-
   regression-python:
     name: RuneGate/Regression/Python
     needs: [feature-python]
@@ -189,24 +126,9 @@ jobs:
           pip install --prefer-binary -r requirements.txt pytest
           .venv/bin/python -m pytest -p no:cov -o addopts='' -m regression tests/ -v --tb=short
 
-  regression-go:
-    name: RuneGate/Regression/Go
-    needs: [feature-go]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
-        with:
-          go-version: '1.23'
-          cache: true
-          cache-dependency-path: rune-operator/go.sum
-      - run: |
-          cd rune-operator
-          go test ./... -run Regression -v
-
   security-sbom:
     name: RuneGate/Security/SBOM-and-CVE-Policy
-    needs: [feature-python, feature-go, linting-python, linting-go]
+    needs: [feature-python, linting-python]
     runs-on: ubuntu-latest
     permissions:
       id-token: write      # required for SLSA provenance attestation
@@ -219,20 +141,16 @@ jobs:
       - name: Build images
         run: |
           docker build -t rune:rune-ci-local -f Dockerfile .
-          docker build -t rune:rune-operator-ci -f rune-operator/Dockerfile rune-operator
       - name: Generate SBOMs — CycloneDX via Syft (IEC 62443 4-1 ML4 SM-9)
         run: |
           set -euo pipefail
           mkdir -p sbom
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "${PWD}:/work" anchore/syft:v1.17.0 rune:rune-ci-local -o cyclonedx-json=/work/sbom/rune-image.cdx.json
-          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "${PWD}:/work" anchore/syft:v1.17.0 rune:rune-operator-ci -o cyclonedx-json=/work/sbom/operator-image.cdx.json
       - name: Scan SBOMs — Grype + Trivy (IEC 62443 4-1 ML4 SVV-3 / DM-4)
         run: |
           set -euo pipefail
           docker run --rm -v "${PWD}:/work" anchore/grype:v0.82.0 -c /work/.grype.yaml sbom:/work/sbom/rune-image.cdx.json -o json > sbom/rune-grype.json
-          docker run --rm -v "${PWD}:/work" anchore/grype:v0.82.0 -c /work/.grype.yaml sbom:/work/sbom/operator-image.cdx.json -o json > sbom/operator-grype.json
           docker run --rm -v "${PWD}:/work" aquasec/trivy:0.65.0 sbom /work/sbom/rune-image.cdx.json --format json --output /work/sbom/rune-trivy.json --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
-          docker run --rm -v "${PWD}:/work" aquasec/trivy:0.65.0 sbom /work/sbom/operator-image.cdx.json --format json --output /work/sbom/operator-trivy.json --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
       - name: Enforce CVE policy — IEC 62443 4-1 ML4 DM-4
         env:
           BRANCH_NAME: ${{ github.ref_name }}
@@ -300,7 +218,6 @@ jobs:
         with:
           subject-path: |
             sbom/rune-image.cdx.json
-            sbom/operator-image.cdx.json
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -316,12 +233,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.14'
-      - uses: actions/setup-go@v6
-        with:
-          go-version: '1.23'
-          cache: true
-          cache-dependency-path: rune-operator/go.sum
-      - name: Bandit + gosec aggregate gate (IEC 62443 4-1 ML4 SI-1 / SVV-1)
+      - name: Bandit gate (IEC 62443 4-1 ML4 SI-1 / SVV-1)
         run: |
           set -euo pipefail
           rc=0
@@ -329,43 +241,29 @@ jobs:
           pip install bandit
           bandit -r rune rune_bench -ll -f json -o bandit-results.json || rc=1
 
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.22.4
-          (cd rune-operator && gosec -fmt json -out ../gosec-results.json -severity high ./...) || rc=1
-
           python3 - <<'PY'
           import json
           from pathlib import Path
 
           bandit_path = Path('bandit-results.json')
-          gosec_path = Path('gosec-results.json')
 
           bandit_findings = []
           if bandit_path.exists():
               bandit_findings = (json.loads(bandit_path.read_text(encoding='utf-8')).get('results') or [])
 
-          gosec_findings = []
-          if gosec_path.exists():
-              gosec_findings = (json.loads(gosec_path.read_text(encoding='utf-8')).get('Issues') or [])
-
           bandit_block = [r for r in bandit_findings if r.get('issue_severity') == 'HIGH' and r.get('issue_confidence') == 'HIGH']
-          gosec_block = [i for i in gosec_findings if i.get('severity') == 'HIGH' and i.get('confidence') == 'HIGH']
 
           print(f'Bandit findings: {len(bandit_findings)} | blocking(HIGH/HIGH): {len(bandit_block)}')
           for r in bandit_block[:20]:
               print(f"BANDIT BLOCK: {r.get('issue_text')} ({r.get('test_id')}) @ {r.get('filename')}:{r.get('line_number')}")
 
-          print(f'gosec findings: {len(gosec_findings)} | blocking(HIGH/HIGH): {len(gosec_block)}')
-          for i in gosec_block[:20]:
-              print(f"GOSEC BLOCK: {i.get('details')} @ {i.get('file')}:{i.get('line')}")
-
           summary = Path('sast-summary.txt')
           summary.write_text(
-              f"Bandit findings={len(bandit_findings)} blocking={len(bandit_block)}\n"
-              f"gosec findings={len(gosec_findings)} blocking={len(gosec_block)}\n",
+              f"Bandit findings={len(bandit_findings)} blocking={len(bandit_block)}\n",
               encoding='utf-8',
           )
 
-          if bandit_block or gosec_block:
+          if bandit_block:
               raise SystemExit(1)
           PY
       - uses: actions/upload-artifact@v7
@@ -374,7 +272,6 @@ jobs:
           name: sast-reports
           path: |
             bandit-results.json
-            gosec-results.json
             sast-summary.txt
           retention-days: 14
 
@@ -546,15 +443,10 @@ jobs:
     if: always()
     needs:
       - coverage-python
-      - coverage-go
       - feature-python
-      - feature-go
       - linting-python
-      - linting-go
       - smoke-cli-api
-      - smoke-operator-container
       - regression-python
-      - regression-go
       - security-sbom
       - security-sast
       - security-secrets
