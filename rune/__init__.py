@@ -18,7 +18,6 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 from vastai import VastAI
 
-from rune_bench import HolmesRunner
 from rune_bench.api_client import RuneApiClient
 from rune_bench.api_contracts import (
     RunAgenticAgentRequest,
@@ -651,6 +650,7 @@ def run_agentic_agent(
 
     # Block 10 — Run HolmesGPT agent
     try:
+        from rune_bench import HolmesRunner
         runner = HolmesRunner(kubeconfig)
         answer = runner.ask(question=question, model=model, ollama_url=ollama_url)
     except (FileNotFoundError, RuntimeError) as exc:
@@ -843,6 +843,7 @@ def run_benchmark(
 
     # Block 10 — Run agentic agent
     try:
+        from rune_bench import HolmesRunner
         runner = HolmesRunner(kubeconfig)
         answer = runner.ask(
             question=question,
