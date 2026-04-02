@@ -39,6 +39,17 @@ from rune_bench.workflows import (
     use_existing_ollama_server,
 )
 
+# Lazy import HolmesRunner to avoid requiring holmes/holmesgpt for API server mode
+HolmesRunner = None
+
+def _get_holmes_runner():
+    """Lazy loader for HolmesRunner to allow API-only deployments."""
+    global HolmesRunner
+    if HolmesRunner is None:
+        from rune_bench import HolmesRunner as _HolmesRunner
+        HolmesRunner = _HolmesRunner
+    return HolmesRunner
+
 app = typer.Typer(help="RUNE — Reliability Use-case Numeric Evaluator", add_completion=False)
 console = Console()
 
@@ -650,8 +661,7 @@ def run_agentic_agent(
 
     # Block 10 — Run HolmesGPT agent
     try:
-        from rune_bench import HolmesRunner
-        runner = HolmesRunner(kubeconfig)
+        runner = (HolmesRunner or _get_holmes_runner())(kubeconfig)
         answer = runner.ask(question=question, model=model, ollama_url=ollama_url)
     except (FileNotFoundError, RuntimeError) as exc:
         console.print(f"[red]Agent error:[/red] {exc}")
@@ -843,8 +853,7 @@ def run_benchmark(
 
     # Block 10 — Run agentic agent
     try:
-        from rune_bench import HolmesRunner
-        runner = HolmesRunner(kubeconfig)
+        runner = (HolmesRunner or _get_holmes_runner())(kubeconfig)
         answer = runner.ask(
             question=question,
             model=selected_model_name,
