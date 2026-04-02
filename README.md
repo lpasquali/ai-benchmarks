@@ -35,18 +35,14 @@ rune/
 │       ├── client.py        # OllamaClient (HTTP transport)
 │       ├── models.py        # OllamaModelManager (business logic)
 │       └── __init__.py
-├── docs/
-│   ├── architecture.md
-│   ├── OLLAMA_REFACTORING.md    # Details on class-based redesign
-│   └── ARCHITECTURE_COMPARISON.md
 ├── experiments/
 │   └── provision.py
 ├── requirements.txt
 └── Dockerfile
 ```
 
-See [docs/architecture.md](docs/architecture.md) for workflow details, including the Ollama module design.
-See [docs/API_COMPATIBILITY_PLAN.md](docs/API_COMPATIBILITY_PLAN.md) for the CLI-to-API compatibility roadmap.
+Platform documentation now lives in the dedicated `lpasquali/rune-docs` repository.
+Helm chart packaging and deployment assets now live in the dedicated `lpasquali/rune-charts` repository.
 Kubernetes operator orchestration now lives in the dedicated `lpasquali/rune-operator` repository.
 
 ## RUNE Commands
@@ -233,7 +229,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Security
 
 See [SECURITY.md](SECURITY.md).
-See [docs/compliance-targets.md](docs/compliance-targets.md) for the repository's explicit security and compliance targets.
+See [compliance targets in rune-docs](https://github.com/lpasquali/rune-docs/blob/main/docs/compliance-targets.md) for the repository's explicit security and compliance targets.
 
 ## License
 
