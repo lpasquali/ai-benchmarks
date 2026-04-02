@@ -48,7 +48,7 @@ BACKEND_MODE = os.environ.get("RUNE_BACKEND", "local").strip().lower() or "local
 API_BASE_URL = os.environ.get("RUNE_API_BASE_URL", "http://localhost:8080").strip() or "http://localhost:8080"
 API_TOKEN = os.environ.get("RUNE_API_TOKEN", "").strip() or None
 API_TENANT = os.environ.get("RUNE_API_TENANT", "default").strip() or "default"
-VERIFY_SSL = not (os.environ.get("RUNE_INSECURE", "").strip().lower() in {"1", "true", "yes", "on"})
+VERIFY_SSL = os.environ.get("RUNE_INSECURE", "").strip().lower() not in {"1", "true", "yes", "on"}
 
 
 @app.callback()

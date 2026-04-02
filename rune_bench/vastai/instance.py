@@ -407,8 +407,8 @@ class InstanceManager:
 
     @staticmethod
     def _first_float(data: dict, fields: tuple[str, ...]) -> float | None:
-        for field in fields:
-            value = data.get(field)
+        for field_name in fields:
+            value = data.get(field_name)
             if value is None:
                 continue
             try:
