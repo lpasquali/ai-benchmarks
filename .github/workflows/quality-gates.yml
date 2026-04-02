@@ -285,11 +285,11 @@ jobs:
           for row in warned[:10]:
               print(f'WARN  [unfixable]  {row[0]}  cvss={row[1]:.1f}  src={row[2]}')
 
-            branch = os.environ.get('BRANCH_NAME', '')
-            strict_branch = branch in {'main', 'develop'}
-            print(f'Branch              : {branch} (strict={strict_branch})')
+          branch = os.environ.get('BRANCH_NAME', '')
+          strict_branch = branch in {'main', 'develop'}
+          print(f'Branch              : {branch} (strict={strict_branch})')
 
-            if blocked and not strict_branch:
+          if blocked and not strict_branch:
               print('Non-protected branch detected: reporting fixable CVEs without blocking merge.')
               raise SystemExit(0)
           if blocked:
@@ -429,48 +429,48 @@ jobs:
           fi
 
           if [ "$rc" -eq 0 ]; then
-            python - <<'PY' || rc=1
-            import json
-            from pathlib import Path
+          python - <<'PY' || rc=1
+          import json
+          from pathlib import Path
 
-            disallowed_tokens = (
-                'agpl',
-                'gplv3',
-                'gpl v3',
-                'gnu general public license v3',
-                'gnu affero general public license',
-            )
-            allowed_package_exceptions = {
-                # Temporary exceptions for transitive deps pulled by the Holmes stack.
-                # Keep this list minimal and track removal in dependency updates.
-                'bashlex',
-                'borb',
-            }
+          disallowed_tokens = (
+            'agpl',
+            'gplv3',
+            'gpl v3',
+            'gnu general public license v3',
+            'gnu affero general public license',
+          )
+          allowed_package_exceptions = {
+            # Temporary exceptions for transitive deps pulled by the Holmes stack.
+            # Keep this list minimal and track removal in dependency updates.
+            'bashlex',
+            'borb',
+          }
 
-            rows = json.loads(Path('licenses-python.json').read_text(encoding='utf-8'))
-            blocked = []
-            allowed_hits = []
-            for row in rows:
-                pkg = str(row.get('Name', 'unknown'))
-                lic = str(row.get('License', '')).lower()
-                if any(token in lic for token in disallowed_tokens):
-                    entry = (pkg, row.get('Version', 'unknown'), row.get('License', ''))
-                    if pkg.lower() in allowed_package_exceptions:
-                        allowed_hits.append(entry)
-                    else:
-                        blocked.append(entry)
+          rows = json.loads(Path('licenses-python.json').read_text(encoding='utf-8'))
+          blocked = []
+          allowed_hits = []
+          for row in rows:
+            pkg = str(row.get('Name', 'unknown'))
+            lic = str(row.get('License', '')).lower()
+            if any(token in lic for token in disallowed_tokens):
+              entry = (pkg, row.get('Version', 'unknown'), row.get('License', ''))
+              if pkg.lower() in allowed_package_exceptions:
+                allowed_hits.append(entry)
+              else:
+                blocked.append(entry)
 
-            print(f'license rows: {len(rows)}')
-            print(f'blocked licenses: {len(blocked)}')
-            print(f'allowed exception hits: {len(allowed_hits)}')
-            for name, version, license_name in allowed_hits[:30]:
-                print(f'ALLOW-EXCEPTION: {name} {version} -> {license_name}')
-            for name, version, license_name in blocked[:30]:
-                print(f'BLOCK: {name} {version} -> {license_name}')
+          print(f'license rows: {len(rows)}')
+          print(f'blocked licenses: {len(blocked)}')
+          print(f'allowed exception hits: {len(allowed_hits)}')
+          for name, version, license_name in allowed_hits[:30]:
+            print(f'ALLOW-EXCEPTION: {name} {version} -> {license_name}')
+          for name, version, license_name in blocked[:30]:
+            print(f'BLOCK: {name} {version} -> {license_name}')
 
-            if blocked:
-                raise SystemExit(1)
-            PY
+          if blocked:
+            raise SystemExit(1)
+          PY
           fi
 
           exit "$rc"
