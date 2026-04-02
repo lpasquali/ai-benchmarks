@@ -50,8 +50,9 @@ WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /usr/local/bin/kubectl /usr/local/bin/kubectl
 
-# Application source
-COPY rune rune_bench ./
+# Application source — preserve subdirectory names so python -m rune resolves correctly
+COPY rune ./rune
+COPY rune_bench ./rune_bench
 RUN chown -R rune:rune /app
 
 ENV PATH="/opt/venv/bin:$PATH" \
