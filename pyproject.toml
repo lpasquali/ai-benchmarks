@@ -57,3 +57,9 @@ python_version = "3.11"
 [[tool.mypy.overrides]]
 module = ["vastai"]
 ignore_missing_imports = true
+
+[tool.bandit]
+# IEC 62443 4-1 ML4 SI-1: static application security testing
+targets = ["rune", "rune_bench"]
+exclude_dirs = ["tests"]
+skips = ["B101"]   # assert statements used only in test/debug guards
