@@ -12,10 +12,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	benchv1alpha1 "github.com/lpasquali/ai-benchmarks/rune-operator/api/v1alpha1"
-	"github.com/lpasquali/ai-benchmarks/rune-operator/controllers"
-	"github.com/lpasquali/ai-benchmarks/rune-operator/internal/metrics"
-	"github.com/lpasquali/ai-benchmarks/rune-operator/internal/telemetry"
+	benchv1alpha1 "github.com/lpasquali/rune/rune-operator/api/v1alpha1"
+	"github.com/lpasquali/rune/rune-operator/controllers"
+	"github.com/lpasquali/rune/rune-operator/internal/metrics"
+	"github.com/lpasquali/rune/rune-operator/internal/telemetry"
 )
 
 func main() {

@@ -24,8 +24,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	benchv1alpha1 "github.com/lpasquali/ai-benchmarks/rune-operator/api/v1alpha1"
-	"github.com/lpasquali/ai-benchmarks/rune-operator/internal/metrics"
+	benchv1alpha1 "github.com/lpasquali/rune/rune-operator/api/v1alpha1"
+	"github.com/lpasquali/rune/rune-operator/internal/metrics"
 )
 
 type RuneBenchmarkReconciler struct {
