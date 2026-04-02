@@ -337,7 +337,7 @@ def _run_vastai_provisioning(
             raise typer.Exit(0)
         except RuntimeError as exc:
             _print_error_and_exit(str(exc))
-    raise AssertionError("unreachable")
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 @app.command("serve")

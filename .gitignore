@@ -14,3 +14,7 @@ sbom/*.sarif
 .pytype/
 .pyre/
 .pyright/
+coverage.out
+gosec-report.json
+license-checks.json
+.venv-ci-lic

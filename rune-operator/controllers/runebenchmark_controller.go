@@ -34,16 +34,23 @@ type RuneBenchmarkReconciler struct {
 	Recorder record.EventRecorder
 }
 
+var setupControllerWithManager = func(mgr ctrl.Manager, r *RuneBenchmarkReconciler) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&benchv1alpha1.RuneBenchmark{}).
+		Complete(r)
+}
+
 // +kubebuilder:rbac:groups=bench.rune.ai,resources=runebenchmarks,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=bench.rune.ai,resources=runebenchmarks/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=bench.rune.ai,resources=runebenchmarks/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 func (r *RuneBenchmarkReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if mgr == nil {
+		return fmt.Errorf("manager is nil")
+	}
 	r.Recorder = mgr.GetEventRecorderFor("rune-benchmark-controller")
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&benchv1alpha1.RuneBenchmark{}).
-		Complete(r)
+	return setupControllerWithManager(mgr, r)
 }
 
 func (r *RuneBenchmarkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, retErr error) {
@@ -143,7 +150,8 @@ func (r *RuneBenchmarkReconciler) executeBenchmark(ctx context.Context, obj *ben
 
 	clientHTTP := &http.Client{Timeout: timeout}
 	if obj.Spec.InsecureTLS {
-		clientHTTP.Transport = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}} //nolint:gosec
+		// #nosec G402 -- explicit opt-in for lab/dev endpoints via RuneBenchmark.spec.insecureTLS
+		clientHTTP.Transport = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
 	}
 
 	requestURL := strings.TrimRight(obj.Spec.APIBaseURL, "/") + "/v1/jobs"
