@@ -5,7 +5,6 @@ from pathlib import Path
 
 from vastai import VastAI
 
-from rune_bench import HolmesRunner
 from rune_bench.api_contracts import (
     RunAgenticAgentRequest,
     RunBenchmarkRequest,
@@ -20,6 +19,18 @@ from rune_bench.workflows import (
     list_running_ollama_models,
     warmup_existing_ollama_model,
 )
+
+# Lazily imported so the API server starts without requiring the holmes/holmesgpt package
+HolmesRunner = None
+
+
+def _get_holmes_runner():
+    """Lazy loader for HolmesRunner to allow API-only deployments."""
+    global HolmesRunner
+    if HolmesRunner is None:
+        from rune_bench.agents.holmes import HolmesRunner as _HolmesRunner
+        HolmesRunner = _HolmesRunner
+    return HolmesRunner
 
 
 def _vastai_sdk() -> VastAI:
@@ -80,7 +91,8 @@ def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
             timeout_seconds=request.ollama_warmup_timeout,
         )
 
-    runner = HolmesRunner(Path(request.kubeconfig))
+    from rune_bench.agents.holmes import HolmesRunner as _HR
+    runner = (HolmesRunner or _HR)(Path(request.kubeconfig))
     answer = runner.ask(
         question=request.question,
         model=request.model,
@@ -124,7 +136,8 @@ def run_benchmark(request: RunBenchmarkRequest) -> dict:
         )
 
     try:
-        runner = HolmesRunner(Path(request.kubeconfig))
+        from rune_bench.agents.holmes import HolmesRunner as _HR
+        runner = (HolmesRunner or _HR)(Path(request.kubeconfig))
         answer = runner.ask(
             question=request.question,
             model=selected_model_name,

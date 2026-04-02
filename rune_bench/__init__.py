@@ -9,7 +9,6 @@ Exposes the top-level classes used by rune.py:
     HolmesRunner     — Block 10: run HolmesGPT against a Kubernetes cluster
 """
 
-from .agents import HolmesRunner
 from .common import ModelSelector
 from .vastai import InstanceManager, OfferFinder, TemplateLoader
 
@@ -18,5 +17,4 @@ __all__ = [
     "ModelSelector",
     "TemplateLoader",
     "InstanceManager",
-    "HolmesRunner",
 ]
