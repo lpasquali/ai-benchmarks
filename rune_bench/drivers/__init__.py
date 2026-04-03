@@ -30,6 +30,7 @@ Examples::
 from __future__ import annotations
 
 import os
+import shlex
 import sys
 
 from rune_bench.drivers.base import DriverTransport
@@ -67,7 +68,6 @@ def make_driver_transport(driver_name: str) -> DriverTransport:
     default_cmd = [sys.executable, "-m", f"rune_bench.drivers.{driver_name}"]
     cmd_str = os.getenv(f"{prefix}_CMD", "")
     if cmd_str:
-        import shlex
         cmd = shlex.split(cmd_str)
     else:
         cmd = default_cmd
