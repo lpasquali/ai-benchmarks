@@ -1,81 +1,52 @@
-import os
 import sys
-import types
 from pathlib import Path
 from unittest.mock import MagicMock
 from urllib.request import Request, urlopen
 
 import pytest
 
-import rune_bench.agents.sre.holmes as holmes_module
 import rune_bench.api_backend as api_backend
 import rune_bench.api_client as api_client_module
 import rune_bench.api_server as api_server
 import rune_bench.workflows as workflows
 from rune_bench.agents.sre.holmes import HolmesRunner
 from rune_bench.api_client import RuneApiClient
-from rune_bench.backends.ollama import OllamaClient, OllamaModelCapabilities
+from rune_bench.backends.ollama import OllamaClient
 from rune_bench.resources.vastai import InstanceManager
 from rune_bench.resources.vastai import OfferFinder
 from rune_bench.resources.vastai import TemplateLoader
 
 
 def test_holmes_runner_remaining_paths(monkeypatch, tmp_path):
+    """Test transport delegation and error propagation in HolmesDriverClient."""
+    import rune_bench.drivers.holmes as holmes_driver_module
+
     kubeconfig = tmp_path / "config"
     kubeconfig.write_text("apiVersion: v1\n")
-    runner = HolmesRunner(kubeconfig)
 
-    fake_client = MagicMock()
-    fake_holmes = MagicMock()
-    fake_holmes.ask.side_effect = TypeError("unsupported")
-    fake_holmes.Holmes.side_effect = [TypeError("new-signature"), fake_client]
-    fake_client.ask.return_value = "fallback-answer"
-    monkeypatch.setattr(holmes_module, "holmes", fake_holmes)
-    monkeypatch.setattr(runner, "_configure_ollama_model_limits", lambda **_: None)
-    assert runner.ask("q", "m") == "fallback-answer"
-
-    monkeypatch.setattr(holmes_module, "holmes", types.SimpleNamespace())
-    monkeypatch.setattr(runner, "_ask_via_cli", lambda **_: "cli-answer")
-    assert runner.ask("q", "m") == "cli-answer"
-
-    monkeypatch.setattr(runner, "_ask_via_cli", lambda **_: None)
-    with pytest.raises(RuntimeError, match="Unsupported HolmesGPT SDK API shape"):
+    # transport error is propagated as RuntimeError
+    failing_transport = MagicMock()
+    failing_transport.call.side_effect = RuntimeError("transport failed")
+    runner = HolmesRunner(kubeconfig, transport=failing_transport)
+    with pytest.raises(RuntimeError, match="transport failed"):
         runner.ask("q", "m")
 
-    runner._configure_ollama_model_limits(model="m", ollama_url=None)
+    # transport returns answer correctly
+    ok_transport = MagicMock()
+    ok_transport.call.return_value = {"answer": "great"}
+    runner2 = HolmesRunner(kubeconfig, transport=ok_transport)
+    assert runner2.ask("q", "m") == "great"
 
-    fake_manager = MagicMock()
-    fake_manager.normalize_model_name.return_value = "plain"
-    monkeypatch.setattr(holmes_module.OllamaModelManager, "create", lambda *_: fake_manager)
-    monkeypatch.setattr(holmes_module, "OllamaClient", lambda *_: type("C", (), {"get_model_capabilities": lambda self, _m: (_ for _ in ()).throw(RuntimeError("boom"))})())
-    runner._configure_ollama_model_limits(model="m", ollama_url="http://x")
+    # _fetch_model_limits returns {} when OllamaModelManager.create raises
+    bad_manager = MagicMock()
+    bad_manager.normalize_model_name.side_effect = RuntimeError("norm failed")
+    monkeypatch.setattr(holmes_driver_module.OllamaModelManager, "create", lambda *_: bad_manager)
+    limits = runner2._fetch_model_limits(model="m", ollama_url="http://x")
+    assert limits == {}
 
-    runner._set_model_limit_override(env_name="OVERRIDE_MAX_CONTENT_SIZE", value=0)
-
-    fake_llm = types.SimpleNamespace()
-    monkeypatch.setitem(sys.modules, "holmes.core.llm", fake_llm)
-    os.environ.pop("OVERRIDE_MAX_OUTPUT_TOKEN", None)
-    runner._set_model_limit_override(env_name="OVERRIDE_MAX_OUTPUT_TOKEN", value=77)
-    assert os.environ["OVERRIDE_MAX_OUTPUT_TOKEN"] == "77"
-
-    runner = object.__new__(HolmesRunner)
-    runner._kubeconfig = kubeconfig
-
-    monkeypatch.setattr(holmes_module.subprocess, "Popen", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("missing")))
-    with pytest.raises(RuntimeError, match="Failed to execute Holmes CLI fallback"):
-        runner._ask_via_cli("q", "m")
-
-    class BadProc:
-        def __init__(self):
-            self.stdout = iter(["bad\n"])
-            self.returncode = 1
-
-        def wait(self):
-            return None
-
-    monkeypatch.setattr(holmes_module.subprocess, "Popen", lambda *args, **kwargs: BadProc())
-    with pytest.raises(RuntimeError, match="Holmes CLI fallback failed"):
-        runner._ask_via_cli("q", "m")
+    # _fetch_model_limits returns {} when no ollama_url
+    limits2 = runner2._fetch_model_limits(model="m", ollama_url=None)
+    assert limits2 == {}
 
 
 def test_api_client_remaining_paths(monkeypatch):
