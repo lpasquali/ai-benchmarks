@@ -79,7 +79,16 @@ jobs:
           .venv/bin/python -m pytest -p no:cov -o addopts='' tests/test_cli_http_mode.py tests/test_api_server.py -v --tb=short
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
-      - uses: docker/build-push-action@v7
+      - name: Build multi-arch (amd64 + arm64)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: false
+          tags: rune:rune-ci-local
+      - name: Load amd64 image and smoke test
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
