@@ -34,5 +34,6 @@ Required policy:
 Security policy gate in CI:
 
 - SBOM is generated and scanned by multiple scanners.
-- If any vulnerability has CVSS score > 8.8, CI fails.
-- Because `Merge Gate` is required, PR merge is blocked when CVSS > 8.8 is detected.
+- If any **fixable** vulnerability has CVSS score > 8.8, CI fails and merge is blocked.
+- Unfixable vulnerabilities above the threshold are logged as warnings and require VEX/risk-acceptance tracking within the patch SLA.
+- Because `Merge Gate` is required, PR merge is blocked when a fixable CVSS > 8.8 is detected.

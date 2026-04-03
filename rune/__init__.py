@@ -40,7 +40,7 @@ from rune_bench.workflows import (
 )
 
 # Lazy import HolmesRunner to avoid requiring holmes/holmesgpt for API server mode
-HolmesRunner = None
+HolmesRunner: type | None = None  # type: ignore[type-arg]
 
 def _get_holmes_runner():
     """Lazy loader for HolmesRunner to allow API-only deployments."""
