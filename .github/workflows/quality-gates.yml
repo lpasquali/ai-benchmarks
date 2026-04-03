@@ -1,0 +1,613 @@
+name: Quality Gates (RuneGate Grouped)
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  coverage-python:
+    name: RuneGate/Coverage/Python
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+      - uses: actions/cache@v5
+        id: cache-venv
+        with:
+          path: .venv
+          key: venv-coverage-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/quality-gates.yml') }}
+      - name: Install dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install --prefer-binary -r requirements.txt pytest pytest-cov pytest-xdist
+      - name: Coverage
+        run: .venv/bin/python -m pytest --cov --cov-report=term-missing:skip-covered --cov-fail-under=97
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request' && always() && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              const output = require('child_process').execSync('.venv/bin/python -m coverage report', { encoding: 'utf-8' });
+              const lines = output.split('\n');
+              const totalLine = lines.find((line) => line.trim().startsWith('TOTAL'));
+              if (!totalLine) {
+                console.log('Could not find TOTAL line in coverage report');
+                return;
+              }
+              const percentMatch = totalLine.match(/(\d+)%\s*$/);
+              if (!percentMatch) {
+                console.log('Could not parse coverage percentage from TOTAL line:', totalLine);
+                return;
+              }
+              const total = Number(percentMatch[1]);
+              const comment = `## Coverage Report\n\n**Total Coverage:** ${total.toFixed(2)}%\n\n${total >= 97 ? '✅ Meets 97% threshold' : '❌ Below 97% threshold'}`;
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            } catch (e) {
+              console.log('Could not generate coverage PR comment:', e.message);
+            }
+
+  feature-python:
+    name: RuneGate/Feature/Python
+    needs: [coverage-python]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+      - uses: actions/cache@v5
+        id: cache-venv
+        with:
+          path: .venv
+          key: venv-feature-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/quality-gates.yml') }}
+      - name: Install dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install --prefer-binary -r requirements.txt pytest pytest-xdist
+      - run: .venv/bin/python -m pytest -p no:cov -o addopts='' tests/ -m "not regression" -v --tb=short
+
+  linting-python:
+    name: RuneGate/Linting/Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+      - uses: actions/cache@v5
+        id: cache-venv
+        with:
+          path: .venv
+          key: venv-linting-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/quality-gates.yml') }}
+      - name: Install dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install --prefer-binary -r requirements.txt ruff mypy
+      - run: |
+          .venv/bin/ruff check rune rune_bench
+          .venv/bin/mypy rune rune_bench
+
+  smoke-cli-api:
+    name: RuneGate/CLI-and-API-Smoke/Python+Containers
+    needs: [feature-python]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+      - uses: actions/cache@v5
+        id: cache-venv
+        with:
+          path: .venv
+          key: venv-smoke-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/quality-gates.yml') }}
+      - name: Install dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install --prefer-binary -r requirements.txt pytest
+      - run: .venv/bin/python -m pytest -p no:cov -o addopts='' tests/test_cli_http_mode.py tests/test_api_server.py -v --tb=short
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - name: Build multi-arch (amd64 + arm64)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: false
+          tags: rune:rune-ci-local
+      - name: Load amd64 image and smoke test
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: rune:rune-ci-local
+      - run: |
+          set -euo pipefail
+          docker run -d --name rune-smoke -e RUNE_API_AUTH_DISABLED=1 -p 18080:8080 rune:rune-ci-local
+          trap 'echo "=== rune-smoke container logs ==="; docker logs rune-smoke 2>&1 | tail -200 || true; docker rm -f rune-smoke >/dev/null 2>&1 || true' EXIT
+          ready=0
+          for i in {1..60}; do
+            if ! docker ps --format '{{.Names}}' | grep -qx rune-smoke; then
+              echo "rune-smoke container exited early"
+              break
+            fi
+            if curl -fsS http://127.0.0.1:18080/healthz >/dev/null 2>&1 || \
+               curl -fsS http://127.0.0.1:18080/ >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "RUNE container did not become ready"
+            exit 1
+          fi
+
+  regression-python:
+    name: RuneGate/Regression/Python
+    needs: [feature-python]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+      - uses: actions/cache@v5
+        id: cache-venv
+        with:
+          path: .venv
+          key: venv-regression-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/quality-gates.yml') }}
+      - name: Install dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install --prefer-binary -r requirements.txt pytest
+      - run: .venv/bin/python -m pytest -p no:cov -o addopts='' -m regression tests/ -v --tb=short
+
+  security-sbom:
+    name: RuneGate/Security/SBOM-and-CVE-Policy
+    needs: [feature-python, linting-python]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write      # required for SLSA provenance attestation
+      attestations: write  # required for SLSA provenance attestation
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - name: Build images
+        run: |
+          docker build -t rune:rune-ci-local -f Dockerfile .
+      - name: Generate SBOMs — CycloneDX via Syft (IEC 62443 4-1 ML4 SM-9)
+        run: |
+          set -euo pipefail
+          mkdir -p sbom
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "${PWD}:/work" anchore/syft:v1.17.0 rune:rune-ci-local -o cyclonedx-json=/work/sbom/rune-image.cdx.json
+      - name: Scan SBOMs — Grype + Trivy (IEC 62443 4-1 ML4 SVV-3 / DM-4)
+        run: |
+          set -euo pipefail
+          docker run --rm -v "${PWD}:/work" anchore/grype:v0.82.0 -c /work/.grype.yaml sbom:/work/sbom/rune-image.cdx.json -o json > sbom/rune-grype.json
+          docker run --rm -v "${PWD}:/work" aquasec/trivy:0.65.0 sbom /work/sbom/rune-image.cdx.json --format json --output /work/sbom/rune-trivy.json --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+      - name: Enforce CVE policy — IEC 62443 4-1 ML4 DM-4
+        env:
+          BRANCH_NAME: ${{ github.event_name == 'pull_request' && github.base_ref || github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import json
+          from pathlib import Path
+
+          # IEC 62443 4-1 ML4 DM-4 blocking policy:
+          #   Block only when remediation exists (fixable vulnerabilities over threshold).
+          #   Unfixable vulnerabilities are logged and require VEX/risk acceptance tracking.
+          THRESHOLD = 8.8
+
+          def safe_float(v):
+              try: return float(v or 0)
+              except: return 0.0
+
+          findings = []
+          for f in sorted(Path('sbom').glob('*.json')):
+              data = json.loads(f.read_text(encoding='utf-8'))
+              if 'matches' in data:
+                  for m in data.get('matches', []):
+                      vuln = m.get('vulnerability', {})
+                      fix_state = (vuln.get('fix') or {}).get('state', 'unknown')
+                      fixable = fix_state == 'fixed'
+                      scores = []
+                      for c in vuln.get('cvss', []) or []:
+                          metrics = c.get('metrics', {})
+                          for k in ('baseScore', 'base_score'):
+                              scores.append(safe_float(metrics.get(k)))
+                      findings.append((vuln.get('id', 'UNKNOWN'), max(scores) if scores else 0.0, f.name, fixable))
+              elif 'Results' in data:
+                  for r in data.get('Results', []) or []:
+                      for v in r.get('Vulnerabilities', []) or []:
+                          score = 0.0
+                          for vendor in ('nvd', 'redhat', 'ghsa'):
+                              score = max(score, safe_float((v.get('CVSS') or {}).get(vendor, {}).get('V3Score')))
+                          fixable = bool((v.get('FixedVersion') or '').strip())
+                          findings.append((v.get('VulnerabilityID', 'UNKNOWN'), score, f.name, fixable))
+
+          blocked = [x for x in findings if x[1] > THRESHOLD and x[3]]
+          warned  = [x for x in findings if x[1] > THRESHOLD and not x[3]]
+
+          print(f'Total findings     : {len(findings)}')
+          print(f'Blocked (policy)   : {len(blocked)}')
+          print(f'Warned (unfixable) : {len(warned)}  — logged in SBOM artifact, VEX acceptance required within patch SLA')
+          for row in blocked[:30]:
+              print(f'BLOCK [fixable] {row[0]}  cvss={row[1]:.1f}  src={row[2]}')
+          for row in warned[:10]:
+              print(f'WARN  [unfixable]  {row[0]}  cvss={row[1]:.1f}  src={row[2]}')
+
+          branch = os.environ.get('BRANCH_NAME', '')
+          strict_branch = branch in {'main', 'develop'}
+          print(f'Branch              : {branch} (strict={strict_branch})')
+
+          if blocked and not strict_branch:
+              print('Non-protected branch detected: reporting fixable CVEs without blocking merge.')
+              raise SystemExit(0)
+          if blocked:
+              raise SystemExit(1)
+          PY
+      - name: Attest SBOM provenance — SLSA L3 (IEC 62443 4-1 ML4 SM-9)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            sbom/rune-image.cdx.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: sbom-security-outputs
+          path: sbom/
+          retention-days: 14
+
+  security-sast:
+    name: RuneGate/Security/SAST
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - name: Bandit gate (IEC 62443 4-1 ML4 SI-1 / SVV-1)
+        run: |
+          set -euo pipefail
+          rc=0
+
+          pip install bandit
+          bandit -r rune rune_bench -ll -f json -o bandit-results.json || rc=1
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          bandit_path = Path('bandit-results.json')
+
+          bandit_findings = []
+          if bandit_path.exists():
+              bandit_findings = (json.loads(bandit_path.read_text(encoding='utf-8')).get('results') or [])
+
+          bandit_block = [r for r in bandit_findings if r.get('issue_severity') == 'HIGH' and r.get('issue_confidence') == 'HIGH']
+
+          print(f'Bandit findings: {len(bandit_findings)} | blocking(HIGH/HIGH): {len(bandit_block)}')
+          for r in bandit_block[:20]:
+              print(f"BANDIT BLOCK: {r.get('issue_text')} ({r.get('test_id')}) @ {r.get('filename')}:{r.get('line_number')}")
+
+          summary = Path('sast-summary.txt')
+          summary.write_text(
+              f"Bandit findings={len(bandit_findings)} blocking={len(bandit_block)}\n",
+              encoding='utf-8',
+          )
+
+          if bandit_block:
+              raise SystemExit(1)
+          PY
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: sast-reports
+          path: |
+            bandit-results.json
+            sast-summary.txt
+          retention-days: 14
+
+  security-secrets:
+    name: RuneGate/Security/SecretScanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: gitleaks — hardcoded credential detection (IEC 62443 4-1 ML4 SM-8)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  security-licenses:
+    name: RuneGate/Security/LicenseCompliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - name: pip-licenses — dependency license audit (IEC 62443 4-1 ML4 SM-2)
+        run: |
+          set -euo pipefail
+          rc=0
+
+          sudo apt-get update
+          sudo apt-get install -y libjpeg-dev zlib1g-dev
+
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          for attempt in 1 2 3; do
+            if pip install --prefer-binary -r requirements.txt pip-licenses; then
+              rc=0
+              break
+            fi
+            rc=1
+            echo "pip install attempt ${attempt} failed, retrying..."
+            sleep 3
+          done
+
+          if [ "$rc" -eq 0 ]; then
+            pip-licenses --format=json --output-file=licenses-python.json || rc=1
+          fi
+
+          # Always produce artifact for diagnostics.
+          if [ ! -f licenses-python.json ]; then
+            printf '[]\n' > licenses-python.json
+          fi
+
+          if [ "$rc" -eq 0 ]; then
+          python - <<'PY' || rc=1
+          import json
+          from pathlib import Path
+
+          disallowed_tokens = (
+            'agpl',
+            'gplv3',
+            'gpl v3',
+            'gnu general public license v3',
+            'gnu affero general public license',
+          )
+          allowed_package_exceptions = {
+            # Temporary exceptions for transitive deps pulled by the Holmes stack.
+            # Keep this list minimal and track removal in dependency updates.
+            'bashlex',
+            'borb',
+          }
+
+          rows = json.loads(Path('licenses-python.json').read_text(encoding='utf-8'))
+          blocked = []
+          allowed_hits = []
+          for row in rows:
+            pkg = str(row.get('Name', 'unknown'))
+            lic = str(row.get('License', '')).lower()
+            if any(token in lic for token in disallowed_tokens):
+              entry = (pkg, row.get('Version', 'unknown'), row.get('License', ''))
+              if pkg.lower() in allowed_package_exceptions:
+                allowed_hits.append(entry)
+              else:
+                blocked.append(entry)
+
+          print(f'license rows: {len(rows)}')
+          print(f'blocked licenses: {len(blocked)}')
+          print(f'allowed exception hits: {len(allowed_hits)}')
+          for name, version, license_name in allowed_hits[:30]:
+            print(f'ALLOW-EXCEPTION: {name} {version} -> {license_name}')
+          for name, version, license_name in blocked[:30]:
+            print(f'BLOCK: {name} {version} -> {license_name}')
+
+          if blocked:
+            raise SystemExit(1)
+          PY
+          fi
+
+          exit "$rc"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: license-reports
+          path: licenses-python.json
+          retention-days: 14
+
+  publish-image-and-notify-charts:
+    name: RuneGate/CD/Publish-Image-and-Notify-Charts
+    if: github.event_name == 'push'
+    needs:
+      - smoke-cli-api
+      - security-sbom
+      - security-sast
+      - security-secrets
+      - security-licenses
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Derive image tag
+        id: meta
+        run: |
+          REF_SLUG="${GITHUB_REF_NAME//\//-}"
+          IMAGE_TAG="${REF_SLUG}-${GITHUB_SHA::7}"
+          echo "image_name=ghcr.io/lpasquali/rune" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+      - name: Build and push rune image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.image_name }}:${{ steps.meta.outputs.image_tag }}
+      - name: Notify rune-charts to sync image tag
+        env:
+          CROSS_REPO_TOKEN: ${{ secrets.RUNE_CHARTS_BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CROSS_REPO_TOKEN:-}" ]; then
+            echo "RUNE_CHARTS_BOT_TOKEN is not set. Skipping cross-repo notification."
+            exit 0
+          fi
+          curl -fsSL -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${CROSS_REPO_TOKEN}" \
+            https://api.github.com/repos/lpasquali/rune-charts/dispatches \
+            -d @- <<JSON
+          {
+            "event_type": "image-published",
+            "client_payload": {
+              "source_repo": "${GITHUB_REPOSITORY}",
+              "image_name": "${{ steps.meta.outputs.image_name }}",
+              "image_tag": "${{ steps.meta.outputs.image_tag }}"
+            }
+          }
+          JSON
+
+  integration-ollama:
+    name: RuneGate/Ollama-Integration/TinyLlama
+    needs: [feature-python]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+      - uses: actions/cache@v5
+        id: cache-venv
+        with:
+          path: .venv
+          key: venv-integration-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/quality-gates.yml') }}
+      - name: Install dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install --prefer-binary -r requirements.txt pytest
+      - uses: actions/cache@v5
+        id: cache-ollama-models
+        with:
+          path: /tmp/ollama-models
+          key: ollama-tinyllama-${{ runner.os }}-v1
+      - name: Start Ollama container
+        run: |
+          mkdir -p /tmp/ollama-models
+          docker run -d --name ollama \
+            -v /tmp/ollama-models:/root/.ollama \
+            -p 11434:11434 \
+            ollama/ollama
+      - name: Wait for Ollama to be ready
+        run: |
+          echo "Waiting for Ollama to become ready..."
+          for i in {1..30}; do
+            if curl -fsS http://localhost:11434/api/tags > /dev/null 2>&1; then
+              echo "Ollama ready (attempt $i)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Ollama did not become ready after 60 seconds"
+          exit 1
+      - name: Pull tinyllama (from cache or registry)
+        run: docker exec ollama ollama pull tinyllama
+      - name: Run Ollama integration tests
+        env:
+          OLLAMA_TEST_URL: http://localhost:11434
+          OLLAMA_TEST_MODEL: tinyllama
+        run: .venv/bin/python -m pytest -m integration -p no:cov -o addopts='' -v --tb=short tests/test_ollama_integration.py
+      - name: Collect Ollama logs on failure
+        if: failure()
+        run: docker logs ollama 2>&1 || true
+      - name: Stop and remove Ollama container
+        if: always()
+        run: docker rm -f ollama 2>/dev/null || true
+
+  merge-gate:
+    name: Merge Gate
+    if: always()
+    needs:
+      - coverage-python
+      - feature-python
+      - linting-python
+      - smoke-cli-api
+      - regression-python
+      - integration-ollama
+      - security-sbom
+      - security-sast
+      - security-secrets
+      - security-licenses
+      - publish-image-and-notify-charts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all concept gates passed
+        env:
+          NEEDS_JSON: ${{ toJson(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          data = json.loads(os.environ['NEEDS_JSON'])
+          failed = [(k, v.get('result')) for k, v in data.items() if v.get('result') not in ('success', 'skipped')]
+          for k, v in data.items():
+              print(f'{k}: {v.get("result")}')
+          if failed:
+              print('Merge blocked due to failing RuneGate checks:')
+              for item in failed:
+                  print(f'- {item[0]}: {item[1]}')
+              raise SystemExit(1)
+          print('All RuneGate checks passed.')
+          PY

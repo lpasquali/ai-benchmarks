@@ -2,9 +2,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from rune_bench.vastai.instance import InstanceManager
-from rune_bench.vastai.offer import OfferFinder
-from rune_bench.vastai.template import TemplateLoader
+from rune_bench.resources.vastai import InstanceManager
+from rune_bench.resources.vastai import OfferFinder
+from rune_bench.resources.vastai import TemplateLoader
 
 
 def test_offer_finder_find_best_success():
@@ -98,7 +98,7 @@ def test_instance_manager_pull_model_wraps_ollama_errors(monkeypatch):
         def load_model(self, _name):
             raise RuntimeError("boom")
 
-    monkeypatch.setattr("rune_bench.vastai.instance.OllamaClient", _FailingClient)
+    monkeypatch.setattr("rune_bench.resources.vastai.instance.OllamaClient", _FailingClient)
 
     with pytest.raises(RuntimeError, match="Model pull via Ollama API failed"):
         manager.pull_model(contract_id=999, model_name="foo:1", ollama_url="http://fake:11434")

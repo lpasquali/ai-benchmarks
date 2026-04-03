@@ -18,7 +18,6 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 from vastai import VastAI
 
-from rune_bench import HolmesRunner
 from rune_bench.api_client import RuneApiClient
 from rune_bench.api_contracts import (
     RunAgenticAgentRequest,
@@ -27,7 +26,7 @@ from rune_bench.api_contracts import (
 )
 from rune_bench.common import ModelSelector
 from rune_bench.debug import set_debug
-from rune_bench.ollama import OllamaClient, OllamaModelCapabilities, OllamaModelManager
+from rune_bench.backends.ollama import OllamaClient, OllamaModelCapabilities, OllamaModelManager
 from rune_bench.workflows import (
     ExistingOllamaServer,
     UserAbortedError,
@@ -40,6 +39,17 @@ from rune_bench.workflows import (
     use_existing_ollama_server,
 )
 
+# Lazy import HolmesRunner to avoid requiring holmes/holmesgpt for API server mode
+HolmesRunner: type | None = None  # type: ignore[type-arg]
+
+def _get_holmes_runner():
+    """Lazy loader for HolmesRunner to allow API-only deployments."""
+    global HolmesRunner
+    if HolmesRunner is None:
+        from rune_bench.agents.sre.holmes import HolmesRunner as _HolmesRunner
+        HolmesRunner = _HolmesRunner
+    return HolmesRunner
+
 app = typer.Typer(help="RUNE — Reliability Use-case Numeric Evaluator", add_completion=False)
 console = Console()
 
@@ -48,7 +58,7 @@ BACKEND_MODE = os.environ.get("RUNE_BACKEND", "local").strip().lower() or "local
 API_BASE_URL = os.environ.get("RUNE_API_BASE_URL", "http://localhost:8080").strip() or "http://localhost:8080"
 API_TOKEN = os.environ.get("RUNE_API_TOKEN", "").strip() or None
 API_TENANT = os.environ.get("RUNE_API_TENANT", "default").strip() or "default"
-VERIFY_SSL = not (os.environ.get("RUNE_INSECURE", "").strip().lower() in {"1", "true", "yes", "on"})
+VERIFY_SSL = os.environ.get("RUNE_INSECURE", "").strip().lower() not in {"1", "true", "yes", "on"}
 
 
 @app.callback()
@@ -337,7 +347,7 @@ def _run_vastai_provisioning(
             raise typer.Exit(0)
         except RuntimeError as exc:
             _print_error_and_exit(str(exc))
-    raise AssertionError("unreachable")
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 @app.command("serve")
@@ -651,7 +661,7 @@ def run_agentic_agent(
 
     # Block 10 — Run HolmesGPT agent
     try:
-        runner = HolmesRunner(kubeconfig)
+        runner = (HolmesRunner or _get_holmes_runner())(kubeconfig)
         answer = runner.ask(question=question, model=model, ollama_url=ollama_url)
     except (FileNotFoundError, RuntimeError) as exc:
         console.print(f"[red]Agent error:[/red] {exc}")
@@ -843,7 +853,7 @@ def run_benchmark(
 
     # Block 10 — Run agentic agent
     try:
-        runner = HolmesRunner(kubeconfig)
+        runner = (HolmesRunner or _get_holmes_runner())(kubeconfig)
         answer = runner.ask(
             question=question,
             model=selected_model_name,

@@ -7,17 +7,17 @@ from urllib.request import Request, urlopen
 
 import pytest
 
-import rune_bench.agents.holmes as holmes_module
+import rune_bench.agents.sre.holmes as holmes_module
 import rune_bench.api_backend as api_backend
 import rune_bench.api_client as api_client_module
 import rune_bench.api_server as api_server
 import rune_bench.workflows as workflows
-from rune_bench.agents.holmes import HolmesRunner
+from rune_bench.agents.sre.holmes import HolmesRunner
 from rune_bench.api_client import RuneApiClient
-from rune_bench.ollama.client import OllamaClient, OllamaModelCapabilities
-from rune_bench.vastai.instance import InstanceManager
-from rune_bench.vastai.offer import OfferFinder
-from rune_bench.vastai.template import TemplateLoader
+from rune_bench.backends.ollama import OllamaClient, OllamaModelCapabilities
+from rune_bench.resources.vastai import InstanceManager
+from rune_bench.resources.vastai import OfferFinder
+from rune_bench.resources.vastai import TemplateLoader
 
 
 def test_holmes_runner_remaining_paths(monkeypatch, tmp_path):
@@ -304,14 +304,24 @@ def test_offer_template_backend_instance_and_workflow_remaining(monkeypatch, tmp
 
     assert TemplateLoader._find([{"hash_id": "x"}], "x") == {"hash_id": "x"}
 
-    monkeypatch.setattr(api_backend, "use_existing_ollama_server", lambda url, model_name: type("S", (), {"url": "http://e"})())
-    monkeypatch.setattr(api_backend, "HolmesRunner", lambda _path: type("R", (), {"ask": lambda self, **_: "a"})())
-    monkeypatch.setattr(api_backend, "provision_vastai_ollama", lambda *_args, **_kwargs: type("R", (), {"contract_id": 8, "ollama_url": "http://x", "model_name": "m"})())
-    monkeypatch.setattr(api_backend, "_vastai_sdk", lambda: MagicMock())
+    from rune_bench.resources.base import ProvisioningResult
+
     stopped = []
-    monkeypatch.setattr(api_backend, "stop_vastai_instance", lambda *_args, **_kwargs: stopped.append(True))
     kubeconfig = tmp_path / "config"
     kubeconfig.write_text("apiVersion: v1\n")
+    monkeypatch.setattr(
+        api_backend,
+        "_make_resource_provider_for_benchmark",
+        lambda req: type("P", (), {
+            "provision": lambda self: ProvisioningResult(ollama_url="http://x", model="m", provider_handle=8),
+            "teardown": lambda self, r: stopped.append(True),
+        })(),
+    )
+    monkeypatch.setattr(
+        api_backend,
+        "_make_agent_runner",
+        lambda path: type("R", (), {"ask": lambda self, **_: "a"})(),
+    )
     result = api_backend.run_benchmark(api_backend.RunBenchmarkRequest(vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url=None, question="q", model="m", ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=str(kubeconfig), vastai_stop_instance=True))
     assert result["contract_id"] == 8
     assert stopped == [True]
@@ -329,9 +339,9 @@ def test_offer_template_backend_instance_and_workflow_remaining(monkeypatch, tmp
 
     manager = InstanceManager(MagicMock())
     values = iter([0.0, 10.0])
-    monkeypatch.setattr("rune_bench.vastai.instance.time.monotonic", lambda: next(values))
+    monkeypatch.setattr("rune_bench.resources.vastai.instance.time.monotonic", lambda: next(values))
     monkeypatch.setattr(manager, "_fetch_instance", lambda _cid: {"id": _cid})
-    monkeypatch.setattr("rune_bench.vastai.instance.time.sleep", lambda *_: None)
+    monkeypatch.setattr("rune_bench.resources.vastai.instance.time.sleep", lambda *_: None)
     assert manager._wait_until_instance_absent(1, timeout_seconds=1) is False
 
     sdk = MagicMock()
@@ -407,7 +417,7 @@ def test_offer_template_backend_instance_and_workflow_remaining(monkeypatch, tmp
 def test_api_backend_and_workflow_last_edges(monkeypatch, tmp_path):
     kubeconfig = tmp_path / "config"
     kubeconfig.write_text("apiVersion: v1\n")
-    monkeypatch.setattr(api_backend, "HolmesRunner", lambda _path: type("R", (), {"ask": lambda self, **_: "a"})())
+    monkeypatch.setattr(api_backend, "_make_agent_runner", lambda path: type("R", (), {"ask": lambda self, **_: "a"})())
     result = api_backend.run_agentic_agent(api_backend.RunAgenticAgentRequest(question="q", model="m", ollama_url=None, ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=str(kubeconfig)))
     assert result == {"answer": "a"}
 

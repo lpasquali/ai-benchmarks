@@ -6,9 +6,9 @@ import typer
 from rich.console import Console
 
 import rune
-from rune_bench.ollama.client import OllamaModelCapabilities
+from rune_bench.backends.ollama import OllamaModelCapabilities
 from rune_bench.workflows import ExistingOllamaServer, VastAIProvisioningResult
-from rune_bench.vastai.instance import ConnectionDetails, TeardownResult
+from rune_bench.resources.vastai import ConnectionDetails, TeardownResult
 
 
 class DummyClient:
