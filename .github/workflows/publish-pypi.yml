@@ -2,9 +2,20 @@
 #
 # Trigger: push of a tag matching v* (e.g. v0.2.0, v1.0.0-rc1)
 #
-# Required secret:
-#   PYPI_API_TOKEN — a PyPI API token scoped to the rune-bench project
-#                    (create at https://pypi.org/manage/account/token/)
+# Authentication: OIDC Trusted Publisher (no long-lived credentials).
+#   id-token: write is scoped to the publish job only (principle of least privilege).
+#
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │  ONE-TIME SETUP REQUIRED on PyPI (pypi.org)                                 │
+# │                                                                             │
+# │  1. Go to https://pypi.org/manage/project/rune-bench/settings/publishing/  │
+# │  2. Add a new GitHub publisher with these exact values:                     │
+# │       Owner:       lpasquali                                                │
+# │       Repository:  rune                                                     │
+# │       Workflow:    publish-pypi.yml                                         │
+# │       Environment: pypi                                                     │
+# │  3. Save — no API token or secret is needed after this.                     │
+# └─────────────────────────────────────────────────────────────────────────────┘
 #
 # The tag should only be placed on a commit that has already passed all
 # quality gates via the PR merge process. This workflow performs a final
@@ -13,9 +24,8 @@
 # that the tagged commit is reachable from origin/main.
 #
 # Security:
-#   - id-token: write is NOT used; classic API token auth avoids the need
-#     to configure PyPI Trusted Publisher (simpler for a personal project).
 #   - contents: read is the minimum needed to check out the repository.
+#   - id-token: write is added only to the publish job for OIDC token exchange.
 
 name: Publish to PyPI
 
@@ -34,6 +44,9 @@ jobs:
     environment:
       name: pypi
       url: https://pypi.org/project/rune-bench/
+
+    permissions:
+      id-token: write  # Required for OIDC token exchange with PyPI
 
     steps:
       - name: Checkout
@@ -83,7 +96,4 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: twine upload dist/*
+        uses: pypa/gh-action-pypi-publish@release/v1
