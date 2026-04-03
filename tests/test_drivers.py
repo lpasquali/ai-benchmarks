@@ -107,7 +107,7 @@ def _make_http_mock(responses: list[dict]):
     """Return a fake make_http_request that cycles through *responses*."""
     it = iter(responses)
 
-    def fake(url: str, method: str, payload, action: str, timeout_seconds: int, debug_prefix: str) -> dict:
+    def fake(url: str, *, method: str, payload, action: str, timeout_seconds: int, headers=None, debug_prefix: str = "HTTP", **kwargs) -> dict:
         return next(it)
 
     return fake
@@ -226,3 +226,87 @@ def test_driver_transport_protocol_satisfied_by_stdio() -> None:
 
 def test_driver_transport_protocol_satisfied_by_http() -> None:
     assert isinstance(HttpTransport("http://x"), DriverTransport)
+
+
+# ---------------------------------------------------------------------------
+# HttpTransport — URL normalization and auth headers
+# ---------------------------------------------------------------------------
+
+
+def test_http_transport_normalizes_url_without_scheme(monkeypatch: pytest.MonkeyPatch) -> None:
+    """HttpTransport should prepend http:// when scheme is missing."""
+    monkeypatch.setattr("rune_bench.drivers.http.make_http_request", _make_http_mock([{"job_id": "j"}, {"status": "succeeded", "result": {}}]))
+    monkeypatch.setattr("rune_bench.drivers.http.time.sleep", lambda *_: None)
+    transport = HttpTransport("driver:8080")
+    assert transport._base_url.startswith("http://")
+    transport.call("ask", {})
+
+
+def test_http_transport_sends_auth_headers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """HttpTransport should include X-Tenant-ID, Authorization, and X-API-Key when token is set."""
+    captured_headers: list[dict] = []
+
+    def fake(url: str, *, method: str, payload, action: str, timeout_seconds: int, headers=None, debug_prefix: str = "HTTP", **kwargs) -> dict:
+        if headers:
+            captured_headers.append(dict(headers))
+        if not captured_headers or len(captured_headers) == 1:
+            return {"job_id": "j1"}
+        return {"status": "succeeded", "result": {"ok": True}}
+
+    monkeypatch.setattr("rune_bench.drivers.http.make_http_request", fake)
+    monkeypatch.setattr("rune_bench.drivers.http.time.sleep", lambda *_: None)
+
+    transport = HttpTransport("http://driver:8080", api_token="secret", tenant="my-tenant")
+    transport.call("ask", {})
+
+    assert len(captured_headers) >= 1
+    h = captured_headers[0]
+    assert h.get("X-Tenant-ID") == "my-tenant"
+    assert h.get("Authorization") == "Bearer secret"
+    assert h.get("X-API-Key") == "secret"
+
+
+def test_http_transport_omits_auth_headers_when_no_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """HttpTransport should not include Authorization/X-API-Key when token is empty."""
+    captured_headers: list[dict] = []
+
+    def fake(url: str, *, method: str, payload, action: str, timeout_seconds: int, headers=None, debug_prefix: str = "HTTP", **kwargs) -> dict:
+        if headers:
+            captured_headers.append(dict(headers))
+        if len(captured_headers) <= 1:
+            return {"job_id": "j1"}
+        return {"status": "succeeded", "result": {}}
+
+    monkeypatch.setattr("rune_bench.drivers.http.make_http_request", fake)
+    monkeypatch.setattr("rune_bench.drivers.http.time.sleep", lambda *_: None)
+
+    HttpTransport("http://driver:8080").call("ask", {})
+
+    assert len(captured_headers) >= 1
+    h = captured_headers[0]
+    assert "X-Tenant-ID" in h
+    assert "Authorization" not in h
+    assert "X-API-Key" not in h
+
+
+# ---------------------------------------------------------------------------
+# make_driver_transport factory — shlex CMD parsing
+# ---------------------------------------------------------------------------
+
+
+def test_factory_stdio_uses_shlex_for_custom_cmd(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CMD env var is parsed with shlex so quoted arguments are handled correctly."""
+    monkeypatch.setenv("RUNE_HOLMES_DRIVER_MODE", "stdio")
+    monkeypatch.setenv("RUNE_HOLMES_DRIVER_CMD", 'my-driver --flag "quoted arg"')
+    transport = make_driver_transport("holmes")
+    assert isinstance(transport, StdioTransport)
+    assert transport._cmd == ["my-driver", "--flag", "quoted arg"]
+
+
+def test_factory_http_normalizes_url_without_scheme(monkeypatch: pytest.MonkeyPatch) -> None:
+    """make_driver_transport should produce an HttpTransport with a valid URL even without scheme."""
+    monkeypatch.setenv("RUNE_HOLMES_DRIVER_MODE", "http")
+    monkeypatch.setenv("RUNE_HOLMES_DRIVER_URL", "sidecar:9090")
+    transport = make_driver_transport("holmes")
+    assert isinstance(transport, HttpTransport)
+    assert transport._base_url.startswith("http://")

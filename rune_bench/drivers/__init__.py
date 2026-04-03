@@ -66,7 +66,11 @@ def make_driver_transport(driver_name: str) -> DriverTransport:
     # Default: stdio — spawn the driver as a subprocess
     default_cmd = [sys.executable, "-m", f"rune_bench.drivers.{driver_name}"]
     cmd_str = os.getenv(f"{prefix}_CMD", "")
-    cmd = cmd_str.split() if cmd_str else default_cmd
+    if cmd_str:
+        import shlex
+        cmd = shlex.split(cmd_str)
+    else:
+        cmd = default_cmd
     return StdioTransport(cmd)
 
 

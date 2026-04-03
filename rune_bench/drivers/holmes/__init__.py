@@ -64,7 +64,19 @@ class HolmesDriverClient:
             f"ollama_url={ollama_url or '<none>'}"
         )
         result = self._transport.call("ask", params)
-        return str(result.get("answer", ""))
+
+        if "answer" not in result:
+            raise RuntimeError("Holmes driver response did not include an answer.")
+
+        answer = result["answer"]
+        if answer is None:
+            raise RuntimeError("Holmes driver returned an empty answer.")
+
+        answer_text = str(answer)
+        if not answer_text:
+            raise RuntimeError("Holmes driver returned an empty answer.")
+
+        return answer_text
 
     def _fetch_model_limits(self, *, model: str, ollama_url: str) -> dict:
         """Return context_window / max_output_tokens for *model*, or ``{}`` on error."""

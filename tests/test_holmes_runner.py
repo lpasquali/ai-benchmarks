@@ -140,3 +140,39 @@ def test_fetch_model_limits_omits_none_values(
     assert "context_window" not in limits
     assert "max_output_tokens" not in limits
 
+
+
+def test_ask_raises_when_answer_key_missing(tmp_path: Path) -> None:
+    kubeconfig = tmp_path / "kubeconfig"
+    kubeconfig.write_text("apiVersion: v1\n")
+
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {"status": "ok"}  # no "answer" key
+
+    runner = HolmesRunner(kubeconfig, transport=mock_transport)
+    with pytest.raises(RuntimeError, match="did not include an answer"):
+        runner.ask("q", "m")
+
+
+def test_ask_raises_when_answer_is_none(tmp_path: Path) -> None:
+    kubeconfig = tmp_path / "kubeconfig"
+    kubeconfig.write_text("apiVersion: v1\n")
+
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {"answer": None}
+
+    runner = HolmesRunner(kubeconfig, transport=mock_transport)
+    with pytest.raises(RuntimeError, match="empty answer"):
+        runner.ask("q", "m")
+
+
+def test_ask_raises_when_answer_is_empty_string(tmp_path: Path) -> None:
+    kubeconfig = tmp_path / "kubeconfig"
+    kubeconfig.write_text("apiVersion: v1\n")
+
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {"answer": ""}
+
+    runner = HolmesRunner(kubeconfig, transport=mock_transport)
+    with pytest.raises(RuntimeError, match="empty answer"):
+        runner.ask("q", "m")

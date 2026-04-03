@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import time
 
-from rune_bench.common import make_http_request
+from rune_bench.common import make_http_request, normalize_url
 from rune_bench.debug import debug_log
 
 _POLL_INTERVAL_S = 2.0
@@ -29,9 +29,17 @@ class HttpTransport:
         api_token: str = "",
         tenant: str = "default",
     ) -> None:
-        self._base_url = base_url.rstrip("/")
+        self._base_url = normalize_url(base_url, service_name="Driver HTTP").rstrip("/")
         self._api_token = api_token
         self._tenant = tenant
+
+    def _build_headers(self) -> dict[str, str]:
+        """Build auth/tenant request headers mirroring RuneApiClient's convention."""
+        headers: dict[str, str] = {"X-Tenant-ID": self._tenant or "default"}
+        if self._api_token:
+            headers["Authorization"] = f"Bearer {self._api_token}"
+            headers["X-API-Key"] = self._api_token
+        return headers
 
     def call(self, action: str, params: dict) -> dict:
         debug_log(f"HttpTransport → {self._base_url} action={action!r}")
@@ -42,6 +50,7 @@ class HttpTransport:
             payload={"params": params},
             action=f"submit driver action {action!r}",
             timeout_seconds=30,
+            headers=self._build_headers(),
             debug_prefix="Driver HTTP",
         )
         job_id = response.get("job_id")
@@ -59,6 +68,7 @@ class HttpTransport:
                 payload=None,
                 action=f"poll driver job {job_id}",
                 timeout_seconds=30,
+                headers=self._build_headers(),
                 debug_prefix="Driver HTTP",
             )
             status = str(poll.get("status", ""))
