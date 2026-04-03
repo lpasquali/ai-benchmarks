@@ -1,9 +1,9 @@
 """Local execution backend behind the RUNE HTTP API."""
 
+from __future__ import annotations
+
 import os
 from pathlib import Path
-
-from vastai import VastAI
 
 from rune_bench.agents.base import AgentRunner
 from rune_bench.api_contracts import (
@@ -14,7 +14,6 @@ from rune_bench.api_contracts import (
 from rune_bench.common import ModelSelector
 from rune_bench.resources.base import LLMResourceProvider
 from rune_bench.resources.existing_ollama_provider import ExistingOllamaProvider
-from rune_bench.resources.vastai import VastAIProvider
 from rune_bench.workflows import (
     list_existing_ollama_models,
     list_running_ollama_models,
@@ -22,9 +21,19 @@ from rune_bench.workflows import (
     warmup_existing_ollama_model,
 )
 
+try:
+    from vastai import VastAI
+except ImportError:
+    VastAI = None  # type: ignore[assignment,misc]
 
-def _vastai_sdk() -> VastAI:
+
+def _vastai_sdk() -> "VastAI":
     """Instantiate VastAI SDK reading the API key from the environment."""
+    if VastAI is None:
+        raise RuntimeError(
+            "The 'vastai' package is required for Vast.ai provisioning. "
+            "Install it with: pip install 'rune-bench[vastai]'"
+        )
     api_key = os.environ.get("VAST_API_KEY", "")
     return VastAI(api_key=api_key, raw=True)
 
@@ -32,6 +41,7 @@ def _vastai_sdk() -> VastAI:
 def _make_resource_provider_for_benchmark(request: RunBenchmarkRequest) -> LLMResourceProvider:
     """Factory: return the LLM resource provider for a benchmark run."""
     if request.vastai:
+        from rune_bench.resources.vastai import VastAIProvider
         return VastAIProvider(
             _vastai_sdk(),
             template_hash=request.template_hash,
@@ -51,6 +61,7 @@ def _make_resource_provider_for_benchmark(request: RunBenchmarkRequest) -> LLMRe
 def _make_resource_provider_for_ollama_instance(request: RunOllamaInstanceRequest) -> LLMResourceProvider:
     """Factory: return the LLM resource provider for an Ollama instance run."""
     if request.vastai:
+        from rune_bench.resources.vastai import VastAIProvider
         return VastAIProvider(
             _vastai_sdk(),
             template_hash=request.template_hash,

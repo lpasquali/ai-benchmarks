@@ -16,7 +16,11 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
-from vastai import VastAI
+
+try:
+    from vastai import VastAI
+except ImportError:
+    VastAI = None  # type: ignore[assignment,misc]
 
 from rune_bench.api_client import RuneApiClient
 from rune_bench.api_contracts import (
@@ -173,8 +177,13 @@ def _fetch_model_capabilities(ollama_url: str, model: str) -> OllamaModelCapabil
         return None
 
 
-def _vastai_sdk() -> VastAI:
+def _vastai_sdk() -> "VastAI":
     """Instantiate VastAI SDK reading the API key from the environment."""
+    if VastAI is None:
+        raise RuntimeError(
+            "The 'vastai' package is required for Vast.ai provisioning. "
+            "Install it with: pip install 'rune-bench[vastai]'"
+        )
     api_key = os.environ.get("VAST_API_KEY", "")
     return VastAI(api_key=api_key, raw=True)
 
