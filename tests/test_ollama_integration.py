@@ -16,6 +16,7 @@ Locally, point at any running Ollama instance::
 """
 
 import os
+import time
 
 import pytest
 
@@ -102,9 +103,17 @@ class TestOllamaClientLive:
     def test_unload_model_removes_from_running(self, ollama_client: OllamaClient) -> None:
         ollama_client.load_model(_OLLAMA_MODEL, keep_alive="5m")
         ollama_client.unload_model(_OLLAMA_MODEL)
+        # Ollama's keep_alive=0 unload is asynchronous: the HTTP 200 is returned
+        # before the model is actually evicted from memory.  Poll briefly.
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            running = ollama_client.get_running_models()
+            if not _model_matches(_OLLAMA_MODEL, running):
+                return
+            time.sleep(0.5)
         running = ollama_client.get_running_models()
         assert not _model_matches(_OLLAMA_MODEL, running), (
-            f"Expected '{_OLLAMA_MODEL}' to be unloaded; still running: {running}"
+            f"Expected '{_OLLAMA_MODEL}' to be unloaded within 5s; still running: {running}"
         )
 
 
