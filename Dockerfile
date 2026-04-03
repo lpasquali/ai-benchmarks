@@ -26,8 +26,10 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY requirements.txt .
+COPY requirements-holmes.txt .
 RUN pip install --no-cache-dir --upgrade pip \
  && pip install --prefer-binary --no-cache-dir -r requirements.txt \
+ && pip install --prefer-binary --no-cache-dir -r requirements-holmes.txt \
  && pip install --no-cache-dir awscli
 
 # ==============================================================================

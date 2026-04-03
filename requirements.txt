@@ -1,8 +1,3 @@
 typer>=0.9
 rich>=13.7
-holmesgpt>=0.23.0
-# holmesgpt==0.23.0 pins postgrest==0.16.8 but also requires supabase>=2.5.
-# supabase>=2.8 requires postgrest>=0.17, conflicting with holmesgpt's pin.
-# Pinning supabase<2.8 resolves the conflict (supabase 2.5-2.7 accepts postgrest<0.17).
-supabase>=2.5,<2.8
 git+https://github.com/lpasquali/vast-sdk@087786d1e0bf031ddba90fe65d60d869ddce6831

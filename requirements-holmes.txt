@@ -1,0 +1,8 @@
+# Holmes driver extras — install alongside the core rune package when running
+# the holmes agent via holmesgpt (either stdio or HTTP driver mode).
+#
+# holmesgpt==0.23.0 pins postgrest==0.16.8 but also requires supabase>=2.5.
+# supabase>=2.8 requires postgrest>=0.17, conflicting with holmesgpt's pin.
+# Pinning supabase<2.8 resolves the conflict (supabase 2.5-2.7 accepts postgrest<0.17).
+holmesgpt>=0.23.0
+supabase>=2.5,<2.8

@@ -1,125 +1,142 @@
-import os
+"""Tests for HolmesRunner / HolmesDriverClient.
+
+HolmesRunner is now a backward-compatible alias for HolmesDriverClient.
+Tests verify the public interface and transport delegation; no holmesgpt
+package is required.
+"""
+
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
-import rune_bench.agents.sre.holmes as holmes_module
+import rune_bench.drivers.holmes as holmes_driver_module
 from rune_bench.agents.sre.holmes import HolmesRunner
 from rune_bench.backends.ollama import OllamaModelCapabilities
+from rune_bench.drivers.holmes import HolmesDriverClient
 
 
-def test_init_requires_existing_kubeconfig(tmp_path):
+def test_holmes_runner_is_alias_for_driver_client() -> None:
+    assert HolmesRunner is HolmesDriverClient
+
+
+def test_init_requires_existing_kubeconfig(tmp_path: Path) -> None:
     missing = tmp_path / "missing-kubeconfig"
     with pytest.raises(FileNotFoundError):
         HolmesRunner(missing)
 
 
-def test_ask_prefers_module_level_ask(monkeypatch, tmp_path):
+def test_ask_calls_transport_with_question_and_model(tmp_path: Path) -> None:
     kubeconfig = tmp_path / "kubeconfig"
     kubeconfig.write_text("apiVersion: v1\n")
-    runner = HolmesRunner(kubeconfig)
 
-    fake_holmes = MagicMock()
-    fake_holmes.ask.return_value = "module-answer"
-    fake_holmes.Holmes = MagicMock()
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {"answer": "the answer"}
 
-    monkeypatch.setattr(holmes_module, "holmes", fake_holmes)
-    monkeypatch.setattr(runner, "_configure_ollama_model_limits", lambda **_: None)
+    runner = HolmesRunner(kubeconfig, transport=mock_transport)
+    answer = runner.ask("What is wrong?", "llama3.1:8b")
 
-    answer = runner.ask("q", "m", "http://ollama")
+    assert answer == "the answer"
+    mock_transport.call.assert_called_once()
+    action, params = mock_transport.call.call_args[0]
+    assert action == "ask"
+    assert params["question"] == "What is wrong?"
+    assert params["model"] == "llama3.1:8b"
+    assert params["kubeconfig_path"] == str(kubeconfig)
 
-    assert answer == "module-answer"
-    fake_holmes.ask.assert_called_once()
 
-
-def test_ask_falls_back_to_class_api(monkeypatch, tmp_path):
+def test_ask_strips_model_name_whitespace(tmp_path: Path) -> None:
     kubeconfig = tmp_path / "kubeconfig"
     kubeconfig.write_text("apiVersion: v1\n")
-    runner = HolmesRunner(kubeconfig)
 
-    fake_client = MagicMock()
-    fake_client.ask.return_value = "class-answer"
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {"answer": "answer"}
 
-    fake_holmes = MagicMock()
-    fake_holmes.ask.side_effect = TypeError("unsupported")
-    fake_holmes.Holmes.return_value = fake_client
+    runner = HolmesRunner(kubeconfig, transport=mock_transport)
+    runner.ask("q", "  llama3.1:8b  ")
 
-    monkeypatch.setattr(holmes_module, "holmes", fake_holmes)
-    monkeypatch.setattr(runner, "_configure_ollama_model_limits", lambda **_: None)
-
-    answer = runner.ask("q", "m")
-
-    assert answer == "class-answer"
-    fake_holmes.Holmes.assert_called_once()
+    _, params = mock_transport.call.call_args[0]
+    assert params["model"] == "llama3.1:8b"
 
 
-def test_configure_ollama_model_limits_sets_env(monkeypatch):
-    runner = object.__new__(HolmesRunner)
-    runner._kubeconfig = Path("/tmp/kubeconfig")
+def test_ask_includes_ollama_url_and_limits(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    kubeconfig = tmp_path / "kubeconfig"
+    kubeconfig.write_text("apiVersion: v1\n")
 
-    for name in ("OVERRIDE_MAX_CONTENT_SIZE", "OVERRIDE_MAX_OUTPUT_TOKEN"):
-        os.environ.pop(name, None)
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {"answer": "ok"}
 
     fake_manager = MagicMock()
-    fake_manager.normalize_model_name.return_value = "kavai/qwen3.5-GPT5:9b"
+    fake_manager.normalize_model_name.return_value = "llama3.1:8b"
 
     fake_client = MagicMock()
     fake_client.get_model_capabilities.return_value = OllamaModelCapabilities(
-        model_name="kavai/qwen3.5-GPT5:9b",
-        context_window=262144,
-        max_output_tokens=52428,
+        model_name="llama3.1:8b",
+        context_window=131072,
+        max_output_tokens=26214,
     )
 
-    monkeypatch.setattr(holmes_module.OllamaModelManager, "create", lambda *_: fake_manager)
-    monkeypatch.setattr(holmes_module, "OllamaClient", lambda *_: fake_client)
+    monkeypatch.setattr(holmes_driver_module.OllamaModelManager, "create", lambda *_: fake_manager)
+    monkeypatch.setattr(holmes_driver_module, "OllamaClient", lambda *_: fake_client)
 
-    runner._configure_ollama_model_limits(
-        model="ollama_chat/kavai/qwen3.5-GPT5:9b",
-        ollama_url="http://fake-ollama.local:11434",
+    runner = HolmesRunner(kubeconfig, transport=mock_transport)
+    runner.ask("q", "llama3.1:8b", ollama_url="http://ollama:11434")
+
+    _, params = mock_transport.call.call_args[0]
+    assert params["ollama_url"] == "http://ollama:11434"
+    assert params["context_window"] == 131072
+    assert params["max_output_tokens"] == 26214
+
+
+def test_ask_omits_limits_when_no_ollama_url(tmp_path: Path) -> None:
+    kubeconfig = tmp_path / "kubeconfig"
+    kubeconfig.write_text("apiVersion: v1\n")
+
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {"answer": "answer"}
+
+    runner = HolmesRunner(kubeconfig, transport=mock_transport)
+    runner.ask("q", "m")
+
+    _, params = mock_transport.call.call_args[0]
+    assert "ollama_url" not in params
+    assert "context_window" not in params
+
+
+def test_fetch_model_limits_handles_ollama_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    kubeconfig = tmp_path / "kubeconfig"
+    kubeconfig.write_text("apiVersion: v1\n")
+
+    def broken_create(*_args: object) -> None:
+        raise RuntimeError("unreachable")
+
+    monkeypatch.setattr(holmes_driver_module.OllamaModelManager, "create", broken_create)
+
+    runner = HolmesRunner(kubeconfig, transport=MagicMock())
+    limits = runner._fetch_model_limits(model="m", ollama_url="http://ollama")
+    assert limits == {}
+
+
+def test_fetch_model_limits_omits_none_values(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    kubeconfig = tmp_path / "kubeconfig"
+    kubeconfig.write_text("apiVersion: v1\n")
+
+    fake_manager = MagicMock()
+    fake_manager.normalize_model_name.return_value = "m"
+    fake_client = MagicMock()
+    fake_client.get_model_capabilities.return_value = OllamaModelCapabilities(
+        model_name="m", context_window=None, max_output_tokens=None
     )
 
-    assert os.environ["OVERRIDE_MAX_CONTENT_SIZE"] == "262144"
-    assert os.environ["OVERRIDE_MAX_OUTPUT_TOKEN"] == "52428"
+    monkeypatch.setattr(holmes_driver_module.OllamaModelManager, "create", lambda *_: fake_manager)
+    monkeypatch.setattr(holmes_driver_module, "OllamaClient", lambda *_: fake_client)
 
+    runner = HolmesRunner(kubeconfig, transport=MagicMock())
+    limits = runner._fetch_model_limits(model="m", ollama_url="http://ollama")
+    assert "context_window" not in limits
+    assert "max_output_tokens" not in limits
 
-def test_set_model_limit_override_preserves_existing(monkeypatch):
-    runner = object.__new__(HolmesRunner)
-    runner._kubeconfig = Path("/tmp/kubeconfig")
-
-    monkeypatch.setenv("OVERRIDE_MAX_CONTENT_SIZE", "123")
-    runner._set_model_limit_override(env_name="OVERRIDE_MAX_CONTENT_SIZE", value=999)
-
-    assert os.environ["OVERRIDE_MAX_CONTENT_SIZE"] == "123"
-
-
-def test_ask_via_cli_includes_overrides(monkeypatch):
-    runner = object.__new__(HolmesRunner)
-    runner._kubeconfig = Path("/tmp/kubeconfig")
-
-    monkeypatch.setenv("OVERRIDE_MAX_CONTENT_SIZE", "262144")
-    monkeypatch.setenv("OVERRIDE_MAX_OUTPUT_TOKEN", "52428")
-
-    captured = {}
-
-    class FakeProc:
-        def __init__(self):
-            self.stdout = iter(["hello\n", "world\n"])
-            self.returncode = 0
-
-        def wait(self):
-            return None
-
-    def fake_popen(cmd, env, stdout, stderr, text, bufsize):
-        captured["cmd"] = cmd
-        captured["env"] = env
-        return FakeProc()
-
-    monkeypatch.setattr(holmes_module.subprocess, "Popen", fake_popen)
-
-    out = runner._ask_via_cli("question", "model", ollama_url="http://ollama:11434")
-
-    assert "hello" in out
-    assert captured["env"]["OVERRIDE_MAX_CONTENT_SIZE"] == "262144"
-    assert captured["env"]["OVERRIDE_MAX_OUTPUT_TOKEN"] == "52428"
-    assert captured["env"]["OLLAMA_API_BASE"] == "http://ollama:11434"
