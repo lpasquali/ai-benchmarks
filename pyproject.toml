@@ -4,7 +4,7 @@ build-backend = "setuptools.backends.legacy:build"
 
 [project]
 name = "rune-bench"
-version = "0.1.0"
+version = "0.0.0a0"
 description = "RUNE — Reliability Use-case Numeric Evaluator"
 readme = "README.md"
 license = { file = "LICENSE" }
