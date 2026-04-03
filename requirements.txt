@@ -6,3 +6,11 @@ holmesgpt>=0.23.0
 # Pinning supabase<2.8 resolves the conflict (supabase 2.5-2.7 accepts postgrest<0.17).
 supabase>=2.5,<2.8
 git+https://github.com/lpasquali/vast-sdk@087786d1e0bf031ddba90fe65d60d869ddce6831
+
+# Transitive dependency lower-bound pins — resolve Dependabot CVE alerts.
+# These are pulled by holmesgpt/vast-sdk; explicit pins ensure pip resolves
+# to patched versions and Dependabot can verify compliance.
+aiohttp>=3.13.4          # CVE-2024-42367, CVE-2024-52304, CVE-2025-*/CVE-2026-* (21 CVEs — DoS/smuggling/injection)
+transformers>=4.53.0     # CVE-2025-5197, CVE-2025-6051, CVE-2025-6638, CVE-2025-6921 (ReDoS)
+pillow>=12.1.1           # CVE-2026-25990 (OOB write on PSD load)
+google-cloud-aiplatform>=1.133.0  # CVE-2026-2472 (stored XSS), CVE-2026-2473 (predictable bucket)
