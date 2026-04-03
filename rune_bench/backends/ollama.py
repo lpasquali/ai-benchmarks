@@ -152,7 +152,7 @@ class OllamaModelManager:
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
             running = self.client.get_running_models()
-            if model_name in running:
+            if self._model_in_running(model_name, running):
                 return model_name
             time.sleep(poll_interval_seconds)
         raise RuntimeError(
@@ -161,8 +161,23 @@ class OllamaModelManager:
 
     def _unload_conflicting_models(self, target_model: str) -> None:
         running = self.client.get_running_models()
-        for model in sorted(name for name in running if name != target_model):
+        for model in sorted(name for name in running if not self._model_in_running(target_model, {name})):
             self.client.unload_model(model)
+
+    @staticmethod
+    def _model_in_running(requested: str, running: set[str]) -> bool:
+        """Return True when *requested* matches any entry in *running*.
+
+        Ollama normalises untagged model names by appending ``:latest``
+        (e.g. ``tinyllama`` → ``tinyllama:latest``) in ``/api/ps``.
+        This helper checks both the bare name and the ``:latest`` variant so
+        callers are not required to use the fully-qualified form.
+        """
+        if requested in running:
+            return True
+        if ":" not in requested and f"{requested}:latest" in running:
+            return True
+        return False
 
     def normalize_model_name(self, model_name: str) -> str:
         """Convert provider-prefixed model identifiers to plain Ollama names."""

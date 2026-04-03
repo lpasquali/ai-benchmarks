@@ -78,3 +78,36 @@ def test_model_manager_warmup_times_out(monkeypatch):
 
     with pytest.raises(RuntimeError, match="Timed out waiting for Ollama model"):
         manager.warmup_model("foo:1", timeout_seconds=0, poll_interval_seconds=0)
+
+
+@pytest.mark.regression
+def test_warmup_matches_latest_tag_when_bare_name_requested(monkeypatch):
+    """Regression: Ollama reports 'tinyllama:latest' in /api/ps but warmup was
+    requested with bare 'tinyllama'.  warmup_model must match both forms.
+    See: https://github.com/lpasquali/rune/issues — integration gate failure."""
+    fake_client = MagicMock()
+    fake_client.base_url = "http://localhost:11434"
+    # /api/ps returns the :latest-qualified name even when bare name was loaded
+    fake_client.get_running_models.side_effect = [set(), {"tinyllama:latest"}]
+    manager = OllamaModelManager(client=fake_client)
+
+    monkeypatch.setattr("rune_bench.backends.ollama.time.sleep", lambda *_: None)
+
+    loaded = manager.warmup_model("tinyllama", timeout_seconds=5, poll_interval_seconds=0)
+
+    assert loaded == "tinyllama"
+    fake_client.load_model.assert_called_once_with("tinyllama", keep_alive="30m")
+
+
+@pytest.mark.regression
+def test_unload_conflicting_spares_latest_variant(monkeypatch):
+    """Regression: _unload_conflicting_models must not unload 'target:latest'
+    when target is requested without a tag."""
+    fake_client = MagicMock()
+    fake_client.get_running_models.return_value = {"tinyllama:latest", "other:7b"}
+    manager = OllamaModelManager(client=fake_client)
+
+    manager._unload_conflicting_models("tinyllama")
+
+    # only the unrelated model should be unloaded
+    fake_client.unload_model.assert_called_once_with("other:7b")
