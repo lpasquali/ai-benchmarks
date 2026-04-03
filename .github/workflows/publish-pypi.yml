@@ -56,7 +56,8 @@ jobs:
       url: https://pypi.org/project/rune-bench/
 
     permissions:
-      id-token: write  # Required for OIDC token exchange with PyPI
+      id-token: write   # Required for OIDC token exchange with PyPI
+      contents: write   # Required to create GitHub Releases
 
     steps:
       - name: Checkout
@@ -111,3 +112,37 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
 
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --generate-notes \
+            --verify-tag \
+            dist/*.whl dist/*.tar.gz
+
+      - name: Tag rune-docs with matching version
+        env:
+          CROSS_REPO_TOKEN: ${{ secrets.RUNE_CHARTS_BOT_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CROSS_REPO_TOKEN:-}" ]; then
+            echo "RUNE_CHARTS_BOT_TOKEN not set — skipping rune-docs tag."
+            exit 0
+          fi
+          # Use GitHub API to create the same tag on rune-docs
+          # Get the SHA of the HEAD commit of rune-docs main
+          DOCS_SHA=$(curl -fsSL \
+            -H "Authorization: Bearer ${CROSS_REPO_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/lpasquali/rune-docs/git/refs/heads/main \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['object']['sha'])")
+          # Create the tag ref on rune-docs
+          curl -fsSL -X POST \
+            -H "Authorization: Bearer ${CROSS_REPO_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/lpasquali/rune-docs/git/refs \
+            -d "{\"ref\": \"refs/tags/${TAG}\", \"sha\": \"${DOCS_SHA}\"}"
+          echo "Tagged rune-docs with ${TAG}"
