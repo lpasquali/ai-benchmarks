@@ -10,7 +10,6 @@ from urllib.request import Request, urlopen
 
 import rune
 import rune.api as rune_api_module
-import rune_bench.agents.sre.holmes as holmes_module
 import rune_bench.api_backend as api_backend
 import rune_bench.api_client as api_client_module
 import rune_bench.api_server as api_server
@@ -26,21 +25,6 @@ from rune_bench.resources.vastai import ConnectionDetails, InstanceManager, Tear
 def test_final_coverage_micro_branches(monkeypatch, tmp_path):
     kubeconfig = tmp_path / "kube"
     kubeconfig.write_text("apiVersion: v1\n")
-    runner = HolmesRunner(kubeconfig)
-
-    # holmes.py: _configure_ollama_model_limits early return (no ollama_url)
-    runner._configure_ollama_model_limits(model="m", ollama_url=None)
-
-    # holmes.py: _set_model_limit_override import/setattr failure debug branch
-    class BadLlmModule:
-        def __setattr__(self, _name, _value):
-            raise RuntimeError("setattr boom")
-
-    monkeypatch.setitem(sys.modules, "holmes", type("H", (), {})())
-    monkeypatch.setitem(sys.modules, "holmes.core", type("HC", (), {})())
-    monkeypatch.setitem(sys.modules, "holmes.core.llm", BadLlmModule())
-    monkeypatch.delenv("OVERRIDE_MAX_OUTPUT_TOKEN", raising=False)
-    runner._set_model_limit_override(env_name="OVERRIDE_MAX_OUTPUT_TOKEN", value=42)
 
     # api_client.py: invalid JSON branch in _request
     client = RuneApiClient("http://api:8080")
@@ -358,26 +342,22 @@ def test_rune_api_entrypoint_main_and_guard(monkeypatch):
 
 
 def test_holmes_and_ollama_remaining_branches(monkeypatch, tmp_path):
+    import rune_bench.drivers.holmes as holmes_driver_module
+
     kubeconfig = tmp_path / "kube"
     kubeconfig.write_text("apiVersion: v1\n")
     runner = HolmesRunner(kubeconfig)
 
-    # successful configure path and failure path
-    monkeypatch.setattr(holmes_module.OllamaModelManager, "create", lambda *_: type("M", (), {"normalize_model_name": lambda self, m: "norm"})())
-    monkeypatch.setattr(holmes_module, "OllamaClient", lambda *_: type("C", (), {"get_model_capabilities": lambda self, _m: OllamaModelCapabilities("norm", 10, 2)})())
-    runner._configure_ollama_model_limits(model="m", ollama_url="http://x")
+    # _fetch_model_limits success path via driver module monkeypatches
+    monkeypatch.setattr(holmes_driver_module.OllamaModelManager, "create", lambda *_: type("M", (), {"normalize_model_name": lambda self, m: "norm"})())
+    monkeypatch.setattr(holmes_driver_module, "OllamaClient", lambda *_: type("C", (), {"get_model_capabilities": lambda self, _m: OllamaModelCapabilities("norm", 10, 2)})())
+    limits = runner._fetch_model_limits(model="m", ollama_url="http://x")
+    assert limits.get("context_window") == 10
 
-    # ensure holmes.core.llm setattr path is covered
-    fake_holmes_pkg = type("Pkg", (), {})()
-    fake_holmes_core = type("Core", (), {})()
-    fake_holmes_llm = type("LLM", (), {})()
-    monkeypatch.setitem(sys.modules, "holmes", fake_holmes_pkg)
-    monkeypatch.setitem(sys.modules, "holmes.core", fake_holmes_core)
-    monkeypatch.setitem(sys.modules, "holmes.core.llm", fake_holmes_llm)
-    runner._set_model_limit_override(env_name="OVERRIDE_MAX_CONTENT_SIZE", value=11)
-
-    monkeypatch.setattr(holmes_module, "OllamaClient", lambda *_: type("C", (), {"get_model_capabilities": lambda self, _m: (_ for _ in ()).throw(RuntimeError("bad"))})())
-    runner._configure_ollama_model_limits(model="m", ollama_url="http://x")
+    # _fetch_model_limits failure path
+    monkeypatch.setattr(holmes_driver_module, "OllamaClient", lambda *_: type("C", (), {"get_model_capabilities": lambda self, _m: (_ for _ in ()).throw(RuntimeError("bad"))})())
+    limits2 = runner._fetch_model_limits(model="m", ollama_url="http://x")
+    assert limits2 == {}
 
     # Ollama invalid URL branch
     with pytest.raises(RuntimeError):
