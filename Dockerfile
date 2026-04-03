@@ -14,7 +14,7 @@ RUN apt-get update \
 
 # kubectl — fetch binary here so the final image needs no curl/wget/git
 # TARGETARCH is injected automatically by docker buildx for multi-arch builds
-ARG KUBECTL_VERSION=v1.31.0
+ARG KUBECTL_VERSION=v1.35.3
 ARG TARGETARCH=amd64
 RUN curl -fsSL \
     "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${TARGETARCH}/kubectl" \
