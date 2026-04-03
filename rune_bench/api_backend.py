@@ -12,7 +12,7 @@ from rune_bench.api_contracts import (
     RunOllamaInstanceRequest,
 )
 from rune_bench.common import ModelSelector
-from rune_bench.resources.base import LLMResourceProvider, ProvisioningResult
+from rune_bench.resources.base import LLMResourceProvider
 from rune_bench.resources.existing_ollama_provider import ExistingOllamaProvider
 from rune_bench.resources.vastai import VastAIProvider
 from rune_bench.workflows import (
