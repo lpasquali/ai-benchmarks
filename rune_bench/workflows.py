@@ -3,15 +3,26 @@
 This module keeps orchestration/business logic out of the CLI layer.
 """
 
-from dataclasses import dataclass
-from typing import Callable
+from __future__ import annotations
 
-from vastai import VastAI
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Callable
+
+if TYPE_CHECKING:
+    from vastai import VastAI
 
 from .common import ModelSelector
 from .debug import debug_log
 from rune_bench.backends.ollama import OllamaClient, OllamaModelManager
-from rune_bench.resources.vastai import ConnectionDetails, InstanceManager, OfferFinder, TeardownResult, TemplateLoader
+
+try:
+    from rune_bench.resources.vastai import ConnectionDetails, InstanceManager, OfferFinder, TeardownResult, TemplateLoader
+except ImportError:  # vastai extra not installed
+    ConnectionDetails = None  # type: ignore[assignment,misc]
+    InstanceManager = None  # type: ignore[assignment,misc]
+    OfferFinder = None  # type: ignore[assignment,misc]
+    TeardownResult = None  # type: ignore[assignment,misc]
+    TemplateLoader = None  # type: ignore[assignment,misc]
 
 
 class UserAbortedError(RuntimeError):
@@ -210,7 +221,6 @@ def provision_vastai_ollama(
 def stop_vastai_instance(sdk: VastAI, contract_id: int | str) -> TeardownResult:
     """Destroy Vast.ai instance + related storage and verify cleanup."""
     return InstanceManager(sdk).destroy_instance_and_related_storage(contract_id)
-
 
 def _extract_ollama_service_url(details: ConnectionDetails) -> str | None:
     for svc in details.service_urls:
