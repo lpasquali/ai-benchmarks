@@ -6,22 +6,21 @@ Standard location:
 
 What CI produces:
 - CycloneDX SBOM (JSON): sbom/rune-image.cdx.json
-- Grype scan report (JSON): sbom/grype-results.json
-- Trivy scan report (JSON): sbom/trivy-results.json
-- Unified security summary: sbom/security-summary.txt
-- Summary SARIF report: sbom/security-summary.sarif
+- Grype scan report (JSON): sbom/rune-grype.json
+- Trivy scan report (JSON): sbom/rune-trivy.json
 
 How it is generated:
-- GitHub Actions workflow: .github/workflows/coverage.yml
+- GitHub Actions workflow: .github/workflows/quality-gates.yml (job: RuneGate/Security/SBOM-and-CVE-Policy)
 - SBOM generator tool: Syft container (`anchore/syft`)
 - SBOM vulnerability scanner tools:
 	- Grype container (`anchore/grype`)
 	- Trivy container (`aquasec/trivy`)
 
 Policy gate:
-- Merge is blocked if any vulnerability with CVSS score > 8.8 is detected by either scanner.
-- Results are normalized into one summary so scanner outputs are homogeneous in CI artifacts.
+- Merge is blocked if any **fixable** vulnerability with CVSS score > 8.8 is detected.
+- Unfixable vulnerabilities above threshold are logged as warnings and tracked via VEX register (security/vex-register.md).
+- Results from both scanners are stored as workflow artifacts (sbom-security-outputs, 14-day retention).
 
 Notes:
-- Generated JSON/SARIF files are ignored by git and uploaded as workflow artifacts.
-- SARIF is also uploaded to GitHub code scanning.
+- Generated JSON files are ignored by git and uploaded as workflow artifacts.
+- SARIF is uploaded to GitHub Security tab via the CodeQL workflow.

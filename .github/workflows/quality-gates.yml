@@ -231,7 +231,7 @@ jobs:
           docker run --rm -v "${PWD}:/work" aquasec/trivy:0.65.0 sbom /work/sbom/rune-image.cdx.json --format json --output /work/sbom/rune-trivy.json --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
       - name: Enforce CVE policy — IEC 62443 4-1 ML4 DM-4
         env:
-          BRANCH_NAME: ${{ github.ref_name }}
+          BRANCH_NAME: ${{ github.event_name == 'pull_request' && github.base_ref || github.ref_name }}
         run: |
           python3 - <<'PY'
           import os
@@ -458,6 +458,7 @@ jobs:
 
   publish-image-and-notify-charts:
     name: RuneGate/CD/Publish-Image-and-Notify-Charts
+    if: github.event_name == 'push'
     needs:
       - smoke-cli-api
       - security-sbom
@@ -539,7 +540,7 @@ jobs:
           python3 - <<'PY'
           import json, os
           data = json.loads(os.environ['NEEDS_JSON'])
-          failed = [(k, v.get('result')) for k, v in data.items() if v.get('result') != 'success']
+          failed = [(k, v.get('result')) for k, v in data.items() if v.get('result') not in ('success', 'skipped')]
           for k, v in data.items():
               print(f'{k}: {v.get("result")}')
           if failed:

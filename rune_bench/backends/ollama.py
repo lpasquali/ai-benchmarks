@@ -72,8 +72,12 @@ class OllamaClient:
 
     def get_model_capabilities(self, model_name: str) -> OllamaModelCapabilities:
         """Return best-effort context/output capabilities for a model."""
-        data = self._make_request("/api/show", method="POST", payload={"model": model_name},
-                                  action=f"inspect model {model_name}")
+        data = self._make_request(
+            "/api/show",
+            method="POST",
+            payload={"model": model_name},
+            action=f"inspect model {model_name}",
+        )
         model_info = data.get("model_info")
         context_window = None
         if isinstance(model_info, dict):

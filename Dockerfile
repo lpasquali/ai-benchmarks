@@ -13,9 +13,11 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 # kubectl — fetch binary here so the final image needs no curl/wget/git
+# TARGETARCH is injected automatically by docker buildx for multi-arch builds
 ARG KUBECTL_VERSION=v1.31.0
+ARG TARGETARCH=amd64
 RUN curl -fsSL \
-    "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
+    "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${TARGETARCH}/kubectl" \
     -o /usr/local/bin/kubectl \
  && chmod +x /usr/local/bin/kubectl
 
@@ -53,7 +55,7 @@ COPY --from=builder /usr/local/bin/kubectl /usr/local/bin/kubectl
 # Application source — preserve subdirectory names so python -m rune resolves correctly
 COPY rune ./rune
 COPY rune_bench ./rune_bench
-RUN chown -R rune:rune /app
+RUN mkdir -p /app/.kube && chown -R rune:rune /app
 
 ENV PATH="/opt/venv/bin:$PATH" \
     RUNE_BACKEND=local \

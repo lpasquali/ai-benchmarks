@@ -57,7 +57,7 @@ services:
       ollama:
         condition: service_started
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
       interval: 10s
       timeout: 5s
       retries: 10
