@@ -10,7 +10,7 @@ import rune_bench.api_backend as api_backend
 import rune_bench.api_server as api_server
 from rune_bench.common import make_http_request
 from rune_bench.api_contracts import RunAgenticAgentRequest, RunBenchmarkRequest, RunOllamaInstanceRequest
-from rune_bench.ollama.client import OllamaClient
+from rune_bench.backends.ollama import OllamaClient
 
 
 def test_rune_container_port_and_vastai_helpers(monkeypatch):
@@ -131,7 +131,7 @@ def test_http_client_verify_ssl_false_branch(monkeypatch):
 
 
 def test_ollama_client_invalid_url_branch(monkeypatch):
-    monkeypatch.setattr("rune_bench.ollama.client.normalize_url", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("bad")))
+    monkeypatch.setattr("rune_bench.backends.ollama.normalize_url", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("bad")))
     with pytest.raises(RuntimeError, match="Missing or invalid Ollama URL"):
         OllamaClient("bad-url")
 
@@ -233,3 +233,69 @@ def test_workflow_normalize_ollama_url_missing():
 
     with pytest.raises(RuntimeError, match="Missing Ollama URL"):
         workflows.normalize_ollama_url(None)
+
+
+def test_backend_stubs_raise_not_implemented():
+    from rune_bench.backends.base import BackendCredentials
+    from rune_bench.backends.openai import OpenAIBackend
+    from rune_bench.backends.bedrock import BedrockBackend
+
+    openai_creds = BackendCredentials(api_key="sk-test")
+    backend = OpenAIBackend(openai_creds)
+    with pytest.raises(NotImplementedError):
+        backend.get_model_capabilities("gpt-4o")
+
+    bedrock_creds = BackendCredentials(extra={"region": "us-east-1"})
+    bedrock = BedrockBackend(bedrock_creds)
+    with pytest.raises(NotImplementedError):
+        bedrock.get_model_capabilities("anthropic.claude-3")
+
+
+def test_bedrock_backend_requires_region():
+    from rune_bench.backends.base import BackendCredentials
+    from rune_bench.backends.bedrock import BedrockBackend
+
+    with pytest.raises(ValueError, match="region"):
+        BedrockBackend(BackendCredentials())
+
+
+def test_vastai_provider_provision_and_teardown(monkeypatch):
+    from unittest.mock import MagicMock
+    from rune_bench.resources.vastai.provider import VastAIProvider
+    from rune_bench.resources.base import ProvisioningResult
+
+    fake_provision_result = MagicMock()
+    fake_provision_result.ollama_url = "http://host:11434"
+    fake_provision_result.model_name = "llama3.1:8b"
+    fake_provision_result.contract_id = 42
+
+    import rune_bench.workflows as workflows_mod
+    monkeypatch.setattr(workflows_mod, "provision_vastai_ollama", lambda *_a, **_k: fake_provision_result)
+
+    stop_calls = []
+    monkeypatch.setattr(workflows_mod, "stop_vastai_instance", lambda sdk, cid: stop_calls.append(cid))
+
+    sdk = MagicMock()
+    provider = VastAIProvider(
+        sdk,
+        template_hash="abc",
+        min_dph=1.0,
+        max_dph=3.0,
+        reliability=0.99,
+        stop_on_teardown=True,
+    )
+
+    result = provider.provision()
+    assert result.ollama_url == "http://host:11434"
+    assert result.model == "llama3.1:8b"
+    assert result.provider_handle == 42
+
+    # teardown without stop
+    provider._stop_on_teardown = False
+    provider.teardown(result)
+    assert stop_calls == []
+
+    # teardown with stop
+    provider._stop_on_teardown = True
+    provider.teardown(result)
+    assert stop_calls == [42]

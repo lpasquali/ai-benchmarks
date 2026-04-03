@@ -12,7 +12,7 @@ import sys
 import holmes  # type: ignore
 
 from rune_bench.debug import debug_log
-from rune_bench.ollama import OllamaClient, OllamaModelManager
+from rune_bench.backends.ollama import OllamaClient, OllamaModelManager
 
 
 class HolmesRunner:

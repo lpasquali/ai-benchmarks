@@ -3,8 +3,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from rune_bench.common import normalize_url
-from rune_bench.ollama.client import OllamaClient
-from rune_bench.ollama.models import OllamaModelManager
+from rune_bench.backends.ollama import OllamaClient
+from rune_bench.backends.ollama import OllamaModelManager
 
 
 def test_normalize_url_accepts_host_port_without_scheme():
@@ -57,7 +57,7 @@ def test_model_manager_warmup_loads_and_waits(monkeypatch):
     fake_client.get_running_models.side_effect = [set(), {"foo:1"}]
     manager = OllamaModelManager(client=fake_client)
 
-    monkeypatch.setattr("rune_bench.ollama.models.time.sleep", lambda *_: None)
+    monkeypatch.setattr("rune_bench.backends.ollama.time.sleep", lambda *_: None)
 
     loaded = manager.warmup_model("foo:1", timeout_seconds=2, poll_interval_seconds=0)
 
@@ -73,8 +73,8 @@ def test_model_manager_warmup_times_out(monkeypatch):
 
     # force immediate timeout
     values = iter([0.0, 1.0])
-    monkeypatch.setattr("rune_bench.ollama.models.time.monotonic", lambda: next(values))
-    monkeypatch.setattr("rune_bench.ollama.models.time.sleep", lambda *_: None)
+    monkeypatch.setattr("rune_bench.backends.ollama.time.monotonic", lambda: next(values))
+    monkeypatch.setattr("rune_bench.backends.ollama.time.sleep", lambda *_: None)
 
     with pytest.raises(RuntimeError, match="Timed out waiting for Ollama model"):
         manager.warmup_model("foo:1", timeout_seconds=0, poll_interval_seconds=0)

@@ -26,7 +26,7 @@ from rune_bench.api_contracts import (
 )
 from rune_bench.common import ModelSelector
 from rune_bench.debug import set_debug
-from rune_bench.ollama import OllamaClient, OllamaModelCapabilities, OllamaModelManager
+from rune_bench.backends.ollama import OllamaClient, OllamaModelCapabilities, OllamaModelManager
 from rune_bench.workflows import (
     ExistingOllamaServer,
     UserAbortedError,
@@ -46,7 +46,7 @@ def _get_holmes_runner():
     """Lazy loader for HolmesRunner to allow API-only deployments."""
     global HolmesRunner
     if HolmesRunner is None:
-        from rune_bench.agents.holmes import HolmesRunner as _HolmesRunner
+        from rune_bench.agents.sre.holmes import HolmesRunner as _HolmesRunner
         HolmesRunner = _HolmesRunner
     return HolmesRunner
 

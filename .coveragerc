@@ -1,0 +1,20 @@
+[run]
+source =
+    rune
+    rune_bench
+
+[report]
+omit =
+    # Stub agents — intentionally unimplemented (raise NotImplementedError)
+    rune_bench/agents/art/*
+    rune_bench/agents/cybersec/*
+    rune_bench/agents/legal/*
+    rune_bench/agents/ops/*
+    rune_bench/agents/research/*
+    rune_bench/agents/sre/cleric.py
+    rune_bench/agents/sre/k8sgpt.py
+    rune_bench/agents/sre/metoro.py
+    rune_bench/agents/sre/pagerduty.py
+    # Backend stubs — intentionally unimplemented (raise NotImplementedError)
+    rune_bench/backends/openai.py
+    rune_bench/backends/bedrock.py

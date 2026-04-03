@@ -12,7 +12,7 @@ from vastai import VastAI
 
 from rune_bench.common import SelectedModel
 from rune_bench.debug import debug_log
-from rune_bench.ollama import OllamaClient
+from rune_bench.backends.ollama import OllamaClient
 
 from .template import Template
 

@@ -13,19 +13,59 @@ jobs:
   coverage-python:
     name: RuneGate/Coverage/Python
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: '3.14'
           cache: 'pip'
-      - name: Coverage
+      - uses: actions/cache@v5
+        id: cache-venv
+        with:
+          path: .venv
+          key: venv-coverage-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/quality-gates.yml') }}
+      - name: Install dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
         run: |
           python -m venv .venv
           . .venv/bin/activate
           pip install --upgrade pip
           pip install --prefer-binary -r requirements.txt pytest pytest-cov pytest-xdist
-          .venv/bin/python -m pytest --cov --cov-report=term-missing:skip-covered --cov-fail-under=97
+      - name: Coverage
+        run: .venv/bin/python -m pytest --cov --cov-report=term-missing:skip-covered --cov-fail-under=97
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request' && always() && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              const output = require('child_process').execSync('.venv/bin/python -m coverage report', { encoding: 'utf-8' });
+              const lines = output.split('\n');
+              const totalLine = lines.find((line) => line.trim().startsWith('TOTAL'));
+              if (!totalLine) {
+                console.log('Could not find TOTAL line in coverage report');
+                return;
+              }
+              const percentMatch = totalLine.match(/(\d+)%\s*$/);
+              if (!percentMatch) {
+                console.log('Could not parse coverage percentage from TOTAL line:', totalLine);
+                return;
+              }
+              const total = Number(percentMatch[1]);
+              const comment = `## Coverage Report\n\n**Total Coverage:** ${total.toFixed(2)}%\n\n${total >= 97 ? '✅ Meets 97% threshold' : '❌ Below 97% threshold'}`;
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            } catch (e) {
+              console.log('Could not generate coverage PR comment:', e.message);
+            }
 
   feature-python:
     name: RuneGate/Feature/Python
@@ -37,12 +77,19 @@ jobs:
         with:
           python-version: '3.14'
           cache: 'pip'
-      - run: |
+      - uses: actions/cache@v5
+        id: cache-venv
+        with:
+          path: .venv
+          key: venv-feature-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/quality-gates.yml') }}
+      - name: Install dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: |
           python -m venv .venv
           . .venv/bin/activate
           pip install --upgrade pip
           pip install --prefer-binary -r requirements.txt pytest pytest-xdist
-          .venv/bin/python -m pytest -p no:cov -o addopts='' tests/ -m "not regression" -v --tb=short
+      - run: .venv/bin/python -m pytest -p no:cov -o addopts='' tests/ -m "not regression" -v --tb=short
 
   linting-python:
     name: RuneGate/Linting/Python
@@ -53,11 +100,19 @@ jobs:
         with:
           python-version: '3.14'
           cache: 'pip'
-      - run: |
+      - uses: actions/cache@v5
+        id: cache-venv
+        with:
+          path: .venv
+          key: venv-linting-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/quality-gates.yml') }}
+      - name: Install dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: |
           python -m venv .venv
           . .venv/bin/activate
           pip install --upgrade pip
           pip install --prefer-binary -r requirements.txt ruff mypy
+      - run: |
           .venv/bin/ruff check rune rune_bench
           .venv/bin/mypy rune rune_bench
 
@@ -71,12 +126,19 @@ jobs:
         with:
           python-version: '3.14'
           cache: 'pip'
-      - run: |
+      - uses: actions/cache@v5
+        id: cache-venv
+        with:
+          path: .venv
+          key: venv-smoke-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/quality-gates.yml') }}
+      - name: Install dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: |
           python -m venv .venv
           . .venv/bin/activate
           pip install --upgrade pip
           pip install --prefer-binary -r requirements.txt pytest
-          .venv/bin/python -m pytest -p no:cov -o addopts='' tests/test_cli_http_mode.py tests/test_api_server.py -v --tb=short
+      - run: .venv/bin/python -m pytest -p no:cov -o addopts='' tests/test_cli_http_mode.py tests/test_api_server.py -v --tb=short
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
       - name: Build multi-arch (amd64 + arm64)
@@ -128,12 +190,19 @@ jobs:
         with:
           python-version: '3.14'
           cache: 'pip'
-      - run: |
+      - uses: actions/cache@v5
+        id: cache-venv
+        with:
+          path: .venv
+          key: venv-regression-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/quality-gates.yml') }}
+      - name: Install dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: |
           python -m venv .venv
           . .venv/bin/activate
           pip install --upgrade pip
           pip install --prefer-binary -r requirements.txt pytest
-          .venv/bin/python -m pytest -p no:cov -o addopts='' -m regression tests/ -v --tb=short
+      - run: .venv/bin/python -m pytest -p no:cov -o addopts='' -m regression tests/ -v --tb=short
 
   security-sbom:
     name: RuneGate/Security/SBOM-and-CVE-Policy
