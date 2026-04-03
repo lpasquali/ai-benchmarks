@@ -517,6 +517,66 @@ jobs:
           }
           JSON
 
+  integration-ollama:
+    name: RuneGate/Ollama-Integration/TinyLlama
+    needs: [feature-python]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+      - uses: actions/cache@v5
+        id: cache-venv
+        with:
+          path: .venv
+          key: venv-integration-${{ runner.os }}-py3.14-${{ hashFiles('requirements.txt', '.github/workflows/quality-gates.yml') }}
+      - name: Install dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install --prefer-binary -r requirements.txt pytest
+      - uses: actions/cache@v5
+        id: cache-ollama-models
+        with:
+          path: /tmp/ollama-models
+          key: ollama-tinyllama-${{ runner.os }}-v1
+      - name: Start Ollama container
+        run: |
+          mkdir -p /tmp/ollama-models
+          docker run -d --name ollama \
+            -v /tmp/ollama-models:/root/.ollama \
+            -p 11434:11434 \
+            ollama/ollama
+      - name: Wait for Ollama to be ready
+        run: |
+          echo "Waiting for Ollama to become ready..."
+          for i in {1..30}; do
+            if curl -fsS http://localhost:11434/api/tags > /dev/null 2>&1; then
+              echo "Ollama ready (attempt $i)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Ollama did not become ready after 60 seconds"
+          exit 1
+      - name: Pull tinyllama (from cache or registry)
+        run: docker exec ollama ollama pull tinyllama
+      - name: Run Ollama integration tests
+        env:
+          OLLAMA_TEST_URL: http://localhost:11434
+          OLLAMA_TEST_MODEL: tinyllama
+        run: .venv/bin/python -m pytest -m integration -p no:cov -o addopts='' -v --tb=short tests/test_ollama_integration.py
+      - name: Collect Ollama logs on failure
+        if: failure()
+        run: docker logs ollama 2>&1 || true
+      - name: Stop and remove Ollama container
+        if: always()
+        run: docker rm -f ollama 2>/dev/null || true
+
   merge-gate:
     name: Merge Gate
     if: always()
@@ -526,6 +586,7 @@ jobs:
       - linting-python
       - smoke-cli-api
       - regression-python
+      - integration-ollama
       - security-sbom
       - security-sast
       - security-secrets
