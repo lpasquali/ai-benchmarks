@@ -21,7 +21,6 @@ Implementation notes:
 - Returns pipeline stdout/result as the answer string.
 """
 
-import asyncio
 
 
 class DaggerRunner:

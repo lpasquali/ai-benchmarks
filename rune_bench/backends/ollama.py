@@ -6,7 +6,6 @@ model lifecycle manager (OllamaModelManager) into a single backend module.
 
 import time
 from dataclasses import dataclass
-from typing import Any
 
 from rune_bench.backends.base import ModelCapabilities
 from rune_bench.common import make_http_request, normalize_url
