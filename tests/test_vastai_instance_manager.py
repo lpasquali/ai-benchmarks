@@ -9,7 +9,7 @@ import pytest
 
 import rune_bench.api_server as api_server
 from rune_bench.job_store import JobStore
-from rune_bench.vastai.instance import InstanceManager
+from rune_bench.resources.vastai import InstanceManager
 
 
 class DummySDK:
@@ -42,7 +42,7 @@ def test_instance_manager_create_wait_list_and_stop(monkeypatch):
     assert manager.create(10, model, template) == 55
 
     sdk.instances = [{"id": 55, "actual_status": "running"}]
-    monkeypatch.setattr("rune_bench.vastai.instance.time.sleep", lambda *_: None)
+    monkeypatch.setattr("rune_bench.resources.vastai.instance.time.sleep", lambda *_: None)
     assert manager.wait_until_running(55)["id"] == 55
     assert manager.list_instances() == sdk.instances
     manager.stop_instance(55)
@@ -62,8 +62,8 @@ def test_instance_manager_error_and_helper_paths(monkeypatch):
 
     sdk = DummySDK()
     manager = InstanceManager(sdk)
-    monkeypatch.setattr("rune_bench.vastai.instance._POLL_MAX_ATTEMPTS", 1)
-    monkeypatch.setattr("rune_bench.vastai.instance.time.sleep", lambda *_: None)
+    monkeypatch.setattr("rune_bench.resources.vastai.instance._POLL_MAX_ATTEMPTS", 1)
+    monkeypatch.setattr("rune_bench.resources.vastai.instance.time.sleep", lambda *_: None)
     with pytest.raises(RuntimeError, match="did not reach 'running'"):
         manager.wait_until_running(2)
 

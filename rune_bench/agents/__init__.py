@@ -1,5 +1,5 @@
 """Agents for cluster investigation and diagnostics."""
 
-from .holmes import HolmesRunner
+from .base import AgentRunner
 
-__all__ = ["HolmesRunner"]
+__all__ = ["AgentRunner"]

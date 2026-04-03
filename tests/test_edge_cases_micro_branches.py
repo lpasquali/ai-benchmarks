@@ -10,19 +10,17 @@ from urllib.request import Request, urlopen
 
 import rune
 import rune.api as rune_api_module
-import rune_bench.agents.holmes as holmes_module
+import rune_bench.agents.sre.holmes as holmes_module
 import rune_bench.api_backend as api_backend
 import rune_bench.api_client as api_client_module
 import rune_bench.api_server as api_server
-import rune_bench.ollama.models as ollama_models_module
+import rune_bench.backends.ollama as ollama_models_module
 import rune_bench.workflows as workflows
-from rune_bench.agents.holmes import HolmesRunner
+from rune_bench.agents.sre.holmes import HolmesRunner
 from rune_bench.api_client import RuneApiClient
 from rune_bench.common import normalize_url
-from rune_bench.ollama.client import OllamaClient, OllamaModelCapabilities
-from rune_bench.ollama.client import OllamaClient
-from rune_bench.ollama.models import OllamaModelManager
-from rune_bench.vastai.instance import ConnectionDetails, InstanceManager, TeardownResult
+from rune_bench.backends.ollama import OllamaClient, OllamaModelCapabilities, OllamaModelManager
+from rune_bench.resources.vastai import ConnectionDetails, InstanceManager, TeardownResult
 
 
 def test_final_coverage_micro_branches(monkeypatch, tmp_path):
@@ -101,9 +99,9 @@ def test_final_coverage_micro_branches(monkeypatch, tmp_path):
     states = iter([{"id": 1}, None])
     monkeypatch.setattr(wait_manager, "_fetch_instance", lambda _cid: next(states))
     monotonic_values = iter([0.0, 0.0, 2.0])
-    monkeypatch.setattr("rune_bench.vastai.instance.time.monotonic", lambda: next(monotonic_values))
+    monkeypatch.setattr("rune_bench.resources.vastai.instance.time.monotonic", lambda: next(monotonic_values))
     slept_wait = []
-    monkeypatch.setattr("rune_bench.vastai.instance.time.sleep", lambda s: slept_wait.append(s))
+    monkeypatch.setattr("rune_bench.resources.vastai.instance.time.sleep", lambda s: slept_wait.append(s))
     assert wait_manager._wait_until_instance_absent(contract_id=1, timeout_seconds=1) is True
     assert slept_wait == [5]
 
@@ -434,12 +432,18 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
     # api_backend line where finally stops vastai contract
     kubeconfig = tmp_path / "kubeconfig"
     kubeconfig.write_text("apiVersion: v1\n")
-    monkeypatch.setattr(api_backend, "provision_vastai_ollama", lambda *_a, **_k: type("R", (), {"contract_id": 99, "ollama_url": "http://x", "model_name": "m"})())
-    monkeypatch.setattr(api_backend, "_vastai_sdk", lambda: MagicMock())
-    monkeypatch.setattr(api_backend, "warmup_existing_ollama_model", lambda *_a, **_k: None)
-    monkeypatch.setattr(api_backend, "HolmesRunner", lambda _p: type("R", (), {"ask": lambda self, **_k: "ok"})())
+    from rune_bench.resources.base import ProvisioningResult
+
     stopped = []
-    monkeypatch.setattr(api_backend, "stop_vastai_instance", lambda *_a, **_k: stopped.append(True))
+    monkeypatch.setattr(
+        api_backend,
+        "_make_resource_provider_for_benchmark",
+        lambda req: type("P", (), {
+            "provision": lambda self: ProvisioningResult(ollama_url="http://x", model="m", provider_handle=99),
+            "teardown": lambda self, r: stopped.append(True),
+        })(),
+    )
+    monkeypatch.setattr(api_backend, "_make_agent_runner", lambda _p: type("R", (), {"ask": lambda self, **_k: "ok"})())
     out = api_backend.run_benchmark(
         api_backend.RunBenchmarkRequest(
             vastai=True,
@@ -459,10 +463,19 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
     assert out["contract_id"] == 99
     assert stopped == [True]
 
-    # api_backend benchmark warmup branch
+    # api_backend benchmark warmup branch — patch at provider module level to verify
+    # ExistingOllamaProvider.provision() calls warmup when warmup=True
+    import rune_bench.resources.existing_ollama_provider as _ep
+    from rune_bench.resources.existing_ollama_provider import ExistingOllamaProvider
+
     warmups = []
-    monkeypatch.setattr(api_backend, "use_existing_ollama_server", lambda *_a, **_k: type("S", (), {"url": "http://existing"})())
-    monkeypatch.setattr(api_backend, "warmup_existing_ollama_model", lambda *_a, **_k: warmups.append(True) or "m")
+    monkeypatch.setattr(_ep, "use_existing_ollama_server", lambda *_a, **_k: type("S", (), {"url": "http://existing"})())
+    monkeypatch.setattr(_ep, "warmup_existing_ollama_model", lambda *_a, **_k: warmups.append(True) or "m")
+    monkeypatch.setattr(
+        api_backend,
+        "_make_resource_provider_for_benchmark",
+        lambda req: ExistingOllamaProvider(req.ollama_url, model=req.model, warmup=req.ollama_warmup, warmup_timeout=req.ollama_warmup_timeout),
+    )
     api_backend.run_benchmark(
         api_backend.RunBenchmarkRequest(
             vastai=False,
@@ -574,8 +587,8 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
 
     manager_timeout = InstanceManager(sdk_nomatch)
     seq = iter([0.0, 2.0])
-    monkeypatch.setattr("rune_bench.vastai.instance.time.monotonic", lambda: next(seq))
-    monkeypatch.setattr("rune_bench.vastai.instance.time.sleep", lambda *_a, **_k: None)
+    monkeypatch.setattr("rune_bench.resources.vastai.instance.time.monotonic", lambda: next(seq))
+    monkeypatch.setattr("rune_bench.resources.vastai.instance.time.sleep", lambda *_a, **_k: None)
     monkeypatch.setattr(manager_timeout, "_fetch_instance", lambda _cid: None)
     assert manager_timeout._wait_until_instance_absent(1, timeout_seconds=1) is True
 

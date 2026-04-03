@@ -10,8 +10,8 @@ from vastai import VastAI
 
 from .common import ModelSelector
 from .debug import debug_log
-from .ollama import OllamaClient, OllamaModelManager
-from .vastai import ConnectionDetails, InstanceManager, OfferFinder, TeardownResult, TemplateLoader
+from rune_bench.backends.ollama import OllamaClient, OllamaModelManager
+from rune_bench.resources.vastai import ConnectionDetails, InstanceManager, OfferFinder, TeardownResult, TemplateLoader
 
 
 class UserAbortedError(RuntimeError):
@@ -47,11 +47,8 @@ def normalize_ollama_url(ollama_url: str | None) -> str:
     """
     if ollama_url is None:
         raise RuntimeError("Missing Ollama URL")
-    try:
-        client = OllamaClient(ollama_url)
-        return client.base_url
-    except RuntimeError:
-        raise
+    client = OllamaClient(ollama_url)
+    return client.base_url
 
 
 def use_existing_ollama_server(ollama_url: str | None, model_name: str) -> ExistingOllamaServer:

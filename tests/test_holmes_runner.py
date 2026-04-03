@@ -4,9 +4,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import rune_bench.agents.holmes as holmes_module
-from rune_bench.agents.holmes import HolmesRunner
-from rune_bench.ollama.client import OllamaModelCapabilities
+import rune_bench.agents.sre.holmes as holmes_module
+from rune_bench.agents.sre.holmes import HolmesRunner
+from rune_bench.backends.ollama import OllamaModelCapabilities
 
 
 def test_init_requires_existing_kubeconfig(tmp_path):

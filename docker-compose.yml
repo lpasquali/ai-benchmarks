@@ -1,0 +1,131 @@
+# RUNE — Docker Compose (client / server mode)
+#
+# Starts three services:
+#   rune-api     — RUNE API server (RUNE_BACKEND=local)
+#   ollama       — local Ollama inference server
+#   seaweedfs    — S3-compatible object store (Apache 2.0, used by Kubeflow)
+#
+# Usage:
+#   docker compose up -d
+#   rune run-benchmark \
+#     --question "Why is the cluster degraded?" \
+#     --model llama3.1:8b
+#
+# The CLI defaults to RUNE_BACKEND=local (in-process).
+# To use the API server instead, set in your shell:
+#   export RUNE_BACKEND=http
+#   export RUNE_API_BASE_URL=http://localhost:8080
+#
+# GPU support (NVIDIA):
+#   Uncomment the `deploy` block under the `ollama` service.
+#
+# Production S3 (AWS / GCS / Azure):
+#   Remove the `seaweedfs` and `seaweedfs-init` services.
+#   Set RUNE_S3_ENDPOINT="" and supply real AWS_* credentials.
+
+name: rune
+
+services:
+
+  # ── RUNE API server ────────────────────────────────────────────────────────
+  rune-api:
+    image: ghcr.io/lpasquali/rune:latest
+    command: ["serve"]
+    ports:
+      - "8080:8080"
+    environment:
+      RUNE_BACKEND: local
+      RUNE_API_HOST: 0.0.0.0
+      RUNE_API_PORT: "8080"
+      RUNE_API_AUTH_DISABLED: "1"          # disable auth for local dev
+      RUNE_OLLAMA_URL: http://ollama:11434
+      RUNE_OLLAMA_WARMUP: "true"
+      RUNE_OLLAMA_WARMUP_TIMEOUT: "300"
+      # S3 results sink — requires rune_bench/s3_sink.py (see deployment docs)
+      RUNE_S3_ENABLED: "true"
+      RUNE_S3_BUCKET: rune-results
+      RUNE_S3_PREFIX: results/
+      RUNE_S3_ENDPOINT: http://seaweedfs:8333   # remove for real AWS S3
+      AWS_ACCESS_KEY_ID: rune
+      AWS_SECRET_ACCESS_KEY: runesecret
+      AWS_DEFAULT_REGION: us-east-1
+    volumes:
+      - rune-db:/app/.rune-api
+    depends_on:
+      seaweedfs-init:
+        condition: service_completed_successfully
+      ollama:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  # ── Ollama inference server ────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    # Uncomment for NVIDIA GPU:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    restart: unless-stopped
+
+  # ── SeaweedFS — S3-compatible object store (Apache 2.0) ───────────────────
+  # https://github.com/seaweedfs/seaweedfs
+  # Used in production by Kubeflow (Linux Foundation) as default storage backend.
+  # Exposes an S3-compatible API on port 8333.
+  # No credentials are enforced in single-server mode; any key pair is accepted.
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    command: >
+      server
+        -dir=/data
+        -s3
+        -s3.port=8333
+        -volume.max=100
+    ports:
+      - "8333:8333"    # S3 API
+      - "9333:9333"    # master API (internal)
+    volumes:
+      - seaweedfs-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9333/cluster/status"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  # ── One-shot: create the rune-results bucket ───────────────────────────────
+  seaweedfs-init:
+    image: amazon/aws-cli:latest
+    depends_on:
+      seaweedfs:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: rune
+      AWS_SECRET_ACCESS_KEY: runesecret
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: >
+      /bin/sh -c "
+        aws --endpoint-url http://seaweedfs:8333
+            s3 mb s3://rune-results
+            --region us-east-1 || true &&
+        echo 'rune-results bucket ready'
+      "
+
+volumes:
+  rune-db:          # SQLite job store
+  ollama-models:    # pulled Ollama models (survives restarts)
+  seaweedfs-data:   # SeaweedFS blob + metadata storage

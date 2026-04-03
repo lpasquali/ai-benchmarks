@@ -25,8 +25,9 @@ dependencies = [
     "typer>=0.9",
     "rich>=13.7",
     "holmesgpt>=0.23.0",
-    "vastai",
-    "anyio>=4.4",
+    # supabase<2.8 required to resolve holmesgpt's postgrest==0.16.8 pin conflict
+    "supabase>=2.5,<2.8",
+    "vastai-sdk @ git+https://github.com/lpasquali/vast-sdk@087786d1e0bf031ddba90fe65d60d869ddce6831",
 ]
 
 [project.optional-dependencies]
@@ -42,12 +43,25 @@ dev = [
 rune = "rune.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/lpasquali/ai-benchmarks"
-Repository = "https://github.com/lpasquali/ai-benchmarks"
-Issues = "https://github.com/lpasquali/ai-benchmarks/issues"
+Homepage = "https://github.com/lpasquali/rune"
+Repository = "https://github.com/lpasquali/rune"
+Issues = "https://github.com/lpasquali/rune/issues"
 
 [tool.setuptools.packages.find]
 include = ["rune*", "rune_bench*"]
 
 [tool.setuptools.package-data]
 "*" = ["py.typed"]
+
+[tool.mypy]
+python_version = "3.11"
+
+[[tool.mypy.overrides]]
+module = ["vastai"]
+ignore_missing_imports = true
+
+[tool.bandit]
+# IEC 62443 4-1 ML4 SI-1: static application security testing
+targets = ["rune", "rune_bench"]
+exclude_dirs = ["tests"]
+skips = ["B101"]   # assert statements used only in test/debug guards

@@ -5,3 +5,16 @@ __pycache__/
 .coverage
 htmlcov
 .rune-api
+sbom/*.json
+sbom/*.sarif
+.ruff_cache/
+.mypy_cache/
+.dmypy.json
+.dmypy.json.??????-??????-??????
+.pytype/
+.pyre/
+.pyright/
+coverage.out
+gosec-report.json
+license-checks.json
+.venv-ci-lic
