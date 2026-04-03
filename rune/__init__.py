@@ -895,3 +895,47 @@ def run_benchmark(
 
 if __name__ == "__main__":
     app()
+
+
+@app.command("info")
+def show_info() -> None:
+    """Show installed extras and environment information."""
+    import importlib.metadata
+
+    try:
+        version = importlib.metadata.version("rune-bench")
+    except importlib.metadata.PackageNotFoundError:
+        version = "(dev — not installed as package)"
+
+    table = Table(title="RUNE Environment", show_header=True, header_style="bold blue")
+    table.add_column("Extra / Component", style="cyan")
+    table.add_column("Status", style="bold")
+    table.add_column("Install command", style="dim")
+
+    # Check vastai
+    try:
+        import vastai  # noqa: F401
+        vastai_status = "[green]✓ installed[/green]"
+        vastai_cmd = ""
+    except ImportError:
+        vastai_status = "[yellow]✗ not installed[/yellow]"
+        vastai_cmd = 'pip install "rune-bench[vastai]"'
+
+    # Check holmesgpt
+    try:
+        import holmes  # noqa: F401
+        holmes_status = "[green]✓ installed[/green]"
+        holmes_cmd = ""
+    except ImportError:
+        holmes_status = "[yellow]✗ not installed[/yellow]"
+        holmes_cmd = 'pip install "rune-bench[holmes]"'
+
+    table.add_row("[bold]vastai[/bold]  (Vast.ai GPU provisioning)", vastai_status, vastai_cmd)
+    table.add_row("[bold]holmes[/bold]  (HolmesGPT SRE agent)", holmes_status, holmes_cmd)
+
+    console.print(Panel.fit(f"[bold blue]rune-bench[/bold blue] v{version}"))
+    console.print(table)
+    if vastai_cmd or holmes_cmd:
+        console.print(
+            "\n[dim]Install all extras:[/dim] [cyan]pip install \"rune-bench[all]\"[/cyan]"
+        )

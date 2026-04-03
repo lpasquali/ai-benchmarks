@@ -2,6 +2,20 @@
 #
 # Trigger: push of a tag matching v* (e.g. v0.2.0, v1.0.0-rc1)
 #
+# ─── TAGGING PROCESS ────────────────────────────────────────────────────────
+#  Tags MUST only be pushed AFTER the PR has been merged to main and all
+#  quality gates (RuneGate Grouped) have passed.
+#
+#  Correct flow:
+#    1. Open PR → quality gates pass → merge to main
+#    2. git pull origin main
+#    3. git tag v<version>   (version must match pyproject.toml exactly)
+#    4. git push origin v<version>
+#
+#  NEVER push a tag on an unmerged branch or before quality gates pass.
+#  The guard step below will reject tags not reachable from origin/main.
+# ────────────────────────────────────────────────────────────────────────────
+#
 # Authentication: OIDC Trusted Publisher (no long-lived credentials).
 #   id-token: write is scoped to the publish job only (principle of least privilege).
 #
@@ -16,12 +30,6 @@
 # │       Environment: pypi                                                     │
 # │  3. Save — no API token or secret is needed after this.                     │
 # └─────────────────────────────────────────────────────────────────────────────┘
-#
-# The tag should only be placed on a commit that has already passed all
-# quality gates via the PR merge process. This workflow performs a final
-# build-integrity check (twine check + fast unit tests) before uploading.
-# A guard step verifies that the tag version matches pyproject.toml and
-# that the tagged commit is reachable from origin/main.
 #
 # Security:
 #   - contents: read is the minimum needed to check out the repository.
@@ -40,6 +48,8 @@ permissions:
 jobs:
   publish:
     name: Build and publish to PyPI
+    # Extra safety: ensure this only ever runs on a real tag push, not on a branch.
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -65,6 +75,7 @@ jobs:
           git fetch origin main
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
             echo "ERROR: Tagged commit is not reachable from origin/main." >&2
+            echo "Tags must only be pushed AFTER merging to main." >&2
             exit 1
           fi
           TAG_VERSION="${GITHUB_REF_NAME#v}"
@@ -80,20 +91,23 @@ jobs:
           fi
           echo "Version check passed: $PKG_VERSION"
 
-      - name: Install dependencies and build tools
-        run: |
-          pip install --upgrade pip build twine
-          pip install --prefer-binary -r requirements.txt pytest
-
-      - name: Run fast unit tests (smoke check before publish)
-        run: |
-          python -m pytest -m "not integration" -p no:cov -o addopts='' -q
+      - name: Install build tools
+        run: pip install --upgrade pip build twine
 
       - name: Build sdist and wheel
         run: python -m build
+
+      - name: Verify bare install works (no extras)
+        run: |
+          python -m venv .venv-bare
+          .venv-bare/bin/pip install --upgrade pip --quiet
+          .venv-bare/bin/pip install dist/*.whl --quiet
+          .venv-bare/bin/python -c "from rune import app; print('bare import: OK')"
+          .venv-bare/bin/python -m rune --help
 
       - name: Verify dist contents
         run: twine check dist/*
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
