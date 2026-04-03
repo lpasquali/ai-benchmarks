@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rune-bench"
-version = "0.0.0a0"
+version = "0.0.0a1"
 description = "RUNE — Reliability Use-case Numeric Evaluator"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -27,6 +27,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Extras are intentionally optional to avoid conflicts in shared Python environments.
+# Install only what you need:
+#
+#   pip install "rune-bench[vastai]"   — Vast.ai GPU provisioning
+#   pip install "rune-bench[holmes]"   — HolmesGPT SRE agent
+#   pip install "rune-bench[all]"      — everything
+#
+# Run `rune info` to see which extras are currently installed.
 holmes = [
     "holmesgpt>=0.23.0",
     # supabase<2.8 required to resolve holmesgpt's postgrest==0.16.8 pin conflict

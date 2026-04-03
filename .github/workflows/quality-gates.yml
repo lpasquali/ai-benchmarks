@@ -577,6 +577,36 @@ jobs:
         if: always()
         run: docker rm -f ollama 2>/dev/null || true
 
+  bare-install-smoke:
+    name: RuneGate/PackageInstall/BareAndExtras
+    needs: [feature-python]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Build wheel from source
+        run: |
+          pip install --upgrade pip build
+          python -m build --wheel
+      - name: "Bare install (no extras) — must import and run without vastai/holmes"
+        run: |
+          python -m venv .venv-bare
+          .venv-bare/bin/pip install --upgrade pip --quiet
+          .venv-bare/bin/pip install dist/*.whl --quiet
+          .venv-bare/bin/python -c "from rune import app; print('bare import: OK')"
+          .venv-bare/bin/python -m rune --help
+      - name: "Install with [vastai] extra — vastai import must succeed"
+        run: |
+          WHEEL=$(ls dist/*.whl)
+          python -m venv .venv-vastai
+          .venv-vastai/bin/pip install --upgrade pip --quiet
+          .venv-vastai/bin/pip install "${WHEEL}[vastai]" --quiet
+          .venv-vastai/bin/python -c "from vastai import VastAI; print('vastai extra import: OK')"
+          .venv-vastai/bin/python -m rune --help
+
   merge-gate:
     name: Merge Gate
     if: always()
@@ -585,6 +615,7 @@ jobs:
       - feature-python
       - linting-python
       - smoke-cli-api
+      - bare-install-smoke
       - regression-python
       - integration-ollama
       - security-sbom

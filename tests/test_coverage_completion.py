@@ -299,3 +299,20 @@ def test_vastai_provider_provision_and_teardown(monkeypatch):
     provider._stop_on_teardown = True
     provider.teardown(result)
     assert stop_calls == [42]
+
+
+def test_show_info_command(monkeypatch):
+    """rune info should display extra status without crashing."""
+    import sys
+    from unittest.mock import MagicMock
+
+    # Case 1: both extras missing → shows install commands
+    monkeypatch.setitem(sys.modules, "vastai", None)  # type: ignore[arg-type]
+    monkeypatch.setitem(sys.modules, "holmes", None)  # type: ignore[arg-type]
+    rune.show_info()
+
+    # Case 2: both extras present → shows "installed"
+    monkeypatch.setitem(sys.modules, "vastai", MagicMock())
+    monkeypatch.setitem(sys.modules, "holmes", MagicMock())
+    rune.show_info()
+
