@@ -10,8 +10,8 @@ from vastai import VastAI
 
 from .common import ModelSelector
 from .debug import debug_log
-from .ollama import OllamaClient, OllamaModelManager
-from .vastai import ConnectionDetails, InstanceManager, OfferFinder, TeardownResult, TemplateLoader
+from rune_bench.backends.ollama import OllamaClient, OllamaModelManager
+from rune_bench.resources.vastai import ConnectionDetails, InstanceManager, OfferFinder, TeardownResult, TemplateLoader
 
 
 class UserAbortedError(RuntimeError):

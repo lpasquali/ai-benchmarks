@@ -10,7 +10,7 @@ Exposes the top-level classes used by rune.py:
 """
 
 from .common import ModelSelector
-from .vastai import InstanceManager, OfferFinder, TemplateLoader
+from rune_bench.resources.vastai import InstanceManager, OfferFinder, TemplateLoader
 
 __all__ = [
     "OfferFinder",

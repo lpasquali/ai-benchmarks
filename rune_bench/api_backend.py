@@ -5,38 +5,72 @@ from pathlib import Path
 
 from vastai import VastAI
 
+from rune_bench.agents.base import AgentRunner
 from rune_bench.api_contracts import (
     RunAgenticAgentRequest,
     RunBenchmarkRequest,
     RunOllamaInstanceRequest,
 )
 from rune_bench.common import ModelSelector
+from rune_bench.resources.base import LLMResourceProvider, ProvisioningResult
+from rune_bench.resources.existing_ollama_provider import ExistingOllamaProvider
+from rune_bench.resources.vastai import VastAIProvider
 from rune_bench.workflows import (
-    provision_vastai_ollama,
-    stop_vastai_instance,
-    use_existing_ollama_server,
     list_existing_ollama_models,
     list_running_ollama_models,
+    use_existing_ollama_server,
     warmup_existing_ollama_model,
 )
-
-# Lazily imported so the API server starts without requiring the holmes/holmesgpt package
-HolmesRunner = None
-
-
-def _get_holmes_runner():
-    """Lazy loader for HolmesRunner to allow API-only deployments."""
-    global HolmesRunner
-    if HolmesRunner is None:
-        from rune_bench.agents.holmes import HolmesRunner as _HolmesRunner
-        HolmesRunner = _HolmesRunner
-    return HolmesRunner
 
 
 def _vastai_sdk() -> VastAI:
     """Instantiate VastAI SDK reading the API key from the environment."""
     api_key = os.environ.get("VAST_API_KEY", "")
     return VastAI(api_key=api_key, raw=True)
+
+
+def _make_resource_provider_for_benchmark(request: RunBenchmarkRequest) -> LLMResourceProvider:
+    """Factory: return the LLM resource provider for a benchmark run."""
+    if request.vastai:
+        return VastAIProvider(
+            _vastai_sdk(),
+            template_hash=request.template_hash,
+            min_dph=request.min_dph,
+            max_dph=request.max_dph,
+            reliability=request.reliability,
+            stop_on_teardown=request.vastai_stop_instance,
+        )
+    return ExistingOllamaProvider(
+        request.ollama_url,
+        model=request.model,
+        warmup=request.ollama_warmup,
+        warmup_timeout=request.ollama_warmup_timeout,
+    )
+
+
+def _make_resource_provider_for_ollama_instance(request: RunOllamaInstanceRequest) -> LLMResourceProvider:
+    """Factory: return the LLM resource provider for an Ollama instance run."""
+    if request.vastai:
+        return VastAIProvider(
+            _vastai_sdk(),
+            template_hash=request.template_hash,
+            min_dph=request.min_dph,
+            max_dph=request.max_dph,
+            reliability=request.reliability,
+            stop_on_teardown=False,
+        )
+    return ExistingOllamaProvider(request.ollama_url)
+
+
+def _make_agent_runner(kubeconfig: Path) -> AgentRunner:
+    """Lazy factory: load HolmesRunner only when an agent run is requested.
+
+    Replace this function (via monkeypatch or dependency injection) to swap
+    in a different AgentRunner implementation.
+    """
+    from rune_bench.agents.sre.holmes import HolmesRunner
+
+    return HolmesRunner(kubeconfig)
 
 
 def list_vastai_models() -> list[dict]:
@@ -60,27 +94,13 @@ def list_ollama_models(ollama_url: str) -> dict:
 
 
 def run_ollama_instance(request: RunOllamaInstanceRequest) -> dict:
-    if not request.vastai:
-        server = use_existing_ollama_server(request.ollama_url, model_name="<user-selected>")
-        return {
-            "mode": "existing",
-            "ollama_url": server.url,
-        }
-
-    result = provision_vastai_ollama(
-        _vastai_sdk(),
-        template_hash=request.template_hash,
-        min_dph=request.min_dph,
-        max_dph=request.max_dph,
-        reliability=request.reliability,
-        confirm_create=lambda: True,
-    )
-    return {
-        "mode": "vastai",
-        "contract_id": result.contract_id,
-        "ollama_url": result.ollama_url,
-        "model_name": result.model_name,
-    }
+    provider = _make_resource_provider_for_ollama_instance(request)
+    result = provider.provision()
+    out: dict = {"mode": "vastai" if request.vastai else "existing", "ollama_url": result.ollama_url}
+    if request.vastai:
+        out["model_name"] = result.model
+        out["contract_id"] = result.provider_handle
+    return out
 
 
 def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
@@ -90,9 +110,7 @@ def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
             request.model,
             timeout_seconds=request.ollama_warmup_timeout,
         )
-
-    from rune_bench.agents.holmes import HolmesRunner as _HR
-    runner = (HolmesRunner or _HR)(Path(request.kubeconfig))
+    runner = _make_agent_runner(Path(request.kubeconfig))
     answer = runner.ask(
         question=request.question,
         model=request.model,
@@ -102,54 +120,29 @@ def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
 
 
 def run_benchmark(request: RunBenchmarkRequest) -> dict:
-    selected_model_name = request.model
-    selected_ollama_url = request.ollama_url
-    vastai_contract_to_stop: int | str | None = None
+    provider = _make_resource_provider_for_benchmark(request)
+    result = provider.provision()
 
-    if request.vastai:
-        result = provision_vastai_ollama(
-            _vastai_sdk(),
-            template_hash=request.template_hash,
-            min_dph=request.min_dph,
-            max_dph=request.max_dph,
-            reliability=request.reliability,
-            confirm_create=lambda: True,
-        )
-        selected_model_name = result.model_name
-        selected_ollama_url = result.ollama_url
-        vastai_contract_to_stop = result.contract_id
-
-        if not selected_ollama_url:
-            raise RuntimeError(
-                "Could not determine Ollama URL from the Vast.ai instance service mappings. "
-                "Ensure port 11434 is exposed in the template."
-            )
-    else:
-        server = use_existing_ollama_server(request.ollama_url, model_name=selected_model_name)
-        selected_ollama_url = server.url
-
-    if selected_ollama_url and request.ollama_warmup:
-        warmup_existing_ollama_model(
-            selected_ollama_url,
-            selected_model_name,
-            timeout_seconds=request.ollama_warmup_timeout,
+    if not result.ollama_url:
+        raise RuntimeError(
+            "Could not determine Ollama URL from the Vast.ai instance service mappings. "
+            "Ensure port 11434 is exposed in the template."
         )
 
     try:
-        from rune_bench.agents.holmes import HolmesRunner as _HR
-        runner = (HolmesRunner or _HR)(Path(request.kubeconfig))
+        runner = _make_agent_runner(Path(request.kubeconfig))
         answer = runner.ask(
             question=request.question,
-            model=selected_model_name,
-            ollama_url=selected_ollama_url,
+            model=result.model or request.model,
+            ollama_url=result.ollama_url,
         )
     finally:
-        if request.vastai and request.vastai_stop_instance and vastai_contract_to_stop is not None:
-            stop_vastai_instance(_vastai_sdk(), vastai_contract_to_stop)
+        provider.teardown(result)
 
     return {
         "answer": answer,
-        "model_name": selected_model_name,
-        "ollama_url": selected_ollama_url,
-        "contract_id": vastai_contract_to_stop,
+        "model_name": result.model or request.model,
+        "ollama_url": result.ollama_url,
+        "contract_id": result.provider_handle,
     }
+
