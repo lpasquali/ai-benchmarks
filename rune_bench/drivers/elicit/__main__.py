@@ -43,7 +43,7 @@ def _handle_ask(params: dict) -> dict:
             "Request API access at https://elicit.com/api"
         )
 
-    url = "https://elicit.com/api/v1/search"
+    url = f"{os.environ.get('RUNE_ELICIT_API_BASE', 'https://elicit.com').rstrip('/')}/api/v1/search"
     body = json.dumps({"query": question, "limit": 10}).encode()
     req = urllib.request.Request(
         url,
@@ -56,7 +56,7 @@ def _handle_ask(params: dict) -> dict:
     )
 
     try:
-        with urllib.request.urlopen(req) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
             data = json.loads(resp.read().decode())
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode() if exc.fp else str(exc)
