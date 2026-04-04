@@ -22,7 +22,7 @@ Dependencies
 ------------
 Requires ``langgraph`` and ``langchain-ollama`` to be installed::
 
-    pip install rune[langgraph]
+    pip install langgraph
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ def _handle_ask(params: dict) -> dict:
         from langgraph.graph import END, START, StateGraph
     except ImportError as exc:
         raise RuntimeError(
-            "LangGraph driver requires: pip install rune[langgraph]  "
+            "LangGraph driver requires: pip install langgraph  "
             "(langgraph and langchain-ollama packages)"
         ) from exc
 
@@ -80,7 +80,7 @@ def _handle_info(_params: dict) -> dict:
         "name": "langgraph",
         "version": "1",
         "actions": ["ask", "info"],
-        "note": "Requires optional dependencies: pip install rune[langgraph]",
+        "note": "Requires optional dependencies: pip install langgraph",
     }
 
 

@@ -66,21 +66,24 @@ def register_agent(
 def get_agent(name: str, **kwargs: Any) -> Any:
     """Return an instantiated agent for *name*.
 
-    Resolution order:
-    1. Custom registry (populated by :func:`register_agent`).
-    2. Built-in map (lazy ``importlib.import_module``).
+    Only kwargs matching the agent's ``required_config`` are forwarded to
+    the constructor.
 
     Raises:
         ValueError: if *name* is not found in either source.
     """
     if name in _REGISTRY:
-        return _REGISTRY[name]["factory"](**kwargs)
+        entry = _REGISTRY[name]
+        req_config: list[str] = entry.get("required_config", [])
+        filtered = {k: v for k, v in kwargs.items() if k in req_config}
+        return entry["factory"](**filtered)
 
     if name in _BUILTIN_AGENTS:
-        module_path, class_name, _req_config = _BUILTIN_AGENTS[name]
+        module_path, class_name, req_config = _BUILTIN_AGENTS[name]
         mod = importlib.import_module(module_path)
         cls = getattr(mod, class_name)
-        return cls(**kwargs)
+        filtered = {k: v for k, v in kwargs.items() if k in req_config}
+        return cls(**filtered)
 
     available = sorted(set(list(_REGISTRY.keys()) + list(_BUILTIN_AGENTS.keys())))
     raise ValueError(

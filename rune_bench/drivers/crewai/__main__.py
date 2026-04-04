@@ -22,7 +22,7 @@ Dependencies
 ------------
 Requires ``crewai`` to be installed::
 
-    pip install rune[crewai]
+    pip install crewai
 """
 
 from __future__ import annotations
@@ -41,13 +41,13 @@ def _handle_ask(params: dict) -> dict:
         from crewai import Agent, Crew, Task
     except ImportError as exc:
         raise RuntimeError(
-            "CrewAI driver requires: pip install rune[crewai]  "
+            "CrewAI driver requires: pip install crewai  "
             "(crewai package)"
         ) from exc
 
     # Configure Ollama via LiteLLM environment variables
     if ollama_url:
-        os.environ["OPENAI_API_BASE"] = f"{ollama_url}/v1"
+        os.environ["OPENAI_API_BASE"] = f"{ollama_url.rstrip('/')}/v1"
 
     agent = Agent(
         role="Analyst",
@@ -70,7 +70,7 @@ def _handle_info(_params: dict) -> dict:
         "name": "crewai",
         "version": "1",
         "actions": ["ask", "info"],
-        "note": "Requires optional dependencies: pip install rune[crewai]",
+        "note": "Requires optional dependencies: pip install crewai",
     }
 
 
