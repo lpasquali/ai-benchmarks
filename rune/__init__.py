@@ -44,8 +44,11 @@ from rune_bench.metrics import InMemoryCollector, set_collector, clear_collector
 from rune_bench.backends.ollama import OllamaClient, OllamaModelCapabilities, OllamaModelManager
 from rune_bench.workflows import (
     ExistingOllamaServer,
+    SpendGateAction,
     UserAbortedError,
     VastAIProvisioningResult,
+    _DEFAULT_SPEND_THRESHOLD,
+    evaluate_spend_gate,
     list_existing_ollama_models,
     list_running_ollama_models,
     provision_vastai_ollama,
@@ -79,7 +82,6 @@ API_BASE_URL = os.environ.get("RUNE_API_BASE_URL", "http://localhost:8080").stri
 API_TOKEN = os.environ.get("RUNE_API_TOKEN", "").strip() or None
 API_TENANT = os.environ.get("RUNE_API_TENANT", "default").strip() or "default"
 VERIFY_SSL = os.environ.get("RUNE_INSECURE", "").strip().lower() not in {"1", "true", "yes", "on"}
-_SPEND_WARNING_THRESHOLD_DEFAULT = 5.00
 
 # Active profile (sourced from --profile argv peek or RUNE_PROFILE env var).
 _ACTIVE_PROFILE: str | None = peek_profile_from_argv()
@@ -368,12 +370,18 @@ def _run_preflight_cost_check(
         border_style="yellow",
     ))
 
-    threshold = float(os.environ.get("RUNE_SPEND_WARNING_THRESHOLD", str(_SPEND_WARNING_THRESHOLD_DEFAULT)))
-    if projected_cost <= threshold or yes:
+    try:
+        threshold = float(os.environ.get("RUNE_SPEND_WARNING_THRESHOLD", str(_DEFAULT_SPEND_THRESHOLD)))
+    except (ValueError, TypeError):
+        console.print("[yellow]Warning: Invalid RUNE_SPEND_WARNING_THRESHOLD value; using default $5.00.[/yellow]")
+        threshold = _DEFAULT_SPEND_THRESHOLD
+
+    action = evaluate_spend_gate(projected_cost, threshold=threshold, yes=yes)
+
+    if action is SpendGateAction.ALLOW:
         return
 
-    is_ci = os.environ.get("CI", "").strip().lower() in {"1", "true", "yes"}
-    if is_ci:
+    if action is SpendGateAction.BLOCK:
         console.print(
             f"[red]Spend threshold exceeded (${projected_cost:.2f} > ${threshold:.2f}). "
             "Pass --yes / -y to proceed in CI.[/red]"

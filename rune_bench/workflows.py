@@ -5,7 +5,9 @@ This module keeps orchestration/business logic out of the CLI layer.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
@@ -28,6 +30,34 @@ except ImportError:  # vastai extra not installed
 
 class UserAbortedError(RuntimeError):
     """Raised when an interactive confirmation is rejected by the user."""
+
+
+_DEFAULT_SPEND_THRESHOLD = 5.00
+
+
+class SpendGateAction(str, Enum):
+    ALLOW = "allow"
+    PROMPT = "prompt"
+    BLOCK = "block"
+
+
+def evaluate_spend_gate(
+    projected_cost: float,
+    *,
+    threshold: float,
+    yes: bool,
+) -> SpendGateAction:
+    """Determine the spend-gate action for a given projected cost.
+
+    Returns ALLOW when cost is within threshold or --yes is set.
+    Returns BLOCK when running in CI (non-interactive).
+    Returns PROMPT otherwise.
+    """
+    if projected_cost <= threshold or yes:
+        return SpendGateAction.ALLOW
+    if os.environ.get("CI", "").strip().lower() in {"1", "true", "yes"}:
+        return SpendGateAction.BLOCK
+    return SpendGateAction.PROMPT
 
 
 @dataclass
