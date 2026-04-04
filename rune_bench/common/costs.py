@@ -3,6 +3,15 @@
 from typing import Optional
 from rune_bench.api_contracts import CostEstimationRequest, CostEstimationResponse
 
+
+class FailClosedError(RuntimeError):
+    """Raised when no valid cost driver is configured (Fail-Closed mode).
+
+    Prevents accidental unbounded cloud spend by halting execution when the
+    caller has not explicitly selected a cost driver.
+    """
+
+
 class CostEstimator:
     """Calculates projected spend for benchmarks across any cloud."""
 
@@ -24,11 +33,9 @@ class CostEstimator:
         if request.gcp:
             return self._estimate_cloud_stub("gcp", request, rate=2.20)
 
-        return CostEstimationResponse(
-            projected_cost_usd=0.0,
-            cost_driver="none",
-            resource_impact="low",
-            warning="No cost driver selected."
+        raise FailClosedError(
+            "No cost driver selected. Configure --vastai, --azure, --aws, --gcp, or --local "
+            "to proceed. (Fail-Closed: execution halted to prevent unbounded spend.)"
         )
 
     async def _estimate_vastai(self, request: CostEstimationRequest) -> CostEstimationResponse:

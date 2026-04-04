@@ -217,9 +217,10 @@ def test_cost_estimator_azure_api_failure(monkeypatch):
 
 
 def test_cost_estimator_no_driver():
+    """CostEstimator raises FailClosedError when no cost driver is configured."""
+    from rune_bench.common.costs import FailClosedError
+
     estimator = CostEstimator()
     r = _estimator_req()
-    result = asyncio.run(estimator.estimate(r))
-    assert result.cost_driver == "none"
-    assert result.projected_cost_usd == 0.0
-    assert result.warning is not None
+    with pytest.raises(FailClosedError, match="No cost driver selected"):
+        asyncio.run(estimator.estimate(r))
