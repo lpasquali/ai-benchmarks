@@ -5,7 +5,10 @@ This module keeps orchestration/business logic out of the CLI layer.
 
 from __future__ import annotations
 
+import asyncio
+import os
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
@@ -28,6 +31,34 @@ except ImportError:  # vastai extra not installed
 
 class UserAbortedError(RuntimeError):
     """Raised when an interactive confirmation is rejected by the user."""
+
+
+DEFAULT_SPEND_THRESHOLD = 5.00
+
+
+class SpendGateAction(str, Enum):
+    ALLOW = "allow"
+    PROMPT = "prompt"
+    BLOCK = "block"
+
+
+def evaluate_spend_gate(
+    projected_cost: float,
+    *,
+    threshold: float,
+    yes: bool,
+) -> SpendGateAction:
+    """Determine the spend-gate action for a given projected cost.
+
+    Returns ALLOW when cost is within threshold or --yes is set.
+    Returns BLOCK when running in CI (non-interactive).
+    Returns PROMPT otherwise.
+    """
+    if projected_cost <= threshold or yes:
+        return SpendGateAction.ALLOW
+    if os.environ.get("CI", "").strip().lower() in {"1", "true", "yes"}:
+        return SpendGateAction.BLOCK
+    return SpendGateAction.PROMPT
 
 
 @dataclass
@@ -228,6 +259,44 @@ def provision_vastai_ollama(
 def stop_vastai_instance(sdk: VastAI, contract_id: int | str) -> TeardownResult:
     """Destroy Vast.ai instance + related storage and verify cleanup."""
     return InstanceManager(sdk).destroy_instance_and_related_storage(contract_id)
+
+
+def run_preflight_cost_check(
+    *,
+    vastai: bool,
+    max_dph: float,
+    min_dph: float,
+    estimated_duration_seconds: int = 3600,
+    backend_mode: str = "local",
+    http_client=None,
+) -> dict:
+    """Estimate projected spend for a Vast.ai job.
+
+    Returns the cost estimate dict (empty dict when vastai is False).
+    Raises FailClosedError when no cost driver is configured.
+    Raises RuntimeError when estimation is unavailable.
+    """
+    if not vastai:
+        return {}
+
+    from rune_bench.api_contracts import CostEstimationRequest
+    from rune_bench.common.costs import CostEstimator, FailClosedError  # noqa: F401 (re-raised by caller)
+
+    cost_req = CostEstimationRequest(
+        vastai=vastai,
+        max_dph=max_dph,
+        min_dph=min_dph,
+        estimated_duration_seconds=estimated_duration_seconds,
+    )
+
+    if backend_mode == "http":
+        if http_client is None:
+            raise RuntimeError("http_client is required when backend_mode='http'")
+        return http_client.get_cost_estimate(cost_req.to_dict())
+
+    estimator = CostEstimator()
+    response = asyncio.run(estimator.estimate(cost_req))
+    return response.to_dict()
 
 def _extract_ollama_service_url(details: ConnectionDetails) -> str | None:
     for svc in details.service_urls:

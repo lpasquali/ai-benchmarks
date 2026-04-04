@@ -34,7 +34,7 @@ class CostEstimator:
             return self._estimate_cloud_stub("gcp", request, rate=2.20)
 
         raise FailClosedError(
-            "No cost driver selected. Configure --vastai, --azure, --aws, --gcp, or --local "
+            "No cost driver selected. Set one of the request fields (vastai, azure, aws, gcp, or local_hardware) "
             "to proceed. (Fail-Closed: execution halted to prevent unbounded spend.)"
         )
 

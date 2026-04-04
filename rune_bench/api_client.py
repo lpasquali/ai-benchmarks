@@ -71,6 +71,12 @@ class RuneApiClient:
         payload = self._request("POST", "/v1/estimates", body=request_payload)
         if "projected_cost_usd" not in payload:
             raise RuntimeError("API payload missing 'projected_cost_usd' for cost estimate")
+        cost_driver = str(payload.get("cost_driver", "")).strip().lower()
+        if not cost_driver or cost_driver in {"unknown", "none"}:
+            from rune_bench.common import FailClosedError
+            raise FailClosedError(
+                f"Cost estimation unavailable: server returned cost_driver={payload.get('cost_driver')!r} (no driver configured)"
+            )
         return payload
 
     def submit_agentic_agent_job(self, request_payload: dict, *, idempotency_key: str | None = None) -> str:
