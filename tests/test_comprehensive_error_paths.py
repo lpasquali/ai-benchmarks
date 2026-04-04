@@ -401,3 +401,76 @@ def test_api_backend_and_workflow_last_edges(monkeypatch, tmp_path):
     fake_client.get_available_models.return_value = ["x"]
     manager = api_backend.use_existing_ollama_server
     assert callable(manager)
+
+
+def test_cost_estimate_backend_and_server_endpoints(monkeypatch, tmp_path):
+    """Cover _get_cost_estimate_backend (lines 55-58) and the /v1/estimates,
+    /v1/metrics/summary and /v1/jobs/{id}/events server endpoints."""
+    import threading
+    from rune_bench.api_contracts import CostEstimationRequest
+
+    # --- _get_cost_estimate_backend direct call ---
+    result = api_server._get_cost_estimate_backend(
+        CostEstimationRequest(vastai=True, min_dph=2.0, max_dph=3.0, estimated_duration_seconds=3600)
+    )
+    assert "projected_cost_usd" in result
+
+    with pytest.raises(RuntimeError, match="invalid request type"):
+        api_server._get_cost_estimate_backend(
+            api_server.RunAgenticAgentRequest(question="q", model="m", ollama_url=None, ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig="/k")
+        )
+
+    # --- live server for endpoint coverage ---
+    store = api_server.JobStore(tmp_path / "jobs.db")
+    app = api_server.RuneApiApplication(
+        store=store,
+        security=api_server.ApiSecurityConfig(auth_disabled=False, tenant_tokens={"t": "tok"}),
+        backend_functions={
+            "cost-estimate": lambda req: {"projected_cost_usd": 1.5, "cost_driver": "vastai", "resource_impact": "low", "local_energy_kwh": 0.0, "confidence_score": 1.0, "warning": None},
+        },
+    )
+    monkeypatch.setattr(api_server, "list_ollama_models", lambda ollama_url: {"ollama_url": ollama_url, "models": [], "running_models": []})
+    server = api_server.ThreadingHTTPServer(("127.0.0.1", 0), app.create_handler())
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host, port = server.server_address
+    base = f"http://{host}:{port}"
+
+    try:
+        auth_headers = {"Authorization": "Bearer tok", "X-Tenant-ID": "t"}
+
+        # /v1/estimates POST (lines 226-231)
+        req = Request(
+            f"{base}/v1/estimates",
+            method="POST",
+            data=b'{"vastai": true, "min_dph": 2.0, "max_dph": 3.0, "estimated_duration_seconds": 3600}',
+            headers={**auth_headers, "Content-Type": "application/json"},
+        )
+        with urlopen(req) as resp:
+            import json as _json
+            payload = _json.loads(resp.read())
+        assert payload["projected_cost_usd"] == 1.5
+
+        # /v1/metrics/summary GET (lines 183-188)
+        req = Request(f"{base}/v1/metrics/summary", headers=auth_headers)
+        with urlopen(req) as resp:
+            payload = _json.loads(resp.read())
+        assert "events" in payload
+
+        # /v1/jobs/{id}/events GET — job not found (lines 193-197)
+        req = Request(f"{base}/v1/jobs/nonexistent/events", headers=auth_headers)
+        with pytest.raises(Exception):
+            urlopen(req)
+
+        # /v1/jobs/{id}/events GET — job exists (lines 198-200)
+        job_id, _ = store.create_job(tenant_id="t", kind="agentic-agent", request_payload={"question": "q"})
+        req = Request(f"{base}/v1/jobs/{job_id}/events", headers=auth_headers)
+        with urlopen(req) as resp:
+            payload = _json.loads(resp.read())
+        assert payload["job_id"] == job_id
+        assert "events" in payload
+
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+        server.server_close()

@@ -25,3 +25,4 @@ venv/
 
 # Build artifacts
 *.egg-info/
+pyvenv.cfg
