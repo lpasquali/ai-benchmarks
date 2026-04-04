@@ -142,38 +142,41 @@ def test_cli_preflight_estimation_failure_without_yes_exits_1(monkeypatch):
 
 
 def test_get_cost_estimate_raises_for_none_cost_driver(monkeypatch):
-    """get_cost_estimate raises RuntimeError when cost_driver is 'none'."""
+    """get_cost_estimate raises FailClosedError when cost_driver is 'none'."""
+    from rune_bench.common.costs import FailClosedError
     client = RuneApiClient("http://api:8080")
     monkeypatch.setattr(
         client,
         "_request",
         lambda *_a, **_kw: {"projected_cost_usd": 4.5, "cost_driver": "none"},
     )
-    with pytest.raises(RuntimeError, match="cost_driver="):
+    with pytest.raises(FailClosedError, match="cost_driver="):
         client.get_cost_estimate({})
 
 
 def test_get_cost_estimate_raises_for_unknown_cost_driver(monkeypatch):
-    """get_cost_estimate raises RuntimeError when cost_driver is 'unknown'."""
+    """get_cost_estimate raises FailClosedError when cost_driver is 'unknown'."""
+    from rune_bench.common.costs import FailClosedError
     client = RuneApiClient("http://api:8080")
     monkeypatch.setattr(
         client,
         "_request",
         lambda *_a, **_kw: {"projected_cost_usd": 4.5, "cost_driver": "unknown"},
     )
-    with pytest.raises(RuntimeError, match="cost_driver="):
+    with pytest.raises(FailClosedError, match="cost_driver="):
         client.get_cost_estimate({})
 
 
 def test_get_cost_estimate_raises_for_missing_cost_driver(monkeypatch):
-    """get_cost_estimate raises RuntimeError when cost_driver is absent."""
+    """get_cost_estimate raises FailClosedError when cost_driver is absent."""
+    from rune_bench.common.costs import FailClosedError
     client = RuneApiClient("http://api:8080")
     monkeypatch.setattr(
         client,
         "_request",
         lambda *_a, **_kw: {"projected_cost_usd": 4.5},
     )
-    with pytest.raises(RuntimeError, match="cost_driver="):
+    with pytest.raises(FailClosedError, match="cost_driver="):
         client.get_cost_estimate({})
 
 
@@ -206,3 +209,67 @@ def test_fail_closed_error_message_uses_local_hardware():
     estimator = CostEstimator()
     with pytest.raises(FailClosedError, match="local_hardware"):
         asyncio.run(estimator.estimate(req))
+
+
+# ─── evaluate_spend_gate CI blocking behavior ─────────────────────────────────
+
+
+def test_evaluate_spend_gate_blocks_in_ci(monkeypatch):
+    """With CI=1 and cost above threshold, evaluate_spend_gate returns BLOCK."""
+    from rune_bench.workflows import SpendGateAction, evaluate_spend_gate
+
+    monkeypatch.setenv("CI", "1")
+    action = evaluate_spend_gate(99.0, threshold=5.0, yes=False)
+    assert action is SpendGateAction.BLOCK
+
+
+def test_evaluate_spend_gate_allows_with_yes_in_ci(monkeypatch):
+    """With --yes, evaluate_spend_gate returns ALLOW even in CI above threshold."""
+    from rune_bench.workflows import SpendGateAction, evaluate_spend_gate
+
+    monkeypatch.setenv("CI", "1")
+    action = evaluate_spend_gate(99.0, threshold=5.0, yes=True)
+    assert action is SpendGateAction.ALLOW
+
+
+def test_cli_preflight_ci_block_exits_1(monkeypatch):
+    """In CI mode with spend above threshold, CLI exits with code 1."""
+    import typer
+    import rune as rune_cli
+
+    monkeypatch.setattr(
+        rune_cli,
+        "run_preflight_cost_check",
+        lambda **_kw: {
+            "projected_cost_usd": 99.0,
+            "cost_driver": "vastai",
+            "resource_impact": "high",
+            "warning": None,
+        },
+    )
+    monkeypatch.setenv("CI", "1")
+    monkeypatch.delenv("RUNE_SPEND_WARNING_THRESHOLD", raising=False)
+
+    with pytest.raises(typer.Exit) as exc_info:
+        rune_cli._run_preflight_cost_check(vastai=True, max_dph=3.0, min_dph=2.0, yes=False)
+
+    assert exc_info.value.exit_code == 1
+
+
+def test_cli_preflight_ci_yes_bypasses_block(monkeypatch):
+    """In CI with --yes, spend block is bypassed and function returns normally."""
+    import rune as rune_cli
+
+    monkeypatch.setattr(
+        rune_cli,
+        "run_preflight_cost_check",
+        lambda **_kw: {
+            "projected_cost_usd": 99.0,
+            "cost_driver": "vastai",
+            "resource_impact": "high",
+            "warning": None,
+        },
+    )
+    monkeypatch.setenv("CI", "1")
+    # Should not raise
+    rune_cli._run_preflight_cost_check(vastai=True, max_dph=3.0, min_dph=2.0, yes=True)
