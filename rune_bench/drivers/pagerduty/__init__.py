@@ -49,7 +49,6 @@ class PagerDutyDriverClient:
         params: dict = {
             "question": question,
             "model": model.strip(),
-            "kubeconfig_path": str(self._kubeconfig),
         }
         if ollama_url:
             params["ollama_url"] = ollama_url

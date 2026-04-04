@@ -41,8 +41,9 @@ class ConsensusDriverClient:
             formatted list of relevant papers.
         """
         params: dict = {"question": question}
-        if model:
-            params["model"] = model
+        normalized_model = model.strip()
+        if normalized_model:
+            params["model"] = normalized_model
         if ollama_url:
             params["ollama_url"] = ollama_url
 
