@@ -1,0 +1,2 @@
+[console_scripts]
+rune = rune.__main__:main
