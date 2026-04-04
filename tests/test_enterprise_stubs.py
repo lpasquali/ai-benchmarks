@@ -164,15 +164,82 @@ def test_handle_info_returns_enterprise_stub(
     _STUBS,
     ids=[s[4] for s in _STUBS],
 )
-def test_handle_ask_raises_without_api_key(
+def test_handle_ask_raises_not_implemented_with_key(
     module_path: str,
     class_name: str,
     env_var: str,
     onboarding_url: str,
     driver_name: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``_handle_ask()`` must raise RuntimeError when the API key is missing."""
+    """``_handle_ask()`` must raise NotImplementedError when the API key is present."""
+    monkeypatch.setenv(env_var, "dummy-key")
     main_mod = importlib.import_module(f"{module_path}.__main__")
 
-    with pytest.raises(RuntimeError, match=env_var):
+    with pytest.raises(NotImplementedError, match="enterprise stub"):
         main_mod._handle_ask({"question": "test", "model": "test"})
+
+
+@pytest.mark.parametrize(
+    "module_path, class_name, env_var, onboarding_url, driver_name",
+    _STUBS,
+    ids=[s[4] for s in _STUBS],
+)
+def test_main_loop_success(
+    module_path: str,
+    class_name: str,
+    env_var: str,
+    onboarding_url: str,
+    driver_name: str,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``main()`` must process JSON requests from stdin and write to stdout."""
+    import json
+    import io
+
+    main_mod = importlib.import_module(f"{module_path}.__main__")
+    
+    # Test 'info' action
+    input_data = json.dumps({"action": "info", "id": "123"}) + "\n"
+    monkeypatch.setattr("sys.stdin", io.StringIO(input_data))
+    
+    main_mod.main()
+    
+    out, _ = capsys.readouterr()
+    resp = json.loads(out.strip())
+    assert resp["status"] == "ok"
+    assert resp["id"] == "123"
+    assert resp["result"]["name"] == driver_name
+
+
+@pytest.mark.parametrize(
+    "module_path, class_name, env_var, onboarding_url, driver_name",
+    _STUBS,
+    ids=[s[4] for s in _STUBS],
+)
+def test_main_loop_unknown_action(
+    module_path: str,
+    class_name: str,
+    env_var: str,
+    onboarding_url: str,
+    driver_name: str,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``main()`` must handle unknown actions by returning an error JSON."""
+    import json
+    import io
+
+    main_mod = importlib.import_module(f"{module_path}.__main__")
+    
+    input_data = json.dumps({"action": "invalid", "id": "456"}) + "\n"
+    monkeypatch.setattr("sys.stdin", io.StringIO(input_data))
+    
+    main_mod.main()
+    
+    out, _ = capsys.readouterr()
+    resp = json.loads(out.strip())
+    assert resp["status"] == "error"
+    assert resp["id"] == "456"
+    assert "Unknown action" in resp["error"]
