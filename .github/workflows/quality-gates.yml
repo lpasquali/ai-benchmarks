@@ -297,6 +297,9 @@ jobs:
     needs: [changes, security-secrets]
     if: needs.changes.outputs.docker == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -316,19 +319,13 @@ jobs:
           pip install --upgrade pip
           pip install --prefer-binary -r requirements.txt pytest
       - run: .venv/bin/python -m pytest -p no:cov -o addopts='' tests/test_cli_http_mode.py tests/test_api_server.py -v --tb=short
-      - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
-      - name: Build multi-arch (amd64 + arm64)
-        uses: docker/build-push-action@v7
+      - uses: docker/login-action@v3
         with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: false
-          tags: rune:rune-ci-local
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: Load amd64 image and smoke test
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build amd64 image and smoke test
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -337,7 +334,8 @@ jobs:
           load: true
           push: false
           tags: rune:rune-ci-local
-          cache-from: type=gha
+          cache-from: type=registry,ref=ghcr.io/lpasquali/rune:buildcache
+          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/lpasquali/rune:buildcache,mode=max' || '' }}
       - run: |
           set -euo pipefail
           docker run -d --name rune-smoke -e RUNE_API_AUTH_DISABLED=1 -p 18080:8080 rune:rune-ci-local
@@ -371,9 +369,15 @@ jobs:
       id-token: write      # required for SLSA provenance attestation
       attestations: write  # required for SLSA provenance attestation
       contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v6
       - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build image
         uses: docker/build-push-action@v7
         with:
@@ -382,8 +386,8 @@ jobs:
           platforms: linux/amd64
           load: true
           tags: rune:rune-ci-local
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=ghcr.io/lpasquali/rune:buildcache
+          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/lpasquali/rune:buildcache,mode=max' || '' }}
       - name: Generate SBOMs — CycloneDX via Syft (IEC 62443 4-1 ML4 SM-9)
         run: |
           set -euo pipefail
@@ -679,8 +683,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.image_name }}:${{ steps.meta.outputs.image_tag }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=ghcr.io/lpasquali/rune:buildcache
+          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/lpasquali/rune:buildcache,mode=max' || '' }}
       - name: Notify rune-charts to sync image tag
         env:
           CROSS_REPO_TOKEN: ${{ secrets.RUNE_CHARTS_BOT_TOKEN }}
