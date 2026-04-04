@@ -31,11 +31,30 @@ import os
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 _DEFAULT_BURP_API_URL = "http://localhost:1337"
 _POLL_INTERVAL_SECONDS = 2
 _SCAN_TIMEOUT_SECONDS = 300
+
+
+def _check_authorization(target: str) -> None:
+    """Raise RuntimeError if target is not in RUNE_BURPGPT_ALLOWED_TARGETS allowlist.
+
+    Reads RUNE_BURPGPT_ALLOWED_TARGETS (comma-separated hostnames).
+    If the env var is empty/unset, the check is skipped (trust the caller).
+    """
+    allowlist_raw = os.environ.get("RUNE_BURPGPT_ALLOWED_TARGETS", "").strip()
+    if not allowlist_raw:
+        return
+    allowed = {h.strip().lower() for h in allowlist_raw.split(",") if h.strip()}
+    host = urllib.parse.urlparse(target).hostname or target.lower()
+    if host not in allowed:
+        raise RuntimeError(
+            f"Target {host!r} is not in RUNE_BURPGPT_ALLOWED_TARGETS. "
+            "Add it to the allowlist before running a scan."
+        )
 
 
 def _burp_request(
@@ -51,9 +70,16 @@ def _burp_request(
         method=method,
     )
     try:
-        with urllib.request.urlopen(req) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
             raw = resp.read().decode()
-            return json.loads(raw) if raw.strip() else {}
+            if not raw.strip():
+                return {}
+            result = json.loads(raw)
+            if not isinstance(result, dict):
+                raise RuntimeError(
+                    f"Burp API returned unexpected response type: {type(result).__name__}"
+                )
+            return result
     except urllib.error.URLError as exc:
         raise RuntimeError(
             f"Cannot connect to Burp Suite REST API at {burp_url}. "
@@ -101,6 +127,8 @@ def _handle_ask(params: dict) -> dict:
 
     burp_url = os.environ.get("RUNE_BURPGPT_BURP_API_URL", _DEFAULT_BURP_API_URL)
     target_url = _extract_target_url(question)
+
+    _check_authorization(target_url)
 
     # Start a scan
     scan_response = _burp_request(
