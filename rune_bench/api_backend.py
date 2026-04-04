@@ -134,6 +134,7 @@ def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
         )
     agent_name = getattr(request, "agent", "holmes")
     if agent_name != "holmes":
+        # Pass all potentially useful kwargs; get_agent() filters based on required_config
         agent_kwargs: dict[str, Any] = {"kubeconfig": Path(request.kubeconfig)}
         runner = get_agent(agent_name, **agent_kwargs)
     else:
