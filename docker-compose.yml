@@ -1,7 +1,8 @@
 # RUNE — Docker Compose (client / server mode)
 #
-# Starts three services:
+# Starts four services:
 #   rune-api     — RUNE API server (RUNE_BACKEND=local)
+#   rune-ui      — RUNE web dashboard (connects to rune-api)
 #   ollama       — local Ollama inference server
 #   seaweedfs    — S3-compatible object store (Apache 2.0, used by Kubeflow)
 #
@@ -26,6 +27,19 @@
 name: rune
 
 services:
+
+  # ── RUNE Web UI ───────────────────────────────────────────────────────────
+  rune-ui:
+    image: ghcr.io/lpasquali/rune-ui:latest
+    ports:
+      - "3000:8080"
+    environment:
+      RUNE_API_BASE_URL: http://rune-api:8080
+      RUNE_API_AUTH_DISABLED: "1"          # mirrors rune-api auth setting
+    depends_on:
+      rune-api:
+        condition: service_healthy
+    restart: unless-stopped
 
   # ── RUNE API server ────────────────────────────────────────────────────────
   rune-api:
