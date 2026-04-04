@@ -18,7 +18,7 @@ import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 
 if TYPE_CHECKING:
     from rune_bench.job_store import JobStore
@@ -148,7 +148,7 @@ class _SpanContext:
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: object,
-    ) -> bool:
+    ) -> Literal[False]:
         self._exc = exc_val
         duration_ms = (time.monotonic() - self._start) * 1000
         status = "error" if exc_val is not None else "ok"
