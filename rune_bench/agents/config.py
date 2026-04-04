@@ -26,6 +26,6 @@ def resolve_agent_config(agent_name: str) -> AgentConfig:
     return AgentConfig(
         api_key=os.getenv(f"{prefix}API_KEY"),
         base_url=os.getenv(f"{prefix}BASE_URL"),
-        kubeconfig=os.getenv("KUBECONFIG"),
+        kubeconfig=os.getenv("RUNE_KUBECONFIG") or os.getenv("KUBECONFIG"),
         extra={},
     )
