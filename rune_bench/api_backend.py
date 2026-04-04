@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
-from rune_bench.agents.base import AgentRunner
+from rune_bench.agents.registry import get_agent
 from rune_bench.api_contracts import (
     CostEstimationRequest,
     RunAgenticAgentRequest,
@@ -75,15 +76,23 @@ def _make_resource_provider_for_ollama_instance(request: RunOllamaInstanceReques
     return ExistingOllamaProvider(request.ollama_url)
 
 
-def _make_agent_runner(kubeconfig: Path) -> AgentRunner:
-    """Lazy factory: load HolmesRunner only when an agent run is requested.
+def _make_agent_runner(agent_name: str = "holmes", *, kubeconfig: Path | None = None) -> Any:
+    """Lazy factory: resolve an agent via the registry.
 
-    Replace this function (via monkeypatch or dependency injection) to swap
-    in a different AgentRunner implementation.
+    Accepts either the new ``(agent_name, *, kubeconfig=...)`` signature or
+    the legacy ``(kubeconfig_path)`` positional call used by existing tests
+    and monkeypatches.
     """
-    from rune_bench.agents.sre.holmes import HolmesRunner
+    if isinstance(agent_name, Path) or (
+        isinstance(agent_name, str) and "/" in agent_name
+    ):
+        kubeconfig = Path(agent_name)
+        agent_name = "holmes"
 
-    return HolmesRunner(kubeconfig)
+    kwargs: dict[str, Any] = {}
+    if kubeconfig is not None:
+        kwargs["kubeconfig"] = kubeconfig
+    return get_agent(agent_name, **kwargs)
 
 
 def list_vastai_models() -> list[dict]:
@@ -123,7 +132,12 @@ def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
             request.model,
             timeout_seconds=request.ollama_warmup_timeout,
         )
-    runner = _make_agent_runner(Path(request.kubeconfig))
+    agent_name = getattr(request, "agent", "holmes")
+    if agent_name != "holmes":
+        agent_kwargs: dict[str, Any] = {"kubeconfig": Path(request.kubeconfig)}
+        runner = get_agent(agent_name, **agent_kwargs)
+    else:
+        runner = _make_agent_runner(Path(request.kubeconfig))
     answer = runner.ask(
         question=request.question,
         model=request.model,
@@ -181,9 +195,6 @@ def get_cost_estimate(request: CostEstimationRequest) -> dict:
     duration_hours = request.estimated_duration_seconds / 3600
 
     if request.vastai:
-        # Use max_dph as the hourly rate (worst-case / ceiling estimate) to match
-        # CostEstimator._estimate_vastai() and give consistent spend-gate behaviour
-        # regardless of whether the CLI runs in local or HTTP backend mode.
         dph = request.max_dph if request.max_dph > 0 else request.min_dph
         projected_cost_usd = dph * duration_hours
         local_energy_kwh = 0.0
@@ -232,4 +243,3 @@ def get_cost_estimate(request: CostEstimationRequest) -> dict:
         "confidence_score": 1.0,
         "warning": None,
     }
-
