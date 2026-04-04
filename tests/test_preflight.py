@@ -80,17 +80,6 @@ def test_preflight_raises_fail_closed_error():
 # ─── CLI _run_preflight_cost_check behaviour ──────────────────────────────────
 
 
-def _make_preflight_runner(monkeypatch, *, vastai=True, max_dph=3.0, min_dph=2.0, yes=False):
-    """Import and call _run_preflight_cost_check with env isolation."""
-    import rune as rune_cli
-    return rune_cli._run_preflight_cost_check, dict(
-        vastai=vastai,
-        max_dph=max_dph,
-        min_dph=min_dph,
-        yes=yes,
-    )
-
-
 def test_cli_preflight_decline_exits_1(monkeypatch, capsys):
     """User declining the confirmation prompt exits with code 1 (not 0)."""
     import typer
@@ -215,5 +204,5 @@ def test_fail_closed_error_message_uses_local_hardware():
         model="", estimated_duration_seconds=3600,
     )
     estimator = CostEstimator()
-    with pytest.raises(FailClosedError, match="--local-hardware"):
+    with pytest.raises(FailClosedError, match="local_hardware"):
         asyncio.run(estimator.estimate(req))
