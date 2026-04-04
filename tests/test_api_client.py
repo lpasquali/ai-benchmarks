@@ -119,3 +119,22 @@ def test_wait_for_job_raises_on_failure(monkeypatch):
 
     with pytest.raises(RuntimeError, match="failed"):
         client.wait_for_job("job-2", timeout_seconds=5, poll_interval_seconds=0)
+
+
+def test_get_cost_estimate_returns_payload(monkeypatch):
+    client = RuneApiClient("http://api:8080")
+    monkeypatch.setattr(
+        client,
+        "_request",
+        lambda *_a, **_k: {"projected_cost_usd": 2.5, "cost_driver": "vastai", "resource_impact": "medium"},
+    )
+    result = client.get_cost_estimate({"vastai": True, "max_dph": 3.0, "min_dph": 2.0, "estimated_duration_seconds": 3600})
+    assert result["projected_cost_usd"] == 2.5
+    assert result["cost_driver"] == "vastai"
+
+
+def test_get_cost_estimate_raises_on_missing_key(monkeypatch):
+    client = RuneApiClient("http://api:8080")
+    monkeypatch.setattr(client, "_request", lambda *_a, **_k: {"cost_driver": "vastai"})
+    with pytest.raises(RuntimeError, match="projected_cost_usd"):
+        client.get_cost_estimate({"vastai": True})

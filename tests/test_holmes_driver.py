@@ -186,3 +186,15 @@ def test_main_skips_empty_lines(monkeypatch: pytest.MonkeyPatch, capsys: pytest.
     holmes_main.main()
 
     assert capsys.readouterr().out.strip() == ""
+
+
+def test_main_dunder_main_guard(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+    """Line 113: ensure the __main__ guard invokes main() when run as __main__."""
+    import runpy
+    from pathlib import Path
+
+    main_path = Path(holmes_main.__file__)
+    monkeypatch.setattr(holmes_main.sys, "stdin", io.StringIO(""))
+    runpy.run_path(str(main_path), run_name="__main__")
+    # No output expected for empty stdin, but the guard must not raise
+    assert capsys.readouterr().out.strip() == ""
