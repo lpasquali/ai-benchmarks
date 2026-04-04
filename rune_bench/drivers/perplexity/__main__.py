@@ -24,7 +24,8 @@ from __future__ import annotations
 import json
 import os
 import sys
-import urllib.request
+
+from rune_bench.common.http_client import make_http_request
 
 
 def _handle_ask(params: dict) -> dict:
@@ -34,26 +35,23 @@ def _handle_ask(params: dict) -> dict:
             "RUNE_PERPLEXITY_API_KEY environment variable is not set"
         )
 
-    model = params.get("model", "sonar-pro")
+    model = params.get("model", "sonar-pro").strip()
+    if not model:
+        raise RuntimeError("Perplexity model must be a non-empty string.")
     question = params["question"]
 
-    body = json.dumps({
+    payload = {
         "model": model,
         "messages": [{"role": "user", "content": question}],
-    }).encode()
+    }
 
-    req = urllib.request.Request(
+    data = make_http_request(
         "https://api.perplexity.ai/chat/completions",
-        data=body,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
         method="POST",
+        payload=payload,
+        action="query Perplexity API",
+        headers={"Authorization": f"Bearer {api_key}"},
     )
-
-    with urllib.request.urlopen(req) as resp:  # noqa: S310
-        data = json.loads(resp.read().decode())
 
     answer = data["choices"][0]["message"]["content"]
     citations = data.get("citations", [])
