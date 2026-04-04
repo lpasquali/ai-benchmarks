@@ -28,8 +28,15 @@ from rune_bench.api_contracts import (
     RunBenchmarkRequest,
     RunOllamaInstanceRequest,
 )
-from rune_bench.common import ModelSelector
+from rune_bench.common import (
+    INIT_TEMPLATE,
+    ModelSelector,
+    get_loaded_config_files,
+    load_config,
+    peek_profile_from_argv,
+)
 from rune_bench.debug import set_debug
+from rune_bench.metrics import InMemoryCollector, set_collector, clear_collector
 from rune_bench.backends.ollama import OllamaClient, OllamaModelCapabilities, OllamaModelManager
 from rune_bench.workflows import (
     ExistingOllamaServer,
@@ -57,6 +64,11 @@ def _get_holmes_runner():
 app = typer.Typer(help="RUNE — Reliability Use-case Numeric Evaluator", add_completion=False)
 console = Console()
 
+# Load rune.yaml (project) / ~/.rune/config.yaml (global) before reading env vars.
+# Values are injected into os.environ only when the env var is not already set,
+# preserving: CLI flags > env vars > yaml config > built-in defaults.
+load_config(peek_profile_from_argv())
+
 DEFAULT_VASTAI_TEMPLATE = "c166c11f035d3a97871a23bd32ca6aba"
 BACKEND_MODE = os.environ.get("RUNE_BACKEND", "local").strip().lower() or "local"
 API_BASE_URL = os.environ.get("RUNE_API_BASE_URL", "http://localhost:8080").strip() or "http://localhost:8080"
@@ -64,9 +76,18 @@ API_TOKEN = os.environ.get("RUNE_API_TOKEN", "").strip() or None
 API_TENANT = os.environ.get("RUNE_API_TENANT", "default").strip() or "default"
 VERIFY_SSL = os.environ.get("RUNE_INSECURE", "").strip().lower() not in {"1", "true", "yes", "on"}
 
+# Active profile (sourced from --profile argv peek or RUNE_PROFILE env var).
+_ACTIVE_PROFILE: str | None = peek_profile_from_argv()
+
 
 @app.callback()
 def main(
+    profile: str | None = typer.Option(
+        None,
+        "--profile",
+        envvar="RUNE_PROFILE",
+        help="Activate a named profile from rune.yaml (e.g. production, ci, test)",
+    ),
     backend: str = typer.Option(
         BACKEND_MODE,
         "--backend",
@@ -107,7 +128,7 @@ def main(
     ),
 ) -> None:
     """Configure global CLI options."""
-    global BACKEND_MODE, API_BASE_URL, API_TOKEN, API_TENANT, VERIFY_SSL
+    global BACKEND_MODE, API_BASE_URL, API_TOKEN, API_TENANT, VERIFY_SSL, _ACTIVE_PROFILE
     normalized_backend = backend.strip().lower()
     if normalized_backend not in {"local", "http"}:
         raise typer.BadParameter("--backend must be either 'local' or 'http'")
@@ -116,6 +137,7 @@ def main(
     API_TOKEN = api_token.strip() or None
     API_TENANT = api_tenant.strip() or "default"
     VERIFY_SSL = not insecure
+    _ACTIVE_PROFILE = profile
     set_debug(debug)
 
 
@@ -311,6 +333,32 @@ def _run_http_job_with_progress(
         )
 
 
+def _print_metrics_summary(collector: InMemoryCollector) -> None:
+    """Print a workflow lifecycle metrics table to the console."""
+    rows = collector.summary_rows()
+    if not rows:
+        return
+    table = Table(title="Workflow Lifecycle Metrics", show_header=True, header_style="bold magenta")
+    table.add_column("Event", style="dim")
+    table.add_column("Total", justify="right")
+    table.add_column("OK", justify="right", style="green")
+    table.add_column("Error", justify="right", style="red")
+    table.add_column("Avg (ms)", justify="right")
+    table.add_column("Min (ms)", justify="right")
+    table.add_column("Max (ms)", justify="right")
+    for row in rows:
+        table.add_row(
+            row["event"],
+            str(row["total"]),
+            str(row["ok"]),
+            str(row["error"]),
+            f"{row['avg_ms']:.0f}",
+            f"{row['min_ms']:.0f}",
+            f"{row['max_ms']:.0f}",
+        )
+    console.print(table)
+
+
 def _warmup_ollama_model(*, ollama_url: str, model_name: str, timeout_seconds: int) -> None:
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
         progress.add_task(f"Loading Ollama model {model_name} and waiting until it is ready...", total=None)
@@ -491,6 +539,8 @@ def run_ollama_instance(
         _print_existing_ollama(server)
         return
 
+    _cli_metrics = InMemoryCollector()
+    set_collector(_cli_metrics)
     result = _run_vastai_provisioning(
         template_hash=template_hash,
         min_dph=min_dph,
@@ -498,6 +548,8 @@ def run_ollama_instance(
         reliability=reliability,
     )
     _print_vastai_result(result)
+    _print_metrics_summary(_cli_metrics)
+    clear_collector()
 
 
 @app.command("vastai-list-models")
@@ -661,6 +713,9 @@ def run_agentic_agent(
         console.print(answer)
         return
 
+    _cli_metrics = InMemoryCollector()
+    set_collector(_cli_metrics)
+
     if ollama_url and ollama_warmup:
         _warmup_ollama_model(
             ollama_url=ollama_url,
@@ -670,12 +725,16 @@ def run_agentic_agent(
 
     # Block 10 — Run HolmesGPT agent
     try:
+        from rune_bench.metrics import span as _span
         runner = (HolmesRunner or _get_holmes_runner())(kubeconfig)
-        answer = runner.ask(question=question, model=model, ollama_url=ollama_url)
+        with _span("agent.ask", model=model, backend="existing"):
+            answer = runner.ask(question=question, model=model, ollama_url=ollama_url)
     except (FileNotFoundError, RuntimeError) as exc:
         console.print(f"[red]Agent error:[/red] {exc}")
         raise typer.Exit(1)
 
+    _print_metrics_summary(_cli_metrics)
+    clear_collector()
     console.print("\n[bold green]Agent Answer[/bold green]")
     console.print(answer)
 
@@ -798,6 +857,8 @@ def run_benchmark(
         console.print(answer)
         return
 
+    _cli_metrics = InMemoryCollector()
+    set_collector(_cli_metrics)
     selected_model_name = model
     selected_ollama_url = ollama_url
     vastai_contract_to_stop: int | str | None = None
@@ -889,6 +950,8 @@ def run_benchmark(
                     f"{vastai_contract_to_stop}: {stop_exc}"
                 )
 
+    _print_metrics_summary(_cli_metrics)
+    clear_collector()
     console.print("\n[bold green]Agent Answer[/bold green]")
     console.print(answer)
 
@@ -939,3 +1002,71 @@ def show_info() -> None:
         console.print(
             "\n[dim]Install all extras:[/dim] [cyan]pip install \"rune-bench[all]\"[/cyan]"
         )
+
+
+@app.command("init")
+def init_config(
+    force: bool = typer.Option(False, "--force", help="Overwrite existing rune.yaml"),
+) -> None:
+    """Scaffold a rune.yaml configuration file in the current directory."""
+    target = Path("rune.yaml")
+    if target.exists() and not force:
+        console.print(
+            "[yellow]rune.yaml already exists.[/yellow] Use [cyan]--force[/cyan] to overwrite."
+        )
+        raise typer.Exit(0)
+    target.write_text(INIT_TEMPLATE)
+    console.print(f"[green]✓ Created[/green] {target.resolve()}")
+    console.print(
+        "\n[dim]Edit the file to set your defaults and profiles, then activate a profile with:[/dim]\n"
+        "  [cyan]rune --profile production run-benchmark[/cyan]\n"
+        "  [cyan]RUNE_PROFILE=ci rune run-agentic-agent[/cyan]\n"
+        "\n[dim]Tip:[/dim] Add [cyan]rune.yaml[/cyan] to [dim].gitignore[/dim] if it contains "
+        "environment-specific paths."
+    )
+
+
+@app.command("config")
+def show_config() -> None:
+    """Show the effective merged configuration (profile + defaults + files loaded)."""
+    effective = load_config(_ACTIVE_PROFILE)
+    config_files = get_loaded_config_files()
+
+    # Header
+    profile_label = f"[bold cyan]{_ACTIVE_PROFILE}[/bold cyan]" if _ACTIVE_PROFILE else "[dim](none — using defaults)[/dim]"
+    console.print(Panel.fit(
+        f"Active profile: {profile_label}",
+        title="[bold blue]RUNE Configuration[/bold blue]",
+    ))
+
+    # Config files loaded
+    if config_files:
+        console.print("\n[bold]Config files loaded[/bold] (later overrides earlier):")
+        for cf in config_files:
+            console.print(f"  [green]✓[/green] {cf.resolve()}")
+    else:
+        console.print("\n[dim]No rune.yaml found — using built-in defaults and env vars.[/dim]")
+        console.print(
+            "[dim]Run [cyan]rune init[/cyan] to scaffold a rune.yaml in the current directory.[/dim]"
+        )
+
+    if not effective:
+        return
+
+    # Effective values table
+    table = Table(title="\nEffective configuration", show_header=True, header_style="bold blue")
+    table.add_column("Key", style="cyan")
+    table.add_column("Value", style="bold")
+    table.add_column("Env var", style="dim")
+
+    from rune_bench.common.config import _FIELD_ENV_MAP
+    for key, env_var in _FIELD_ENV_MAP.items():
+        if key in effective:
+            env_val = os.environ.get(env_var, "")
+            table.add_row(key, str(effective[key]), f"{env_var}={env_val}" if env_val else env_var)
+
+    console.print(table)
+    console.print(
+        "\n[dim]Secrets (RUNE_API_TOKEN, VAST_API_KEY) are never shown here — "
+        "check your environment directly.[/dim]"
+    )

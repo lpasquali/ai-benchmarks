@@ -12,6 +12,7 @@ from rune_bench.api_contracts import (
     RunOllamaInstanceRequest,
 )
 from rune_bench.common import ModelSelector
+from rune_bench.metrics import span  # noqa: F401 (used by workflows layer)
 from rune_bench.resources.base import LLMResourceProvider
 from rune_bench.resources.existing_ollama_provider import ExistingOllamaProvider
 from rune_bench.workflows import (
@@ -140,11 +141,12 @@ def run_benchmark(request: RunBenchmarkRequest) -> dict:
             "Ensure port 11434 is exposed in the template."
         )
 
+    effective_model = result.model or request.model
     try:
         runner = _make_agent_runner(Path(request.kubeconfig))
         answer = runner.ask(
             question=request.question,
-            model=result.model or request.model,
+            model=effective_model,
             ollama_url=result.ollama_url,
         )
     finally:
@@ -152,7 +154,7 @@ def run_benchmark(request: RunBenchmarkRequest) -> dict:
 
     return {
         "answer": answer,
-        "model_name": result.model or request.model,
+        "model_name": effective_model,
         "ollama_url": result.ollama_url,
         "contract_id": result.provider_handle,
     }
