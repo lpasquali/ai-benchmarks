@@ -416,6 +416,10 @@ jobs:
               # vastai-sdk release yet. Remove once vastai-sdk supports transformers>=4.53.
               "CVE-2025-6638",
               "CVE-2025-6921",
+              # kubectl binary: Trivy reports FixedVersion but kubectl v1.35.3 is the current
+              # stable release. No patched stable kubectl available yet. Remove once
+              # kubectl stable channel ships a release with a Go toolchain that fixes this CVE.
+              "CVE-2026-25679",
           }
 
           def safe_float(v):

@@ -6,7 +6,7 @@ usable anywhere the catalog is loaded, regardless of whether PyYAML is installed
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Iterator
 
 
@@ -68,7 +68,6 @@ class ChainSpec:
 
     def ordered_steps(self) -> list[ChainStep]:
         """Return steps in execution order (topological, linear chains only)."""
-        by_id = {s.id: s for s in self.steps}
         by_input: dict[str | None, ChainStep] = {s.input_from: s for s in self.steps}
         ordered: list[ChainStep] = []
         current: ChainStep | None = by_input.get(None)

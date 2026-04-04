@@ -18,7 +18,7 @@ import threading
 import time
 from collections import defaultdict
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generator, Protocol
 
 if TYPE_CHECKING:
