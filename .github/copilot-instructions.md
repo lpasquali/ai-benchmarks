@@ -4,9 +4,9 @@
 - Treat [rune/__init__.py](../rune/__init__.py) as a thin CLI layer only (Typer args, Rich output, progress UI).
 - Put orchestration/business flow in [rune_bench/workflows.py](../rune_bench/workflows.py), not in CLI command handlers.
 - Keep provider-specific logic in domain modules:
-  - Ollama transport/logic: [rune_bench/ollama/client.py](../rune_bench/ollama/client.py), [rune_bench/ollama/models.py](../rune_bench/ollama/models.py)
-  - Vast.ai offer/template/instance lifecycle: [rune_bench/vastai/offer.py](../rune_bench/vastai/offer.py), [rune_bench/vastai/template.py](../rune_bench/vastai/template.py), [rune_bench/vastai/instance.py](../rune_bench/vastai/instance.py)
-  - Agent execution: [rune_bench/agents/holmes.py](../rune_bench/agents/holmes.py)
+  - Ollama transport/logic: [rune_bench/backends/ollama.py](../rune_bench/backends/ollama.py)
+  - Vast.ai offer/template/instance lifecycle: [rune_bench/resources/vastai/offer.py](../rune_bench/resources/vastai/offer.py), [rune_bench/resources/vastai/template.py](../rune_bench/resources/vastai/template.py), [rune_bench/resources/vastai/instance.py](../rune_bench/resources/vastai/instance.py)
+  - Agent execution: [rune_bench/agents/sre/holmes.py](../rune_bench/agents/sre/holmes.py)
 
 ## Local vs HTTP backend pattern
 - CLI defaults to local in-process execution; HTTP mode is opt-in via `--backend http` / `RUNE_BACKEND`.
@@ -26,7 +26,7 @@
 
 ## External integration points
 - Vast.ai SDK (`VastAI(raw=True)`) is the only cloud control plane used by workflows.
-- HolmesGPT runner supports multiple SDK shapes and CLI fallback in [rune_bench/agents/holmes.py](../rune_bench/agents/holmes.py).
+- HolmesGPT runner supports multiple SDK shapes and CLI fallback in [rune_bench/agents/sre/holmes.py](../rune_bench/agents/sre/holmes.py).
 - API auth is tenant-scoped (`X-Tenant-ID` + bearer/API key) unless `RUNE_API_AUTH_DISABLED=1`.
 - Async job creation supports `Idempotency-Key`; keep this wired through client and server endpoints.
 

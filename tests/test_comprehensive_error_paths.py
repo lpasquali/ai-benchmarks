@@ -309,7 +309,12 @@ def test_offer_template_backend_instance_and_workflow_remaining(monkeypatch, tmp
         InstanceManager(sdk)._destroy_instance(1)
 
     manager = InstanceManager(MagicMock())
-    values = iter([0.0, 10.0])
+    # Use itertools.chain so that after the two controlled values (needed for the
+    # timeout logic in _wait_until_instance_absent) the iterator never exhausts.
+    # This is necessary because the monkeypatch targets the global time module,
+    # so span() calls in subsequent workflow code also hit this lambda.
+    import itertools
+    values = itertools.chain(iter([0.0, 10.0]), itertools.repeat(999.0))
     monkeypatch.setattr("rune_bench.resources.vastai.instance.time.monotonic", lambda: next(values))
     monkeypatch.setattr(manager, "_fetch_instance", lambda _cid: {"id": _cid})
     monkeypatch.setattr("rune_bench.resources.vastai.instance.time.sleep", lambda *_: None)

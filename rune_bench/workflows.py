@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 from .common import ModelSelector
 from .debug import debug_log
+from .metrics import span
 from rune_bench.backends.ollama import OllamaClient, OllamaModelManager
 
 try:
@@ -101,13 +102,14 @@ def warmup_existing_ollama_model(
         f"Workflow warmup: ollama_url={normalized_url} requested_model={model_name} api_model={api_model_name}"
     )
 
-    return manager.warmup_model(
-        api_model_name,
-        timeout_seconds=timeout_seconds,
-        poll_interval_seconds=poll_interval_seconds,
-        keep_alive=keep_alive,
-        unload_others=True,
-    )
+    with span("ollama.model.warmup", model=api_model_name):
+        return manager.warmup_model(
+            api_model_name,
+            timeout_seconds=timeout_seconds,
+            poll_interval_seconds=poll_interval_seconds,
+            keep_alive=keep_alive,
+            unload_others=True,
+        )
 
 
 
@@ -128,11 +130,12 @@ def provision_vastai_ollama(
     """
     manager = InstanceManager(sdk)
 
-    reusable = manager.find_reusable_running_instance(
-        min_dph=min_dph,
-        max_dph=max_dph,
-        reliability=reliability,
-    )
+    with span("vastai.instance.reuse_check"):
+        reusable = manager.find_reusable_running_instance(
+            min_dph=min_dph,
+            max_dph=max_dph,
+            reliability=reliability,
+        )
 
     template = None
     reused_existing_instance = False
@@ -157,19 +160,22 @@ def provision_vastai_ollama(
 
     if reusable is None:
         debug_log("Workflow provisioning new Vast.ai instance")
-        offer = OfferFinder(sdk).find_best(
-            min_dph=min_dph,
-            max_dph=max_dph,
-            reliability=reliability,
-        )
+        with span("vastai.offer_search", min_dph=min_dph, max_dph=max_dph, reliability=reliability):
+            offer = OfferFinder(sdk).find_best(
+                min_dph=min_dph,
+                max_dph=max_dph,
+                reliability=reliability,
+            )
         selected_model = ModelSelector().select(offer.total_vram_mb)
         template = TemplateLoader(sdk).load(template_hash)
 
         if not confirm_create():
             raise UserAbortedError("User aborted instance creation.")
 
-        contract_id = manager.create(offer.offer_id, selected_model, template)
-        instance_info = manager.wait_until_running(contract_id, on_poll=on_poll)
+        with span("vastai.instance.create", model=selected_model.name):
+            contract_id = manager.create(offer.offer_id, selected_model, template)
+        with span("vastai.instance.wait_running"):
+            instance_info = manager.wait_until_running(contract_id, on_poll=on_poll)
         total_vram_mb = offer.total_vram_mb
         offer_id = offer.offer_id
 
@@ -193,7 +199,8 @@ def provision_vastai_ollama(
 
         if api_model not in running:
             if api_model not in available:
-                manager.pull_model(contract_id, selected_model.name, ollama_url=ollama_url)
+                with span("vastai.model.pull", model=selected_model.name):
+                    manager.pull_model(contract_id, selected_model.name, ollama_url=ollama_url)
 
             warmup_existing_ollama_model(
                 ollama_url,
