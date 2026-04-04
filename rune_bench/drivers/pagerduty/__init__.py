@@ -25,11 +25,11 @@ class PagerDutyDriverClient:
 
     def __init__(
         self,
-        kubeconfig: Path,
+        kubeconfig: Path | None = None,
         *,
         transport: DriverTransport | None = None,
     ) -> None:
-        if not kubeconfig.exists():
+        if kubeconfig is not None and not kubeconfig.exists():
             raise FileNotFoundError(f"kubeconfig not found: {kubeconfig}")
         self._kubeconfig = kubeconfig
         self._transport: DriverTransport = transport or make_driver_transport("pagerduty")
