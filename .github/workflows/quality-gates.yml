@@ -406,7 +406,8 @@ jobs:
           # IEC 62443 4-1 ML4 DM-4 blocking policy:
           #   Block only when remediation exists (fixable vulnerabilities over threshold).
           #   Unfixable vulnerabilities are logged and require VEX/risk acceptance tracking.
-          THRESHOLD = 8.8
+          BLOCK_THRESHOLD = 7.0   # fixable HIGH+CRITICAL → hard block (IEC 62443 4-1 ML4 DM-4)
+          WARN_THRESHOLD  = 7.0   # unfixable HIGH+CRITICAL → VEX register required
 
           def safe_float(v):
               try: return float(v or 0)
@@ -435,8 +436,8 @@ jobs:
                           fixable = bool((v.get('FixedVersion') or '').strip())
                           findings.append((v.get('VulnerabilityID', 'UNKNOWN'), score, f.name, fixable))
 
-          blocked = [x for x in findings if x[1] > THRESHOLD and x[3]]
-          warned  = [x for x in findings if x[1] > THRESHOLD and not x[3]]
+          blocked = [x for x in findings if x[1] >= BLOCK_THRESHOLD and x[3]]
+          warned  = [x for x in findings if x[1] >= WARN_THRESHOLD and not x[3]]
 
           print(f'Total findings     : {len(findings)}')
           print(f'Blocked (policy)   : {len(blocked)}')
