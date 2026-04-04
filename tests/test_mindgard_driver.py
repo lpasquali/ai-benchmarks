@@ -252,3 +252,11 @@ def test_main_skips_empty_lines(monkeypatch: pytest.MonkeyPatch, capsys: pytest.
     mindgard_main.main()
 
     assert capsys.readouterr().out.strip() == ""
+
+
+def test_main_entrypoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify that calling main() as a script works (module-level coverage)."""
+    # We just want to make sure it doesn't crash and returns after EOF on stdin.
+    import io
+    monkeypatch.setattr("sys.stdin", io.StringIO(""))
+    mindgard_main.main()
