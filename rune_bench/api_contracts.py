@@ -29,6 +29,7 @@ class RunAgenticAgentRequest:
     ollama_warmup: bool
     ollama_warmup_timeout: int
     kubeconfig: str
+    agent: str = "holmes"
 
     @classmethod
     def from_cli(
@@ -40,6 +41,7 @@ class RunAgenticAgentRequest:
         ollama_warmup: bool,
         ollama_warmup_timeout: int,
         kubeconfig: Path,
+        agent: str = "holmes",
     ) -> "RunAgenticAgentRequest":
         return cls(
             question=question,
@@ -48,6 +50,7 @@ class RunAgenticAgentRequest:
             ollama_warmup=ollama_warmup,
             ollama_warmup_timeout=ollama_warmup_timeout,
             kubeconfig=str(kubeconfig),
+            agent=agent,
         )
 
     def to_dict(self) -> dict:
