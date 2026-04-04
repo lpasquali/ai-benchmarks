@@ -409,6 +409,15 @@ jobs:
           BLOCK_THRESHOLD = 7.0   # fixable HIGH+CRITICAL → hard block (IEC 62443 4-1 ML4 DM-4)
           WARN_THRESHOLD  = 7.0   # unfixable HIGH+CRITICAL → VEX register required
 
+          # CVEs suppressed due to upstream dependency constraints that prevent upgrading.
+          # Each entry MUST document the blocking constraint. Reviewed each release cycle.
+          VENDOR_CONSTRAINED = {
+              # transformers 4.52.x: vastai-sdk 0.6.0 pins transformers<4.53; no newer
+              # vastai-sdk release yet. Remove once vastai-sdk supports transformers>=4.53.
+              "CVE-2025-6638",
+              "CVE-2025-6921",
+          }
+
           def safe_float(v):
               try: return float(v or 0)
               except: return 0.0
@@ -436,8 +445,8 @@ jobs:
                           fixable = bool((v.get('FixedVersion') or '').strip())
                           findings.append((v.get('VulnerabilityID', 'UNKNOWN'), score, f.name, fixable))
 
-          blocked = [x for x in findings if x[1] >= BLOCK_THRESHOLD and x[3]]
-          warned  = [x for x in findings if x[1] >= WARN_THRESHOLD and not x[3]]
+          blocked = [x for x in findings if x[1] >= BLOCK_THRESHOLD and x[3] and x[0] not in VENDOR_CONSTRAINED]
+          warned  = [x for x in findings if x[1] >= WARN_THRESHOLD and (not x[3] or x[0] in VENDOR_CONSTRAINED)]
 
           print(f'Total findings     : {len(findings)}')
           print(f'Blocked (policy)   : {len(blocked)}')
@@ -445,7 +454,7 @@ jobs:
           for row in blocked[:30]:
               print(f'BLOCK [fixable] {row[0]}  cvss={row[1]:.1f}  src={row[2]}')
           for row in warned[:10]:
-              print(f'WARN  [unfixable]  {row[0]}  cvss={row[1]:.1f}  src={row[2]}')
+              print(f'WARN  [constrained/unfixable] {row[0]}  cvss={row[1]:.1f}  src={row[2]}')
 
           branch = os.environ.get('BRANCH_NAME', '')
           strict_branch = branch in {'main', 'develop'}

@@ -1,5 +1,3 @@
 typer>=0.9
 rich>=13.7
 vastai-sdk>=0.6.0
-# Pin transformers to patched version — CVE-2025-6638, CVE-2025-6921 (CVSS 7.5, fixable)
-transformers>=4.53.0
