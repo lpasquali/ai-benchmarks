@@ -47,7 +47,7 @@ def _handle_ask(params: dict) -> dict:
 
     # Configure Ollama via LiteLLM environment variables
     if ollama_url:
-        os.environ["OPENAI_API_BASE"] = f"{ollama_url}/v1"
+        os.environ["OPENAI_API_BASE"] = f"{ollama_url.rstrip('/')}/v1"
 
     agent = Agent(
         role="Analyst",
