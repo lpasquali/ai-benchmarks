@@ -17,23 +17,23 @@
     {
       "vulnerability": { "name": "CVE-2026-25679" },
       "products": [{ "@id": "pkg:golang/k8s.io/kubectl" }],
-      "status": "not_affected",
-      "justification": "component_not_present",
-      "impact_statement": "kubectl v1.35 compiled with vulnerable Go net/url; no patched stable release yet. Tracked for remediation on next kubectl stable release."
+      "status": "affected",
+      "impact_statement": "kubectl v1.35 is present and compiled with vulnerable Go net/url.",
+      "action_statement": "kubectl v1.35 is compiled with vulnerable Go net/url; no patched stable release is available yet. Track and upgrade to the next patched kubectl stable release when available."
     },
     {
       "vulnerability": { "name": "CVE-2025-6638" },
       "products": [{ "@id": "pkg:pypi/transformers" }],
-      "status": "not_affected",
-      "justification": "vulnerable_code_cannot_be_controlled_by_adversary",
-      "impact_statement": "vastai-sdk pins transformers<4.53; upgrade blocked by upstream dependency constraint."
+      "status": "affected",
+      "impact_statement": "vastai-sdk pins transformers<4.53; upgrade blocked by upstream dependency constraint.",
+      "action_statement": "Track upstream vastai-sdk for a release that relaxes the transformers<4.53 constraint, then upgrade transformers to a fixed version and update this VEX statement."
     },
     {
       "vulnerability": { "name": "CVE-2025-6921" },
       "products": [{ "@id": "pkg:pypi/transformers" }],
-      "status": "not_affected",
-      "justification": "vulnerable_code_cannot_be_controlled_by_adversary",
-      "impact_statement": "vastai-sdk pins transformers<4.53; same upstream constraint as CVE-2025-6638."
+      "status": "affected",
+      "impact_statement": "vastai-sdk pins transformers<4.53; same upstream constraint as CVE-2025-6638.",
+      "action_statement": "Track upstream vastai-sdk for a release that relaxes the transformers<4.53 constraint, then upgrade transformers to a fixed version and update this VEX statement."
     }
   ]
 }
