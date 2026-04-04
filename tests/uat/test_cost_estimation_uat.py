@@ -143,8 +143,8 @@ def test_uat_vastai_estimate_uses_midpoint_rate() -> None:
     req = _req(vastai=True, min_dph=1.0, max_dph=2.0, estimated_duration_seconds=900)
     result = _run(estimator.estimate(req))
 
-    # 15 minutes at midpoint $1.50/hr = $0.375
-    expected = (1.0 + 2.0) / 2 * (900 / 3600)
+    # 15 minutes at midpoint $1.50/hr = $0.375 → rounded to $0.38
+    expected = round((1.0 + 2.0) / 2 * (900 / 3600), 2)
     assert result.projected_cost_usd == pytest.approx(expected, rel=0.01)
 
 
