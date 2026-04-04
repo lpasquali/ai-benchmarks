@@ -28,9 +28,9 @@ class XbowDriverClient:
         api_key = os.getenv("RUNE_XBOW_API_KEY")
         if not api_key:
             raise RuntimeError(
-                f"XBOW requires an enterprise contract or API access. "
+                "XBOW requires an enterprise contract or API access. "
                 f"Visit {self.ONBOARDING_URL} to get started. "
-                f"Once provisioned, set RUNE_XBOW_API_KEY."
+                "Once provisioned, set RUNE_XBOW_API_KEY."
             )
         result = self._transport.call("ask", {
             "question": question,
