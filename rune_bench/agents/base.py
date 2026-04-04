@@ -27,6 +27,6 @@ class AgentRunner(Protocol):
     The ``ask()`` method returns a plain string for backward compatibility.
     """
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None, **kwargs) -> str:
+    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
         """Run an investigation query and return the answer as a string."""
         ...
