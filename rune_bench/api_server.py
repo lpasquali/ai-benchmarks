@@ -12,6 +12,7 @@ from typing import Callable, TypeAlias
 from urllib.parse import parse_qs, urlparse
 
 from rune_bench.api_backend import (
+    get_cost_estimate,
     list_ollama_models,
     list_vastai_models,
     run_agentic_agent,
@@ -19,6 +20,7 @@ from rune_bench.api_backend import (
     run_ollama_instance,
 )
 from rune_bench.api_contracts import (
+    CostEstimationRequest,
     RunAgenticAgentRequest,
     RunBenchmarkRequest,
     RunOllamaInstanceRequest,
@@ -26,7 +28,9 @@ from rune_bench.api_contracts import (
 from rune_bench.job_store import JobRecord, JobStore
 from rune_bench.metrics import SQLiteMetricsCollector, clear_collector, set_collector, set_job_id, span
 
-BackendRequest: TypeAlias = RunAgenticAgentRequest | RunBenchmarkRequest | RunOllamaInstanceRequest
+BackendRequest: TypeAlias = (
+    RunAgenticAgentRequest | RunBenchmarkRequest | RunOllamaInstanceRequest | CostEstimationRequest
+)
 BackendHandler: TypeAlias = Callable[[BackendRequest], dict]
 
 
@@ -46,6 +50,12 @@ def _run_ollama_instance_backend(request: BackendRequest) -> dict:
     if not isinstance(request, RunOllamaInstanceRequest):
         raise RuntimeError("invalid request type for ollama-instance backend")
     return run_ollama_instance(request)
+
+
+def _get_cost_estimate_backend(request: BackendRequest) -> dict:
+    if not isinstance(request, CostEstimationRequest):
+        raise RuntimeError("invalid request type for cost-estimate backend")
+    return get_cost_estimate(request)
 
 
 @dataclass(frozen=True)
@@ -87,6 +97,7 @@ class RuneApiApplication:
             "agentic-agent": _run_agentic_backend,
             "benchmark": _run_benchmark_backend,
             "ollama-instance": _run_ollama_instance_backend,
+            "cost-estimate": _get_cost_estimate_backend,
         }
         self.store.mark_incomplete_jobs_failed()
 
@@ -209,6 +220,14 @@ class RuneApiApplication:
                     payload = self._read_json()
                 except ValueError as exc:
                     self._write_json(400, {"error": str(exc)})
+                    return
+
+                if path == "/v1/estimates":
+                    try:
+                        result = app._dispatch("cost-estimate", payload)
+                        self._write_json(200, result)
+                    except Exception as exc:
+                        self._write_json(400, {"error": str(exc)})
                     return
 
                 endpoint_to_kind = {

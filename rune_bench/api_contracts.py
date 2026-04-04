@@ -103,3 +103,41 @@ class RunBenchmarkRequest:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class CostEstimationRequest:
+    # Cloud parameters
+    vastai: bool = False
+    aws: bool = False
+    gcp: bool = False
+    azure: bool = False
+    min_dph: float = 0.0
+    max_dph: float = 0.0
+    
+    # Local hardware parameters
+    local_hardware: bool = False
+    local_tdp_watts: float = 0.0
+    local_energy_rate_kwh: float = 0.0
+    local_hardware_purchase_price: float = 0.0
+    local_hardware_lifespan_years: float = 0.0
+    
+    # Run parameters
+    model: str = ""
+    estimated_duration_seconds: int = 3600
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class CostEstimationResponse:
+    projected_cost_usd: float
+    cost_driver: str  # vastai, aws, gcp, azure, local
+    resource_impact: str  # low, medium, high
+    local_energy_kwh: float = 0.0
+    confidence_score: float = 1.0
+    warning: str | None = None
+
+    def to_dict(self) -> dict:
+        return asdict(self)
