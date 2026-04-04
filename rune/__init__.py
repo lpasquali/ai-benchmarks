@@ -75,6 +75,15 @@ console = Console()
 load_config(peek_profile_from_argv())
 
 DEFAULT_VASTAI_TEMPLATE = "c166c11f035d3a97871a23bd32ca6aba"
+
+def _parse_spend_threshold() -> float:
+    try:
+        return float(os.environ.get("RUNE_SPEND_WARNING_THRESHOLD", str(_DEFAULT_SPEND_THRESHOLD)))
+    except (ValueError, TypeError):
+        return _DEFAULT_SPEND_THRESHOLD
+
+SPEND_WARNING_THRESHOLD: float = _parse_spend_threshold()
+
 BACKEND_MODE = os.environ.get("RUNE_BACKEND", "local").strip().lower() or "local"
 API_BASE_URL = os.environ.get("RUNE_API_BASE_URL", "http://localhost:8080").strip() or "http://localhost:8080"
 API_TOKEN = os.environ.get("RUNE_API_TOKEN", "").strip() or None
@@ -340,11 +349,14 @@ def _run_preflight_cost_check(
         raise typer.Exit(1)
     except RuntimeError as exc:
         if yes:
-            console.print(f"[yellow]Cost estimation unavailable:[/yellow] {exc}")
+            console.print(
+                f"[yellow]Cost estimation unavailable:[/yellow] {exc}\n"
+                "[yellow]Proceeding because --yes was provided despite unavailable cost estimation.[/yellow]"
+            )
             return
         console.print(
-            f"[red]Cost estimation failed:[/red] {exc}\n"
-            "Pass --yes / -y to skip cost check and proceed."
+            f"[red]Unable to estimate projected Vast.ai spend:[/red] {exc}\n"
+            "Pass --yes / -y to proceed despite unavailable cost estimation."
         )
         raise typer.Exit(1)
 
@@ -369,11 +381,7 @@ def _run_preflight_cost_check(
         border_style="yellow",
     ))
 
-    try:
-        threshold = float(os.environ.get("RUNE_SPEND_WARNING_THRESHOLD", str(_DEFAULT_SPEND_THRESHOLD)))
-    except (ValueError, TypeError):
-        console.print("[yellow]Warning: Invalid RUNE_SPEND_WARNING_THRESHOLD value; using default $5.00.[/yellow]")
-        threshold = _DEFAULT_SPEND_THRESHOLD
+    threshold = SPEND_WARNING_THRESHOLD
 
     action = evaluate_spend_gate(projected_cost, threshold=threshold, yes=yes)
 
