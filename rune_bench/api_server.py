@@ -287,6 +287,8 @@ class RuneApiApplication:
             request = RunBenchmarkRequest(**payload)
         elif kind == "ollama-instance":
             request = RunOllamaInstanceRequest(**payload)
+        elif kind == "cost-estimate":
+            request = CostEstimationRequest(**payload)
         else:
             raise RuntimeError(f"unsupported job kind: {kind}")
 
