@@ -1,0 +1,38 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "urn:github:lpasquali:rune:.vex:permanent.openvex.json",
+  "author": "lpasquali",
+  "role": "Project Maintainer",
+  "timestamp": "2026-04-04T00:00:00Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": { "name": "CVE-2005-2541" },
+      "products": [{ "@id": "pkg:deb/debian/tar" }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_cannot_be_controlled_by_adversary",
+      "impact_statement": "Debian: intended behaviour, will not fix in any release."
+    },
+    {
+      "vulnerability": { "name": "CVE-2026-25679" },
+      "products": [{ "@id": "pkg:golang/k8s.io/kubectl" }],
+      "status": "affected",
+      "impact_statement": "kubectl v1.35 is present and compiled with vulnerable Go net/url.",
+      "action_statement": "kubectl v1.35 is compiled with vulnerable Go net/url; no patched stable release is available  yet. Track and upgrade to the next patched kubectl stable release when available."
+    },
+    {
+      "vulnerability": { "name": "CVE-2025-6638" },
+      "products": [{ "@id": "pkg:pypi/transformers" }],
+      "status": "affected",
+      "impact_statement": "vastai-sdk pins transformers<4.53; upgrade blocked by upstream dependency constraint.",
+      "action_statement": "Track upstream vastai-sdk for a release that relaxes the transformers<4.53 constraint, then upgrade transformers to a fixed version and update this VEX statement."
+    },
+    {
+      "vulnerability": { "name": "CVE-2025-6921" },
+      "products": [{ "@id": "pkg:pypi/transformers" }],
+      "status": "affected",
+      "impact_statement": "vastai-sdk pins transformers<4.53; same upstream constraint as CVE-2025-6638.",
+      "action_statement": "Track upstream vastai-sdk for a release that relaxes the transformers<4.53 constraint, then upgrade transformers to a fixed version and update this VEX statement."
+    }
+  ]
+}

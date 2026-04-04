@@ -396,8 +396,8 @@ jobs:
       - name: Scan SBOMs — Grype + Trivy (IEC 62443 4-1 ML4 SVV-3 / DM-4)
         run: |
           set -euo pipefail
-          docker run --rm -v "${PWD}:/work" anchore/grype:v0.82.0 -c /work/.grype.yaml sbom:/work/sbom/rune-image.cdx.json -o json > sbom/rune-grype.json
-          docker run --rm -v "${PWD}:/work" aquasec/trivy:0.65.0 sbom /work/sbom/rune-image.cdx.json --format json --output /work/sbom/rune-trivy.json --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          docker run --rm -v "${PWD}:/work" anchore/grype:v0.82.0 -c /work/.grype.yaml sbom:/work/sbom/rune-image.cdx.json --vex /work/.vex/permanent.openvex.json -o json > sbom/rune-grype.json
+          docker run --rm -v "${PWD}:/work" aquasec/trivy:0.65.0 sbom /work/sbom/rune-image.cdx.json --vex /work/.vex/permanent.openvex.json --format json --output /work/sbom/rune-trivy.json --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
       - name: Enforce CVE policy — IEC 62443 4-1 ML4 DM-4
         env:
           BRANCH_NAME: ${{ github.event_name == 'pull_request' && github.base_ref || github.ref_name }}
@@ -413,18 +413,19 @@ jobs:
           BLOCK_THRESHOLD = 7.0   # fixable HIGH+CRITICAL → hard block (IEC 62443 4-1 ML4 DM-4)
           WARN_THRESHOLD  = 7.0   # unfixable HIGH+CRITICAL → VEX register required
 
-          # CVEs suppressed due to upstream dependency constraints that prevent upgrading.
-          # Each entry MUST document the blocking constraint. Reviewed each release cycle.
-          VENDOR_CONSTRAINED = {
-              # transformers 4.52.x: vastai-sdk 0.6.0 pins transformers<4.53; no newer
-              # vastai-sdk release yet. Remove once vastai-sdk supports transformers>=4.53.
-              "CVE-2025-6638",
-              "CVE-2025-6921",
-              # kubectl binary: Trivy reports FixedVersion but kubectl v1.35.3 is the current
-              # stable release. No patched stable kubectl available yet. Remove once
-              # kubectl stable channel ships a release with a Go toolchain that fixes this CVE.
-              "CVE-2026-25679",
-          }
+          # CVEs documented in .vex/permanent.openvex.json are authoritative.
+          # Both "not_affected" (suppressed by --vex) and "affected" (risk-accepted)
+          # entries are treated as constrained: already reviewed, not blocking merge.
+          # Add new entries to the VEX file rather than hard-coding IDs here.
+          vex_path = Path('.vex/permanent.openvex.json')
+          VENDOR_CONSTRAINED = set()
+          if vex_path.exists():
+              import json as _json
+              vex_doc = _json.loads(vex_path.read_text(encoding='utf-8'))
+              for _stmt in vex_doc.get('statements', []):
+                  _vuln_name = (_stmt.get('vulnerability') or {}).get('name', '')
+                  if _vuln_name and _stmt.get('status') in {'affected', 'not_affected'}:
+                      VENDOR_CONSTRAINED.add(_vuln_name)
 
           def safe_float(v):
               try: return float(v or 0)
