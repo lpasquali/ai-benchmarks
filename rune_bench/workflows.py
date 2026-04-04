@@ -259,6 +259,46 @@ def stop_vastai_instance(sdk: VastAI, contract_id: int | str) -> TeardownResult:
     """Destroy Vast.ai instance + related storage and verify cleanup."""
     return InstanceManager(sdk).destroy_instance_and_related_storage(contract_id)
 
+
+def run_preflight_cost_check(
+    *,
+    vastai: bool,
+    max_dph: float,
+    min_dph: float,
+    estimated_duration_seconds: int = 3600,
+    backend_mode: str = "local",
+    http_client=None,
+) -> dict:
+    """Estimate projected spend for a Vast.ai job.
+
+    Returns the cost estimate dict (empty dict when vastai is False).
+    Raises FailClosedError when no cost driver is configured.
+    Raises RuntimeError when estimation is unavailable.
+    """
+    import asyncio
+
+    if not vastai:
+        return {}
+
+    from rune_bench.api_contracts import CostEstimationRequest
+    from rune_bench.common.costs import CostEstimator, FailClosedError  # noqa: F401 (re-raised by caller)
+
+    cost_req = CostEstimationRequest(
+        vastai=vastai,
+        max_dph=max_dph,
+        min_dph=min_dph,
+        estimated_duration_seconds=estimated_duration_seconds,
+    )
+
+    if backend_mode == "http":
+        if http_client is None:
+            raise RuntimeError("http_client is required when backend_mode='http'")
+        return http_client.get_cost_estimate(cost_req.to_dict())
+
+    estimator = CostEstimator()
+    response = asyncio.run(estimator.estimate(cost_req))
+    return response.to_dict()
+
 def _extract_ollama_service_url(details: ConnectionDetails) -> str | None:
     for svc in details.service_urls:
         direct = str(svc.get("direct", ""))

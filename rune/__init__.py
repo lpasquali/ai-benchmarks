@@ -52,6 +52,7 @@ from rune_bench.workflows import (
     list_existing_ollama_models,
     list_running_ollama_models,
     provision_vastai_ollama,
+    run_preflight_cost_check,
     stop_vastai_instance,
     warmup_existing_ollama_model,
     use_existing_ollama_server,
@@ -324,32 +325,33 @@ def _run_preflight_cost_check(
 ) -> None:
     """Estimate projected spend and display a Rich warning panel before execution.
 
-    Raises typer.Exit(1) on FailClosedError or if the user declines to proceed.
-    Raises typer.Exit(0) if the user aborts an interactive prompt.
+    Raises typer.Exit(1) on FailClosedError, estimation failure without --yes,
+    or if the user declines to proceed.
     Does nothing when no cloud cost driver is active (local/existing Ollama server).
     """
-    if not vastai:
-        return
-
-    cost_req = CostEstimationRequest(
-        vastai=vastai,
-        max_dph=max_dph,
-        min_dph=min_dph,
-        estimated_duration_seconds=estimated_duration_seconds,
-    )
-
     try:
-        if BACKEND_MODE == "http":
-            result = _http_client().get_cost_estimate(cost_req.to_dict())
-        else:
-            estimator = CostEstimator()
-            response = asyncio.run(estimator.estimate(cost_req))
-            result = response.to_dict()
+        result = run_preflight_cost_check(
+            vastai=vastai,
+            max_dph=max_dph,
+            min_dph=min_dph,
+            estimated_duration_seconds=estimated_duration_seconds,
+            backend_mode=BACKEND_MODE,
+            http_client=_http_client() if BACKEND_MODE == "http" else None,
+        )
     except FailClosedError as exc:
         console.print(f"[red]Cost estimation error:[/red] {exc}")
         raise typer.Exit(1)
     except RuntimeError as exc:
-        console.print(f"[yellow]Cost estimation unavailable:[/yellow] {exc}")
+        if yes:
+            console.print(f"[yellow]Cost estimation unavailable:[/yellow] {exc}")
+            return
+        console.print(
+            f"[red]Cost estimation failed:[/red] {exc}\n"
+            "Pass --yes / -y to skip cost check and proceed."
+        )
+        raise typer.Exit(1)
+
+    if not result:
         return
 
     projected_cost: float = float(result.get("projected_cost_usd", 0.0))
