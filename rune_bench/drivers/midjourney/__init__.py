@@ -32,9 +32,9 @@ class MidjourneyDriverClient:
         api_key = os.getenv("RUNE_MIDJOURNEY_API_KEY")
         if not api_key:
             raise RuntimeError(
-                f"Midjourney requires an enterprise contract or API access. "
+                "Midjourney requires an enterprise contract or API access. "
                 f"Visit {self.ONBOARDING_URL} to get started. "
-                f"Once provisioned, set RUNE_MIDJOURNEY_API_KEY."
+                "Once provisioned, set RUNE_MIDJOURNEY_API_KEY."
             )
         result = self._transport.call("ask", {
             "question": question,

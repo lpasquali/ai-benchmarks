@@ -29,9 +29,9 @@ class RadiantDriverClient:
         api_key = os.getenv("RUNE_RADIANT_API_KEY")
         if not api_key:
             raise RuntimeError(
-                f"Radiant Security requires an enterprise contract or API access. "
+                "Radiant Security requires an enterprise contract or API access. "
                 f"Visit {self.ONBOARDING_URL} to get started. "
-                f"Once provisioned, set RUNE_RADIANT_API_KEY."
+                "Once provisioned, set RUNE_RADIANT_API_KEY."
             )
         result = self._transport.call("ask", {
             "question": question,

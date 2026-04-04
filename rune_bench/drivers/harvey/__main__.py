@@ -2,7 +2,8 @@
 
 Wire protocol (v1):
     stdin:  {"action": "ACTION", "params": {...}, "id": "UUID"}
-    stdout: {"status": "ok"|"error", "result": {...}, "id": "UUID"}
+    stdout success: {"status": "ok", "result": {...}, "id": "UUID"}
+    stdout error:   {"status": "error", "error": "MESSAGE", "id": "UUID"}
 
 Supported actions:
     ask — params: question (str), model (str, optional), ollama_url (str, optional)
