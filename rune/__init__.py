@@ -41,8 +41,11 @@ from rune_bench.metrics import InMemoryCollector, set_collector, clear_collector
 from rune_bench.backends.ollama import OllamaClient, OllamaModelCapabilities, OllamaModelManager
 from rune_bench.workflows import (
     ExistingOllamaServer,
+    SpendGateAction,
     UserAbortedError,
     VastAIProvisioningResult,
+    _DEFAULT_SPEND_THRESHOLD,
+    evaluate_spend_gate,
     list_existing_ollama_models,
     list_running_ollama_models,
     provision_vastai_ollama,
@@ -367,16 +370,17 @@ def _run_preflight_cost_check(
     ))
 
     try:
-        threshold = float(os.environ.get("RUNE_SPEND_WARNING_THRESHOLD", "5.00"))
+        threshold = float(os.environ.get("RUNE_SPEND_WARNING_THRESHOLD", str(_DEFAULT_SPEND_THRESHOLD)))
     except (ValueError, TypeError):
         console.print("[yellow]Warning: Invalid RUNE_SPEND_WARNING_THRESHOLD value; using default $5.00.[/yellow]")
-        threshold = 5.0
+        threshold = _DEFAULT_SPEND_THRESHOLD
 
-    if projected_cost <= threshold or yes:
+    action = evaluate_spend_gate(projected_cost, threshold=threshold, yes=yes)
+
+    if action is SpendGateAction.ALLOW:
         return
 
-    is_ci = os.environ.get("CI", "").strip().lower() in {"1", "true", "yes"}
-    if is_ci:
+    if action is SpendGateAction.BLOCK:
         console.print(
             f"[red]Spend threshold exceeded (${projected_cost:.2f} > ${threshold:.2f}). "
             "Pass --yes / -y to proceed in CI.[/red]"
