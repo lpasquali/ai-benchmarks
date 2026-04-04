@@ -7,6 +7,7 @@ This file only handles CLI argument parsing, Rich output, and orchestration.
 """
 
 from pathlib import Path
+import asyncio
 import os
 import socket
 from typing import Callable
@@ -24,17 +25,20 @@ except ImportError:
 
 from rune_bench.api_client import RuneApiClient
 from rune_bench.api_contracts import (
+    CostEstimationRequest,
     RunAgenticAgentRequest,
     RunBenchmarkRequest,
     RunOllamaInstanceRequest,
 )
 from rune_bench.common import (
     INIT_TEMPLATE,
+    FailClosedError,
     ModelSelector,
     get_loaded_config_files,
     load_config,
     peek_profile_from_argv,
 )
+from rune_bench.common.costs import CostEstimator
 from rune_bench.debug import set_debug
 from rune_bench.metrics import InMemoryCollector, set_collector, clear_collector
 from rune_bench.backends.ollama import OllamaClient, OllamaModelCapabilities, OllamaModelManager
@@ -75,6 +79,7 @@ API_BASE_URL = os.environ.get("RUNE_API_BASE_URL", "http://localhost:8080").stri
 API_TOKEN = os.environ.get("RUNE_API_TOKEN", "").strip() or None
 API_TENANT = os.environ.get("RUNE_API_TENANT", "default").strip() or "default"
 VERIFY_SSL = os.environ.get("RUNE_INSECURE", "").strip().lower() not in {"1", "true", "yes", "on"}
+SPEND_WARNING_THRESHOLD = float(os.environ.get("RUNE_SPEND_WARNING_THRESHOLD", "5.00"))
 
 # Active profile (sourced from --profile argv peek or RUNE_PROFILE env var).
 _ACTIVE_PROFILE: str | None = peek_profile_from_argv()
@@ -307,6 +312,80 @@ def _http_client() -> RuneApiClient:
     return RuneApiClient(API_BASE_URL, api_token=API_TOKEN, tenant_id=API_TENANT, verify_ssl=VERIFY_SSL)
 
 
+def _run_preflight_cost_check(
+    *,
+    vastai: bool,
+    max_dph: float,
+    min_dph: float,
+    yes: bool,
+    estimated_duration_seconds: int = 3600,
+) -> None:
+    """Estimate projected spend and display a Rich warning panel before execution.
+
+    Raises typer.Exit(1) on FailClosedError or if the user declines to proceed.
+    Raises typer.Exit(0) if the user aborts an interactive prompt.
+    Does nothing when no cloud cost driver is active (local/existing Ollama server).
+    """
+    if not vastai:
+        return
+
+    cost_req = CostEstimationRequest(
+        vastai=vastai,
+        max_dph=max_dph,
+        min_dph=min_dph,
+        estimated_duration_seconds=estimated_duration_seconds,
+    )
+
+    try:
+        if BACKEND_MODE == "http":
+            result = _http_client().get_cost_estimate(cost_req.to_dict())
+        else:
+            estimator = CostEstimator()
+            response = asyncio.run(estimator.estimate(cost_req))
+            result = response.to_dict()
+    except FailClosedError as exc:
+        console.print(f"[red]Cost estimation error:[/red] {exc}")
+        raise typer.Exit(1)
+    except RuntimeError as exc:
+        console.print(f"[yellow]Cost estimation unavailable:[/yellow] {exc}")
+        return
+
+    projected_cost: float = float(result.get("projected_cost_usd", 0.0))
+    driver: str = str(result.get("cost_driver", "unknown"))
+    impact: str = str(result.get("resource_impact", "low"))
+    warning: str | None = result.get("warning")  # type: ignore[assignment]
+
+    panel_lines = [
+        f"Projected cost: [bold]${projected_cost:.2f}[/bold] (driver: {driver})",
+        f"Resource impact: {impact}",
+    ]
+    if warning:
+        panel_lines.append(f"Warning: {warning}")
+
+    console.print(Panel(
+        "\n".join(panel_lines),
+        title="[bold yellow]Spend Warning[/bold yellow]",
+        border_style="yellow",
+    ))
+
+    threshold = float(os.environ.get("RUNE_SPEND_WARNING_THRESHOLD", str(SPEND_WARNING_THRESHOLD)))
+    if projected_cost <= threshold or yes:
+        return
+
+    is_ci = os.environ.get("CI", "").strip().lower() in {"1", "true", "yes"}
+    if is_ci:
+        console.print(
+            f"[red]Spend threshold exceeded (${projected_cost:.2f} > ${threshold:.2f}). "
+            "Pass --yes / -y to proceed in CI.[/red]"
+        )
+        raise typer.Exit(1)
+
+    ack = console.input("\n[bold magenta]Proceed with benchmark? [y/N]: [/bold magenta]").strip().lower()
+    if ack not in {"y", "yes"}:
+        console.print("Aborted.")
+        raise typer.Exit(0)
+
+
 def _run_http_job_with_progress(
     *,
     submit_description: str,
@@ -484,6 +563,13 @@ def run_ollama_instance(
         envvar="RUNE_IDEMPOTENCY_KEY",
         help="Optional idempotency key when using the HTTP backend",
     ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        envvar="RUNE_YES",
+        help="Skip interactive spend confirmation (auto-approve)",
+    ),
 ) -> None:
     """Provision an Ollama instance on Vast.ai, or use an existing server."""
     _enable_debug_if_requested(debug)
@@ -496,6 +582,13 @@ def run_ollama_instance(
         ollama_url=ollama_url,
     )
     console.print(Panel.fit("[bold blue]RUNE — Reliability Use-case Numeric Evaluator[/bold blue]"))
+
+    _run_preflight_cost_check(
+        vastai=vastai,
+        max_dph=max_dph,
+        min_dph=min_dph,
+        yes=yes,
+    )
 
     if BACKEND_MODE == "http":
         try:
@@ -813,6 +906,13 @@ def run_benchmark(
         envvar="RUNE_IDEMPOTENCY_KEY",
         help="Optional idempotency key when using the HTTP backend",
     ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        envvar="RUNE_YES",
+        help="Skip interactive spend confirmation (auto-approve)",
+    ),
 ) -> None:
     """Run full benchmark: provision Ollama instance, then run agentic agent."""
     _enable_debug_if_requested(debug)
@@ -831,6 +931,13 @@ def run_benchmark(
         vastai_stop_instance=vastai_stop_instance,
     )
     console.print(Panel.fit("[bold blue]RUNE — Full Benchmark Workflow[/bold blue]"))
+
+    _run_preflight_cost_check(
+        vastai=vastai,
+        max_dph=max_dph,
+        min_dph=min_dph,
+        yes=yes,
+    )
 
     if BACKEND_MODE == "http":
         try:
