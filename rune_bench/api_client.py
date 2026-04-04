@@ -67,6 +67,12 @@ class RuneApiClient:
             raise RuntimeError("API payload missing 'running_models' list for Ollama models endpoint")
         return payload
 
+    def get_cost_estimate(self, request_payload: dict) -> dict:
+        payload = self._request("POST", "/v1/estimates", body=request_payload)
+        if "projected_cost_usd" not in payload:
+            raise RuntimeError("API payload missing 'projected_cost_usd' for cost estimate")
+        return payload
+
     def submit_agentic_agent_job(self, request_payload: dict, *, idempotency_key: str | None = None) -> str:
         payload = self._request(
             "POST",
