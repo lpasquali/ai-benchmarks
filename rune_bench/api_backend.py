@@ -136,7 +136,7 @@ def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
         )
     agent_name = getattr(request, "agent", "holmes")
     if agent_name != "holmes":
-        # Non-default agent: resolve via registry directly.
+        # Non-default agent: pass kubeconfig; get_agent() filters based on required_config
         agent_kwargs: dict[str, Any] = {"kubeconfig": Path(request.kubeconfig)}
         runner = get_agent(agent_name, **agent_kwargs)
     else:
