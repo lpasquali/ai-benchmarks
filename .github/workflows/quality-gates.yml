@@ -335,7 +335,7 @@ jobs:
           push: false
           tags: rune:rune-ci-local
           cache-from: type=registry,ref=ghcr.io/lpasquali/rune:buildcache
-          cache-to: type=registry,ref=ghcr.io/lpasquali/rune:buildcache,mode=max
+          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/lpasquali/rune:buildcache,mode=max' || '' }}
       - run: |
           set -euo pipefail
           docker run -d --name rune-smoke -e RUNE_API_AUTH_DISABLED=1 -p 18080:8080 rune:rune-ci-local
@@ -387,7 +387,7 @@ jobs:
           load: true
           tags: rune:rune-ci-local
           cache-from: type=registry,ref=ghcr.io/lpasquali/rune:buildcache
-          cache-to: type=registry,ref=ghcr.io/lpasquali/rune:buildcache,mode=max
+          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/lpasquali/rune:buildcache,mode=max' || '' }}
       - name: Generate SBOMs — CycloneDX via Syft (IEC 62443 4-1 ML4 SM-9)
         run: |
           set -euo pipefail
@@ -684,7 +684,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.image_name }}:${{ steps.meta.outputs.image_tag }}
           cache-from: type=registry,ref=ghcr.io/lpasquali/rune:buildcache
-          cache-to: type=registry,ref=ghcr.io/lpasquali/rune:buildcache,mode=max
+          cache-to: ${{ github.event_name == 'push' && 'type=registry,ref=ghcr.io/lpasquali/rune:buildcache,mode=max' || '' }}
       - name: Notify rune-charts to sync image tag
         env:
           CROSS_REPO_TOKEN: ${{ secrets.RUNE_CHARTS_BOT_TOKEN }}
