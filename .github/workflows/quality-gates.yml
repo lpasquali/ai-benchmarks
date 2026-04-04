@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ─── Path-change detection ──────────────────────────────────────────────────
   # Skips expensive jobs when irrelevant files change (e.g. README-only edits).
@@ -58,7 +62,7 @@ jobs:
 
   coverage-python:
     name: RuneGate/Coverage/Python
-    needs: [changes]
+    needs: [changes, security-secrets]
     if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -142,7 +146,7 @@ jobs:
 
   linting-python:
     name: RuneGate/Linting/Python
-    needs: [changes]
+    needs: [changes, security-secrets]
     if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -290,7 +294,7 @@ jobs:
 
   smoke-cli-api:
     name: RuneGate/CLI-and-API-Smoke/Python+Containers
-    needs: [changes]
+    needs: [changes, security-secrets]
     if: needs.changes.outputs.docker == 'true'
     runs-on: ubuntu-latest
     steps:
