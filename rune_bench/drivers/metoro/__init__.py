@@ -37,8 +37,8 @@ class MetoroDriverClient:
 
         Args:
             question: Natural-language question about the Kubernetes cluster.
-            model: Model identifier (passed through but not used by Metoro API).
-            ollama_url: Ollama server URL (unused, kept for interface compatibility).
+            model: Model identifier (not forwarded to Metoro API; kept for interface compatibility).
+            ollama_url: Ollama server URL (not forwarded; kept for interface compatibility).
 
         Returns:
             Metoro's textual explanation.
@@ -65,3 +65,6 @@ class MetoroDriverClient:
             raise RuntimeError("Metoro driver returned an empty answer.")
 
         return answer_text
+
+
+MetoroRunner = MetoroDriverClient

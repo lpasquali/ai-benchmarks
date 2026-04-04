@@ -57,3 +57,6 @@ class GleanDriverClient:
             raise RuntimeError("Glean driver returned an empty answer.")
 
         return answer_text
+
+
+GleanRunner = GleanDriverClient
