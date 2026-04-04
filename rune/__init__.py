@@ -7,7 +7,6 @@ This file only handles CLI argument parsing, Rich output, and orchestration.
 """
 
 from pathlib import Path
-import asyncio
 import os
 import socket
 from typing import Callable
@@ -25,7 +24,6 @@ except ImportError:
 
 from rune_bench.api_client import RuneApiClient
 from rune_bench.api_contracts import (
-    CostEstimationRequest,
     RunAgenticAgentRequest,
     RunBenchmarkRequest,
     RunOllamaInstanceRequest,
@@ -38,7 +36,6 @@ from rune_bench.common import (
     load_config,
     peek_profile_from_argv,
 )
-from rune_bench.common.costs import CostEstimator
 from rune_bench.debug import set_debug
 from rune_bench.metrics import InMemoryCollector, set_collector, clear_collector
 from rune_bench.backends.ollama import OllamaClient, OllamaModelCapabilities, OllamaModelManager
@@ -49,6 +46,7 @@ from rune_bench.workflows import (
     list_existing_ollama_models,
     list_running_ollama_models,
     provision_vastai_ollama,
+    run_preflight_cost_check,
     stop_vastai_instance,
     warmup_existing_ollama_model,
     use_existing_ollama_server,
@@ -79,7 +77,6 @@ API_BASE_URL = os.environ.get("RUNE_API_BASE_URL", "http://localhost:8080").stri
 API_TOKEN = os.environ.get("RUNE_API_TOKEN", "").strip() or None
 API_TENANT = os.environ.get("RUNE_API_TENANT", "default").strip() or "default"
 VERIFY_SSL = os.environ.get("RUNE_INSECURE", "").strip().lower() not in {"1", "true", "yes", "on"}
-SPEND_WARNING_THRESHOLD = float(os.environ.get("RUNE_SPEND_WARNING_THRESHOLD", "5.00"))
 
 # Active profile (sourced from --profile argv peek or RUNE_PROFILE env var).
 _ACTIVE_PROFILE: str | None = peek_profile_from_argv()
@@ -322,32 +319,33 @@ def _run_preflight_cost_check(
 ) -> None:
     """Estimate projected spend and display a Rich warning panel before execution.
 
-    Raises typer.Exit(1) on FailClosedError or if the user declines to proceed.
-    Raises typer.Exit(0) if the user aborts an interactive prompt.
+    Raises typer.Exit(1) on FailClosedError, estimation failure without --yes,
+    or if the user declines to proceed.
     Does nothing when no cloud cost driver is active (local/existing Ollama server).
     """
-    if not vastai:
-        return
-
-    cost_req = CostEstimationRequest(
-        vastai=vastai,
-        max_dph=max_dph,
-        min_dph=min_dph,
-        estimated_duration_seconds=estimated_duration_seconds,
-    )
-
     try:
-        if BACKEND_MODE == "http":
-            result = _http_client().get_cost_estimate(cost_req.to_dict())
-        else:
-            estimator = CostEstimator()
-            response = asyncio.run(estimator.estimate(cost_req))
-            result = response.to_dict()
+        result = run_preflight_cost_check(
+            vastai=vastai,
+            max_dph=max_dph,
+            min_dph=min_dph,
+            estimated_duration_seconds=estimated_duration_seconds,
+            backend_mode=BACKEND_MODE,
+            http_client=_http_client() if BACKEND_MODE == "http" else None,
+        )
     except FailClosedError as exc:
         console.print(f"[red]Cost estimation error:[/red] {exc}")
         raise typer.Exit(1)
     except RuntimeError as exc:
-        console.print(f"[yellow]Cost estimation unavailable:[/yellow] {exc}")
+        if yes:
+            console.print(f"[yellow]Cost estimation unavailable:[/yellow] {exc}")
+            return
+        console.print(
+            f"[red]Cost estimation failed:[/red] {exc}\n"
+            "Pass --yes / -y to skip cost check and proceed."
+        )
+        raise typer.Exit(1)
+
+    if not result:
         return
 
     projected_cost: float = float(result.get("projected_cost_usd", 0.0))
@@ -368,7 +366,12 @@ def _run_preflight_cost_check(
         border_style="yellow",
     ))
 
-    threshold = float(os.environ.get("RUNE_SPEND_WARNING_THRESHOLD", str(SPEND_WARNING_THRESHOLD)))
+    try:
+        threshold = float(os.environ.get("RUNE_SPEND_WARNING_THRESHOLD", "5.00"))
+    except (ValueError, TypeError):
+        console.print("[yellow]Warning: Invalid RUNE_SPEND_WARNING_THRESHOLD value; using default $5.00.[/yellow]")
+        threshold = 5.0
+
     if projected_cost <= threshold or yes:
         return
 
@@ -383,7 +386,7 @@ def _run_preflight_cost_check(
     ack = console.input("\n[bold magenta]Proceed with benchmark? [y/N]: [/bold magenta]").strip().lower()
     if ack not in {"y", "yes"}:
         console.print("Aborted.")
-        raise typer.Exit(0)
+        raise typer.Exit(1)
 
 
 def _run_http_job_with_progress(
