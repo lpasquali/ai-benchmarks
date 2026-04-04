@@ -79,7 +79,7 @@ API_BASE_URL = os.environ.get("RUNE_API_BASE_URL", "http://localhost:8080").stri
 API_TOKEN = os.environ.get("RUNE_API_TOKEN", "").strip() or None
 API_TENANT = os.environ.get("RUNE_API_TENANT", "default").strip() or "default"
 VERIFY_SSL = os.environ.get("RUNE_INSECURE", "").strip().lower() not in {"1", "true", "yes", "on"}
-SPEND_WARNING_THRESHOLD = float(os.environ.get("RUNE_SPEND_WARNING_THRESHOLD", "5.00"))
+_SPEND_WARNING_THRESHOLD_DEFAULT = 5.00
 
 # Active profile (sourced from --profile argv peek or RUNE_PROFILE env var).
 _ACTIVE_PROFILE: str | None = peek_profile_from_argv()
@@ -368,7 +368,7 @@ def _run_preflight_cost_check(
         border_style="yellow",
     ))
 
-    threshold = float(os.environ.get("RUNE_SPEND_WARNING_THRESHOLD", str(SPEND_WARNING_THRESHOLD)))
+    threshold = float(os.environ.get("RUNE_SPEND_WARNING_THRESHOLD", str(_SPEND_WARNING_THRESHOLD_DEFAULT)))
     if projected_cost <= threshold or yes:
         return
 
@@ -383,7 +383,7 @@ def _run_preflight_cost_check(
     ack = console.input("\n[bold magenta]Proceed with benchmark? [y/N]: [/bold magenta]").strip().lower()
     if ack not in {"y", "yes"}:
         console.print("Aborted.")
-        raise typer.Exit(0)
+        raise typer.Exit(1)
 
 
 def _run_http_job_with_progress(
