@@ -379,7 +379,10 @@ def _run_preflight_cost_check(
     try:
         threshold = float(os.environ.get("RUNE_SPEND_WARNING_THRESHOLD", str(DEFAULT_SPEND_THRESHOLD)))
     except (ValueError, TypeError):
-        console.print("[yellow]Warning: Invalid RUNE_SPEND_WARNING_THRESHOLD value; using default $5.00.[/yellow]")
+        console.print(
+            f"[yellow]Warning: Invalid RUNE_SPEND_WARNING_THRESHOLD value; "
+            f"using default ${DEFAULT_SPEND_THRESHOLD:.2f}.[/yellow]"
+        )
         threshold = DEFAULT_SPEND_THRESHOLD
 
     action = evaluate_spend_gate(projected_cost, threshold=threshold, yes=yes)
