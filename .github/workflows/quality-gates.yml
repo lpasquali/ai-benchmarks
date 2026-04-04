@@ -295,7 +295,7 @@ jobs:
   build-image:
     name: RuneGate/Build/Docker-Image-amd64
     needs: [changes]
-    if: needs.changes.outputs.docker == 'true'
+    if: needs.changes.outputs.docker == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     permissions:
       contents: read
