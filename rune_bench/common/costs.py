@@ -41,9 +41,13 @@ class CostEstimator:
     async def _estimate_vastai(self, request: CostEstimationRequest) -> CostEstimationResponse:
         """Estimate using live Vast.ai market data if max_dph is provided."""
         duration_hours = request.estimated_duration_seconds / 3600
-        # Use midpoint of [min_dph, max_dph] range; fall back to 2.50 if both are zero.
-        if request.max_dph > 0 or request.min_dph > 0:
+        # Midpoint when both bounds given; single bound when only one set; default otherwise.
+        if request.max_dph > 0 and request.min_dph > 0:
             rate = (request.min_dph + request.max_dph) / 2
+        elif request.max_dph > 0:
+            rate = request.max_dph
+        elif request.min_dph > 0:
+            rate = request.min_dph
         else:
             rate = 2.50
         cost = rate * duration_hours

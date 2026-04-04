@@ -253,7 +253,7 @@ def test_run_ollama_instance_http_vastai_result_branch(monkeypatch):
     monkeypatch.setattr(rune, "console", test_console)
     monkeypatch.setattr(rune, "BACKEND_MODE", "http")
 
-    fake_client = type("C", (), {"get_cost_estimate": lambda self, *_a, **_k: {}, "submit_ollama_instance_job": lambda self, *_a, **_k: "job-1"})()
+    fake_client = type("C", (), {"get_cost_estimate": lambda self, *_a, **_k: {"projected_cost_usd": 1.0, "cost_driver": "vastai", "resource_impact": "low", "warning": None}, "submit_ollama_instance_job": lambda self, *_a, **_k: "job-1"})()
     monkeypatch.setattr(rune, "_http_client", lambda: fake_client)
     monkeypatch.setattr(
         rune,

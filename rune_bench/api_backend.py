@@ -181,10 +181,16 @@ def get_cost_estimate(request: CostEstimationRequest) -> dict:
     duration_hours = request.estimated_duration_seconds / 3600
 
     if request.vastai:
-        # Use max_dph as the hourly rate (worst-case / ceiling estimate) to match
-        # CostEstimator._estimate_vastai() and give consistent spend-gate behaviour
-        # regardless of whether the CLI runs in local or HTTP backend mode.
-        dph = request.max_dph if request.max_dph > 0 else request.min_dph
+        # Midpoint when both bounds given; single bound when only one set; default otherwise.
+        # Mirrors CostEstimator._estimate_vastai() for consistent spend-gate behaviour.
+        if request.max_dph > 0 and request.min_dph > 0:
+            dph = (request.min_dph + request.max_dph) / 2
+        elif request.max_dph > 0:
+            dph = request.max_dph
+        elif request.min_dph > 0:
+            dph = request.min_dph
+        else:
+            dph = 2.50
         projected_cost_usd = dph * duration_hours
         local_energy_kwh = 0.0
         cost_driver = "vastai"

@@ -394,7 +394,7 @@ def _run_preflight_cost_check(
         )
         raise typer.Exit(1)
 
-    ack = console.input("\n[bold magenta]Proceed with benchmark? [y/N]: [/bold magenta]").strip().lower()
+    ack = console.input("\n[bold magenta]Proceed? [y/N]: [/bold magenta]").strip().lower()
     if ack not in {"y", "yes"}:
         console.print("Aborted.")
         raise typer.Exit(1)
