@@ -7,6 +7,7 @@ from pathlib import Path
 
 from rune_bench.agents.base import AgentRunner
 from rune_bench.api_contracts import (
+    CostEstimationRequest,
     RunAgenticAgentRequest,
     RunBenchmarkRequest,
     RunOllamaInstanceRequest,
@@ -157,5 +158,60 @@ def run_benchmark(request: RunBenchmarkRequest) -> dict:
         "model_name": effective_model,
         "ollama_url": result.ollama_url,
         "contract_id": result.provider_handle,
+    }
+
+
+def get_cost_estimate(request: CostEstimationRequest) -> dict:
+    """Estimate cost for a benchmark run based on cloud or local hardware parameters."""
+    duration_hours = request.estimated_duration_seconds / 3600
+
+    if request.vastai:
+        avg_dph = (request.min_dph + request.max_dph) / 2 if request.max_dph > 0 else request.min_dph
+        projected_cost_usd = avg_dph * duration_hours
+        local_energy_kwh = 0.0
+        cost_driver = "vastai"
+    elif request.local_hardware:
+        local_energy_kwh = (request.local_tdp_watts * duration_hours) / 1000
+        energy_cost = local_energy_kwh * request.local_energy_rate_kwh
+        depreciation_cost = 0.0
+        if request.local_hardware_lifespan_years > 0:
+            depreciation_cost = (
+                request.local_hardware_purchase_price
+                / (request.local_hardware_lifespan_years * 8760)
+                * duration_hours
+            )
+        projected_cost_usd = energy_cost + depreciation_cost
+        cost_driver = "local"
+    elif request.aws:
+        projected_cost_usd = (request.min_dph + request.max_dph) / 2 * duration_hours
+        local_energy_kwh = 0.0
+        cost_driver = "aws"
+    elif request.gcp:
+        projected_cost_usd = (request.min_dph + request.max_dph) / 2 * duration_hours
+        local_energy_kwh = 0.0
+        cost_driver = "gcp"
+    elif request.azure:
+        projected_cost_usd = (request.min_dph + request.max_dph) / 2 * duration_hours
+        local_energy_kwh = 0.0
+        cost_driver = "azure"
+    else:
+        projected_cost_usd = 0.0
+        local_energy_kwh = 0.0
+        cost_driver = "unknown"
+
+    if projected_cost_usd < 1.0:
+        resource_impact = "low"
+    elif projected_cost_usd < 10.0:
+        resource_impact = "medium"
+    else:
+        resource_impact = "high"
+
+    return {
+        "projected_cost_usd": round(projected_cost_usd, 4),
+        "cost_driver": cost_driver,
+        "resource_impact": resource_impact,
+        "local_energy_kwh": round(local_energy_kwh, 4),
+        "confidence_score": 1.0,
+        "warning": None,
     }
 
