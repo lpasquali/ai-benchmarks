@@ -11,8 +11,9 @@ Wire protocol (v1):
 Supported actions
 -----------------
 ask
-    params: question (str), model (str, optional), ollama_url (str, optional)
-    result: {"answer": str, "papers": list[dict]}
+    params: question (str), model (str, optional), ollama_url (str, optional),
+            limit (int, optional, default 10)
+    result: {"answer": str, "papers": list[dict], "consensus_score": null}
 
 info
     params: (none)
@@ -25,7 +26,6 @@ from __future__ import annotations
 import json
 import os
 import sys
-import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -45,11 +45,11 @@ SYNTHESIS_PROMPT = (
 )
 
 
-def _search_semantic_scholar(question: str) -> list[dict]:
+def _search_semantic_scholar(question: str, *, limit: int = SEARCH_LIMIT) -> list[dict]:
     """Query the Semantic Scholar paper search endpoint."""
     params = urllib.parse.urlencode({
         "query": question,
-        "limit": SEARCH_LIMIT,
+        "limit": limit,
         "fields": SEARCH_FIELDS,
     })
     url = f"{SEMANTIC_SCHOLAR_BASE}/paper/search?{params}"
@@ -132,18 +132,19 @@ def _handle_ask(params: dict) -> dict:
     question: str = params["question"]
     model: str | None = params.get("model")
     ollama_url: str | None = params.get("ollama_url")
+    limit: int = int(params.get("limit", SEARCH_LIMIT))
 
-    papers = _search_semantic_scholar(question)
+    papers = _search_semantic_scholar(question, limit=limit)
 
     if not papers:
-        return {"answer": "No papers found for the given query.", "papers": []}
+        return {"answer": "No papers found for the given query.", "papers": [], "consensus_score": None}
 
     if model and ollama_url:
         answer = _synthesize_via_ollama(question, papers, model, ollama_url)
     else:
         answer = _format_papers(papers)
 
-    return {"answer": answer, "papers": _simplify_papers(papers)}
+    return {"answer": answer, "papers": _simplify_papers(papers), "consensus_score": None}
 
 
 def _handle_info(_params: dict) -> dict:

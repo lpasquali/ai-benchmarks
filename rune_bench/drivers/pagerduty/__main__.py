@@ -11,7 +11,7 @@ Wire protocol (v1):
 Supported actions
 -----------------
 ask
-    params: question (str), model (str), kubeconfig_path (str),
+    params: question (str), model (str, optional),
             ollama_url (str, optional)
     result: {"answer": str, "incidents": list}
 

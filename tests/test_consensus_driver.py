@@ -85,7 +85,7 @@ def test_handle_ask_searches_semantic_scholar(monkeypatch: pytest.MonkeyPatch) -
     assert "answer" in result
     assert "papers" in result
     assert len(result["papers"]) == 2
-    assert "semanticscholar.org" in captured_url[0]
+    assert captured_url[0].startswith("https://api.semanticscholar.org/")
     assert "deep+learning+NLP" in captured_url[0] or "deep%20learning%20NLP" in captured_url[0] or "deep+learning" in captured_url[0]
 
 
