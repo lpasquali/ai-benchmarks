@@ -1,10 +1,9 @@
 {
   "@context": "https://openvex.dev/ns/v0.2.0",
-  "@id": "https://github.com/lpasquali/rune/blob/main/.vex/permanent.openvex.json",
+  "@id": "urn:github:lpasquali:rune:.vex:permanent.openvex.json",
   "author": "lpasquali",
   "role": "Project Maintainer",
   "timestamp": "2026-04-04T00:00:00Z",
-  "last_updated": "2026-04-04T00:00:00Z",
   "version": "1",
   "statements": [
     {
@@ -19,7 +18,7 @@
       "products": [{ "@id": "pkg:golang/k8s.io/kubectl" }],
       "status": "affected",
       "impact_statement": "kubectl v1.35 is present and compiled with vulnerable Go net/url.",
-      "action_statement": "kubectl v1.35 is compiled with vulnerable Go net/url; no patched stable release is available yet. Track and upgrade to the next patched kubectl stable release when available."
+      "action_statement": "kubectl v1.35 is compiled with vulnerable Go net/url; no patched stable release is available  yet. Track and upgrade to the next patched kubectl stable release when available."
     },
     {
       "vulnerability": { "name": "CVE-2025-6638" },

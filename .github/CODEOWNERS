@@ -1,4 +1,4 @@
 # Assign @lpasquali as code owner for .vex/ risk-acceptance documents.
-# Enforcement as a required approval depends on branch protection being configured
-# to require review from Code Owners.
+# Enforcement as a required approval depends on branch protection being
+# configured to require review from Code Owners.
 .vex/   @lpasquali
