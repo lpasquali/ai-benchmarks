@@ -54,6 +54,12 @@ _FIELD_ENV_MAP: dict[str, str] = {
     "kubeconfig": "RUNE_KUBECONFIG",
 }
 
+# Maps nested attestation section keys → RUNE_ATTESTATION_* env vars.
+_ATTESTATION_ENV_MAP: dict[str, str] = {
+    "driver": "RUNE_ATTESTATION_DRIVER",
+    "pcr_policy_path": "RUNE_ATTESTATION_PCR_POLICY_PATH",
+}
+
 # Search order: project-level (CWD) takes precedence over global user config.
 # Within each tier, .yaml is tried before .yml.
 _PROJECT_CANDIDATES: list[Path] = [Path("rune.yaml"), Path("rune.yml")]
@@ -127,6 +133,25 @@ profiles:
     ollama_url: http://localhost:11434
     ollama_warmup: false
     model: llama3.1:8b
+
+# Attestation settings (TPM 2.0 hardware PCR verification).
+# Can be placed at the top level (infrastructure config) or under
+# defaults/profiles (per-profile overrides take precedence).
+# driver: noop   — always passes; safe for local/dev/CI (default)
+# driver: tpm2   — calls tpm2_quote / tpm2_checkquote via subprocess;
+#                  requires tpm2-tools and a provisioned AK context.
+#
+# Top-level example (applies to all profiles unless overridden):
+# attestation:
+#   driver: noop
+#   pcr_policy_path: /etc/rune/pcr.policy
+#
+# Per-profile example (override in a specific profile):
+# profiles:
+#   production:
+#     attestation:
+#       driver: tpm2
+#       pcr_policy_path: /etc/rune/pcr.policy
 """
 
 
@@ -213,6 +238,18 @@ def load_config(profile: str | None = None) -> dict[str, Any]:
     for key, env_var in _FIELD_ENV_MAP.items():
         if key in effective and env_var not in os.environ:
             os.environ[env_var] = _to_env_str(effective[key])
+
+    # Handle nested attestation section.  The section may appear at the
+    # top level of the YAML (as infrastructure config, separate from per-run
+    # defaults) or under defaults/profiles.  Effective (defaults+profile)
+    # takes precedence; top-level serves as fallback.
+    attestation_cfg: dict[str, Any] = _merge(
+        raw.get("attestation") or {},
+        effective.get("attestation") or {},
+    )
+    for key, env_var in _ATTESTATION_ENV_MAP.items():
+        if key in attestation_cfg and env_var not in os.environ:
+            os.environ[env_var] = _to_env_str(attestation_cfg[key])
 
     return effective
 
