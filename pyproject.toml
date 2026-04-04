@@ -79,7 +79,7 @@ include = ["rune*", "rune_bench*"]
 python_version = "3.11"
 
 [[tool.mypy.overrides]]
-module = ["vastai", "holmes", "holmes.*"]
+module = ["vastai", "holmes", "holmes.*", "yaml"]
 ignore_missing_imports = true
 
 [tool.bandit]

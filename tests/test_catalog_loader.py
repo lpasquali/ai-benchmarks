@@ -474,3 +474,33 @@ def test_chain_spec_step_by_id_none_when_missing(tmp_csv: Path, tmp_chain_yaml: 
     merged = merge_chains(catalog, tmp_chain_yaml)
     chain = merged.get_scope("TestScope").chain
     assert chain.step_by_id("nonexistent") is None
+
+
+# ---------------------------------------------------------------------------
+# rune_bench lazy __getattr__ and resources __getattr__
+# ---------------------------------------------------------------------------
+
+
+def test_rune_bench_getattr_lazy_loads_vastai():
+    import rune_bench
+    # Should return the class without error
+    klass = rune_bench.OfferFinder
+    assert klass.__name__ == "OfferFinder"
+
+
+def test_rune_bench_getattr_raises_for_unknown():
+    import rune_bench
+    with pytest.raises(AttributeError):
+        _ = rune_bench.NonExistentThing
+
+
+def test_resources_getattr_lazy_loads_vastai_provider():
+    import rune_bench.resources as resources_pkg
+    klass = resources_pkg.VastAIProvider
+    assert klass.__name__ == "VastAIProvider"
+
+
+def test_resources_getattr_raises_for_unknown():
+    import rune_bench.resources as resources_pkg
+    with pytest.raises(AttributeError):
+        _ = resources_pkg.NonExistentThing

@@ -293,16 +293,41 @@ def load(catalog_dir: Path | None = None) -> Catalog:
         3. Bundled defaults           →  same resolution as above
 
     When *catalog_dir* is ``None`` only the bundled defaults are searched.
+    When *catalog_dir* is given, only that directory is searched — the bundled
+    defaults are NOT used as a fallback so that explicit configuration is never
+    silently overridden.
+
+    Raises ``FileNotFoundError`` when no catalog files are found.
     """
-    search_dirs: list[Path] = []
     if catalog_dir is not None:
-        search_dirs.append(Path(catalog_dir))
-    search_dirs.append(_DEFAULTS_DIR)
+        d = Path(catalog_dir)
+        if d.is_dir():
+            scopes_yaml = d / "scopes.yaml"
+            chains_yaml = d / "chains.yaml"
+            scopes_csv = d / "scopes.csv"
+            chains_csv = d / "chains.csv"
 
-    for d in search_dirs:
-        if not d.is_dir():
-            continue
+            if scopes_yaml.exists():
+                return load_from_yaml(
+                    scopes_yaml,
+                    chains_yaml if chains_yaml.exists() else None,
+                )
 
+            primary_csv = chains_csv if chains_csv.exists() else (scopes_csv if scopes_csv.exists() else None)
+            if primary_csv is not None:
+                catalog = load_from_csv(primary_csv)
+                if chains_yaml.exists():
+                    catalog = merge_chains(catalog, chains_yaml)
+                return catalog
+
+        raise FileNotFoundError(
+            "No catalog files found in the specified directory. "
+            f"Expected scopes.csv, chains.csv, or scopes.yaml in: {catalog_dir}"
+        )
+
+    # No explicit dir — search bundled defaults only.
+    d = _DEFAULTS_DIR
+    if d.is_dir():
         scopes_yaml = d / "scopes.yaml"
         chains_yaml = d / "chains.yaml"
         scopes_csv = d / "scopes.csv"
@@ -314,7 +339,6 @@ def load(catalog_dir: Path | None = None) -> Catalog:
                 chains_yaml if chains_yaml.exists() else None,
             )
 
-        # Prefer chains.csv (enriched) over scopes.csv
         primary_csv = chains_csv if chains_csv.exists() else (scopes_csv if scopes_csv.exists() else None)
         if primary_csv is not None:
             catalog = load_from_csv(primary_csv)
@@ -324,5 +348,5 @@ def load(catalog_dir: Path | None = None) -> Catalog:
 
     raise FileNotFoundError(
         "No catalog files found. Expected scopes.csv, chains.csv, or scopes.yaml in "
-        + (str(catalog_dir) if catalog_dir else f"the bundled defaults ({_DEFAULTS_DIR})")
+        f"the bundled defaults ({_DEFAULTS_DIR})"
     )

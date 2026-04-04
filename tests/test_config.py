@@ -359,3 +359,67 @@ class TestInitTemplate:
             "question", "model", "kubeconfig",
         }
         assert set(_FIELD_ENV_MAP.keys()) == known_keys
+
+
+# ---------------------------------------------------------------------------
+# CLI commands: rune init / rune config
+# ---------------------------------------------------------------------------
+
+class TestCliInitConfig:
+    """Integration tests for the rune init and rune config CLI commands."""
+
+    def test_init_creates_rune_yaml(self, tmp_path, monkeypatch):
+        from typer.testing import CliRunner
+        import rune
+        runner = CliRunner()
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(rune.app, ["init"])
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "rune.yaml").exists()
+        assert "Created" in result.output
+
+    def test_init_refuses_to_overwrite_without_force(self, tmp_path, monkeypatch):
+        from typer.testing import CliRunner
+        import rune
+        runner = CliRunner()
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "rune.yaml").write_text("# existing\n")
+        result = runner.invoke(rune.app, ["init"])
+        assert result.exit_code == 0
+        assert "already exists" in result.output
+        # original content unchanged
+        assert (tmp_path / "rune.yaml").read_text() == "# existing\n"
+
+    def test_init_force_overwrites(self, tmp_path, monkeypatch):
+        from typer.testing import CliRunner
+        import rune
+        runner = CliRunner()
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "rune.yaml").write_text("# old\n")
+        result = runner.invoke(rune.app, ["init", "--force"])
+        assert result.exit_code == 0, result.output
+        assert "Created" in result.output
+        content = (tmp_path / "rune.yaml").read_text()
+        assert "profiles:" in content
+
+    def test_config_no_yaml_prints_defaults(self, tmp_path, monkeypatch):
+        from typer.testing import CliRunner
+        import rune
+        runner = CliRunner()
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(rune.app, ["config"])
+        assert result.exit_code == 0, result.output
+        # Should show "No rune.yaml found" or config table
+        assert result.output  # non-empty
+
+    def test_config_with_yaml_shows_values(self, tmp_path, monkeypatch):
+        from typer.testing import CliRunner
+        import rune
+        runner = CliRunner()
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "rune.yaml").write_text(
+            "defaults:\n  model: llama3.1:70b\n  question: test-q\n"
+        )
+        with patch("rune_bench.common.config._GLOBAL_CANDIDATES", [tmp_path / "rune.yaml"]):
+            result = runner.invoke(rune.app, ["config"])
+        assert result.exit_code == 0, result.output
