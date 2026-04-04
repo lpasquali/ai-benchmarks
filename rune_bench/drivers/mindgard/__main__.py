@@ -47,6 +47,7 @@ def _handle_ask(params: dict) -> dict:
         a backend LLM.  Mindgard tests the target model for vulnerabilities.
     """
     model: str = params["model"]
+    question: str = params.get("question", "")
     ollama_url: str | None = params.get("ollama_url")
 
     api_key = os.environ.get("RUNE_MINDGARD_API_KEY", "")
@@ -62,7 +63,10 @@ def _handle_ask(params: dict) -> dict:
             "Install with: pip install mindgard"
         )
 
-    target_url = f"{ollama_url}/v1" if ollama_url else "http://localhost:11434/v1"
+    from rune_bench.common.http_client import normalize_url  # local import avoids circular dep
+
+    base = normalize_url(ollama_url, "Ollama") if ollama_url else "http://localhost:11434"
+    target_url = f"{base.rstrip('/')}/v1"
 
     cmd: list[str] = [
         "mindgard",
@@ -77,7 +81,7 @@ def _handle_ask(params: dict) -> dict:
     ]
 
     proc = subprocess.run(  # noqa: S603
-        cmd, capture_output=True, text=True, check=False,
+        cmd, capture_output=True, text=True, check=False, timeout=600,
     )
     if proc.returncode != 0:
         detail = proc.stderr.strip() or proc.stdout.strip() or f"exit {proc.returncode}"
@@ -94,9 +98,13 @@ def _handle_ask(params: dict) -> dict:
     lines: list[str] = [
         f"Mindgard Red-Team Assessment — model: {model}",
         f"Target: {target_url}",
+    ]
+    if question:
+        lines.append(f"Red-team objective: {question}")
+    lines.extend([
         f"Overall risk score: {risk_score:.1f}",
         "",
-    ]
+    ])
     if vulnerabilities:
         lines.append(f"Vulnerabilities ({len(vulnerabilities)}):")
         for i, vuln in enumerate(vulnerabilities, 1):
