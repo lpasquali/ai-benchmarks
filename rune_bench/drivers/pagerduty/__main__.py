@@ -25,7 +25,8 @@ from __future__ import annotations
 import json
 import os
 import sys
-import urllib.request
+
+from rune_bench.common.http_client import make_http_request, normalize_url
 
 _PAGERDUTY_API_BASE = "https://api.pagerduty.com"
 
@@ -33,15 +34,15 @@ _PAGERDUTY_API_BASE = "https://api.pagerduty.com"
 def _pd_request(path: str, api_key: str) -> dict:
     """Make an authenticated GET request to the PagerDuty REST v2 API."""
     url = f"{_PAGERDUTY_API_BASE}{path}"
-    req = urllib.request.Request(
+    return make_http_request(
         url,
+        method="GET",
+        action="fetch PagerDuty incidents",
         headers={
             "Authorization": f"Token token={api_key}",
-            "Content-Type": "application/json",
+            "Accept": "application/vnd.pagerduty+json;version=2",
         },
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
-        return json.loads(resp.read().decode())
 
 
 def _fetch_open_incidents(api_key: str) -> list[dict]:
@@ -86,16 +87,14 @@ def _format_incident_data(incidents: list[dict], alerts_by_incident: dict[str, l
 
 def _call_ollama(prompt: str, model: str, ollama_url: str) -> str:
     """Call the Ollama /api/generate endpoint for triage synthesis."""
-    url = f"{ollama_url.rstrip('/')}/api/generate"
-    payload = json.dumps({"model": model, "prompt": prompt, "stream": False}).encode()
-    req = urllib.request.Request(
+    base = normalize_url(ollama_url, "Ollama")
+    url = f"{base.rstrip('/')}/api/generate"
+    result = make_http_request(
         url,
-        data=payload,
-        headers={"Content-Type": "application/json"},
         method="POST",
+        payload={"model": model, "prompt": prompt, "stream": False},
+        action="synthesize via Ollama",
     )
-    with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
-        result = json.loads(resp.read().decode())
     return result.get("response", "")
 
 
