@@ -43,10 +43,14 @@ holmes = [
 vastai = [
     "vastai-sdk>=0.6.0",
 ]
+catalog = [
+    "pyyaml>=6.0",
+]
 all = [
     "holmesgpt>=0.23.0",
     "supabase>=2.5,<2.8",
     "vastai-sdk>=0.6.0",
+    "pyyaml>=6.0",
 ]
 dev = [
     "pytest>=8",
@@ -68,6 +72,7 @@ Issues = "https://github.com/lpasquali/rune/issues"
 include = ["rune*", "rune_bench*"]
 
 [tool.setuptools.package-data]
+"rune_bench" = ["catalog/defaults/*.csv", "catalog/defaults/*.yaml"]
 "*" = ["py.typed"]
 
 [tool.mypy]

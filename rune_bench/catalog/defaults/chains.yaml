@@ -1,0 +1,57 @@
+# RUNE chain topology definitions
+#
+# Each entry upgrades a scope from mode="atomic" to mode="chain" by defining
+# the ordered pipeline of agents, their roles, and how context flows between
+# steps (input_from references a preceding step's id).
+#
+# To add a new chain:
+#   1. Add a block here following the same structure.
+#   2. The scope name must match a scope in scopes.csv / chains.csv.
+#   3. Agent names must match entries in that scope's agent list.
+#
+# To override the topology for your environment, copy this file to a local
+# directory and pass that path to load_catalog(catalog_dir=...).
+
+chains:
+  - scope: Legal/Ops
+    name: NDA Processing Pipeline
+    trigger: >
+      Your company has received an NDA from a potential partner.
+      Process it end-to-end: orchestrate the team, analyse legal risk,
+      flag non-standard clauses, upload the document to the client portal,
+      and verify retention-policy compliance.
+    steps:
+      # Step 1 — CrewAI kicks off the workflow and assigns roles
+      - id: orchestrate
+        agent: CrewAI
+        role: Orchestrator
+        question: "Analyze this NDA for risk and assign review tasks to the legal team."
+        input_from: null   # entry point
+
+      # Step 2 — Harvey AI performs deep legal analysis on the NDA text
+      - id: analyze
+        agent: Harvey AI
+        role: Legal Analyst
+        question: "Review the 50-page NDA for risky clauses and summarise findings."
+        input_from: orchestrate
+
+      # Step 3 — Spellbook flags non-standard language in real time
+      - id: flag
+        agent: Spellbook
+        role: Clause Reviewer
+        question: "Flag any non-standard or high-risk language identified in the legal analysis."
+        input_from: analyze
+
+      # Step 4 — MultiOn executes browser actions to upload the reviewed document
+      - id: execute
+        agent: MultiOn
+        role: Executor
+        question: "Upload the reviewed and flagged NDA to the client portal."
+        input_from: flag
+
+      # Step 5 — Dagger runs the compliance verification pipeline
+      - id: verify
+        agent: Dagger
+        role: Compliance Pipeline
+        question: "Verify that the NDA retention policy is compliant after upload."
+        input_from: execute

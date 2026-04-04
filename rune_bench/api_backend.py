@@ -12,6 +12,7 @@ from rune_bench.api_contracts import (
     RunOllamaInstanceRequest,
 )
 from rune_bench.common import ModelSelector
+from rune_bench.metrics import span
 from rune_bench.resources.base import LLMResourceProvider
 from rune_bench.resources.existing_ollama_provider import ExistingOllamaProvider
 from rune_bench.workflows import (
@@ -122,17 +123,20 @@ def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
             timeout_seconds=request.ollama_warmup_timeout,
         )
     runner = _make_agent_runner(Path(request.kubeconfig))
-    answer = runner.ask(
-        question=request.question,
-        model=request.model,
-        ollama_url=request.ollama_url,
-    )
+    with span("agent.ask", model=request.model, backend="existing"):
+        answer = runner.ask(
+            question=request.question,
+            model=request.model,
+            ollama_url=request.ollama_url,
+        )
     return {"answer": answer}
 
 
 def run_benchmark(request: RunBenchmarkRequest) -> dict:
+    backend = "vastai" if request.vastai else "existing"
     provider = _make_resource_provider_for_benchmark(request)
-    result = provider.provision()
+    with span("workflow.provision", backend=backend):
+        result = provider.provision()
 
     if not result.ollama_url:
         raise RuntimeError(
@@ -140,19 +144,21 @@ def run_benchmark(request: RunBenchmarkRequest) -> dict:
             "Ensure port 11434 is exposed in the template."
         )
 
+    effective_model = result.model or request.model
     try:
         runner = _make_agent_runner(Path(request.kubeconfig))
-        answer = runner.ask(
-            question=request.question,
-            model=result.model or request.model,
-            ollama_url=result.ollama_url,
-        )
+        with span("agent.ask", model=effective_model, backend=backend):
+            answer = runner.ask(
+                question=request.question,
+                model=effective_model,
+                ollama_url=result.ollama_url,
+            )
     finally:
         provider.teardown(result)
 
     return {
         "answer": answer,
-        "model_name": result.model or request.model,
+        "model_name": effective_model,
         "ollama_url": result.ollama_url,
         "contract_id": result.provider_handle,
     }

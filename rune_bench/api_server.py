@@ -24,6 +24,7 @@ from rune_bench.api_contracts import (
     RunOllamaInstanceRequest,
 )
 from rune_bench.job_store import JobRecord, JobStore
+from rune_bench.metrics import SQLiteMetricsCollector, clear_collector, set_collector, set_job_id, span
 
 BackendRequest: TypeAlias = RunAgenticAgentRequest | RunBenchmarkRequest | RunOllamaInstanceRequest
 BackendHandler: TypeAlias = Callable[[BackendRequest], dict]
@@ -168,8 +169,24 @@ class RuneApiApplication:
                     self._write_json(200, payload)
                     return
 
+                if path == "/v1/metrics/summary":
+                    query = parse_qs(parsed.query)
+                    filter_job_id = query.get("job_id", [None])[0]
+                    summary = app.store.get_events_summary(job_id=filter_job_id)
+                    self._write_json(200, {"events": summary})
+                    return
+
                 if path.startswith("/v1/jobs/"):
                     job_id = path.removeprefix("/v1/jobs/").strip()
+                    if job_id.endswith("/events"):
+                        raw_job_id = job_id.removesuffix("/events").strip()
+                        job = app.store.get_job(raw_job_id, tenant_id=tenant_id)
+                        if job is None:
+                            self._write_json(404, {"error": f"job not found: {raw_job_id}"})
+                            return
+                        events = app.store.get_events_for_job(raw_job_id)
+                        self._write_json(200, {"job_id": raw_job_id, "events": events})
+                        return
                     job = app.store.get_job(job_id, tenant_id=tenant_id)
                     if job is None:
                         self._write_json(404, {"error": f"job not found: {job_id}"})
@@ -229,12 +246,18 @@ class RuneApiApplication:
         return Handler
 
     def _execute_job(self, job_id: str, kind: str, payload: dict) -> None:
+        set_collector(SQLiteMetricsCollector(self.store))
+        set_job_id(job_id)
         self.store.update_job(job_id, status="running", message="job is running")
         try:
-            result = self._dispatch(kind, payload)
+            with span("job.execute", kind=kind):
+                result = self._dispatch(kind, payload)
         except Exception as exc:  # noqa: BLE001
             self.store.update_job(job_id, status="failed", error=str(exc), message=str(exc))
             return
+        finally:
+            clear_collector()
+            set_job_id(None)
         self.store.update_job(job_id, status="succeeded", result_payload=result, message="job completed")
 
     def _dispatch(self, kind: str, payload: dict) -> dict:

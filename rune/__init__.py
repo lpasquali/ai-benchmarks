@@ -1012,7 +1012,7 @@ def init_config(
     target = Path("rune.yaml")
     if target.exists() and not force:
         console.print(
-            f"[yellow]rune.yaml already exists.[/yellow] Use [cyan]--force[/cyan] to overwrite."
+            "[yellow]rune.yaml already exists.[/yellow] Use [cyan]--force[/cyan] to overwrite."
         )
         raise typer.Exit(0)
     target.write_text(INIT_TEMPLATE)

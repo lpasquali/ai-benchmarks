@@ -8,6 +8,10 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from rune_bench.metrics import MetricsEvent
 
 
 @dataclass(frozen=True)
@@ -65,6 +69,26 @@ class JobStore:
                     PRIMARY KEY (tenant_id, operation, idempotency_key)
                 )
                 """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS workflow_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_id TEXT,
+                    event TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    duration_ms REAL,
+                    error_type TEXT,
+                    labels_json TEXT,
+                    recorded_at REAL NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_workflow_events_job_id ON workflow_events(job_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_workflow_events_event ON workflow_events(event)"
             )
 
     def mark_incomplete_jobs_failed(self, message: str = "server restarted before job completion") -> None:
@@ -161,6 +185,90 @@ class JobStore:
 
         with self._connect() as conn:
             conn.execute(f"UPDATE jobs SET {', '.join(fields)} WHERE job_id = ?", values)
+
+    def record_workflow_event(self, event: "MetricsEvent") -> None:
+        """Persist a single workflow lifecycle event."""
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO workflow_events(job_id, event, status, duration_ms, error_type, labels_json, recorded_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event.job_id,
+                    event.event,
+                    event.status,
+                    event.duration_ms,
+                    event.error_type,
+                    json.dumps(event.labels, sort_keys=True) if event.labels else None,
+                    event.recorded_at,
+                ),
+            )
+
+    def get_events_summary(self, *, job_id: str | None = None) -> list[dict]:
+        """Return per-event aggregate statistics.
+
+        When *job_id* is given, only events for that job are included.
+        Rows are ordered by event name and include count, ok/error split,
+        and avg/min/max duration in milliseconds — suitable for cross-run comparison.
+        """
+        query = """
+            SELECT
+                event,
+                COUNT(*)                                              AS total,
+                SUM(CASE WHEN status = 'ok'    THEN 1 ELSE 0 END)   AS ok_count,
+                SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END)    AS error_count,
+                ROUND(AVG(duration_ms), 1)                           AS avg_ms,
+                ROUND(MIN(duration_ms), 1)                           AS min_ms,
+                ROUND(MAX(duration_ms), 1)                           AS max_ms
+            FROM workflow_events
+        """
+        params: list[object] = []
+        if job_id is not None:
+            query += " WHERE job_id = ?"
+            params.append(job_id)
+        query += " GROUP BY event ORDER BY event"
+
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+
+        return [
+            {
+                "event": str(row["event"]),
+                "total": int(row["total"]),
+                "ok": int(row["ok_count"]),
+                "error": int(row["error_count"]),
+                "avg_ms": float(row["avg_ms"] or 0.0),
+                "min_ms": float(row["min_ms"] or 0.0),
+                "max_ms": float(row["max_ms"] or 0.0),
+            }
+            for row in rows
+        ]
+
+    def get_events_for_job(self, job_id: str) -> list[dict]:
+        """Return all raw workflow events for a single job, ordered by recorded_at."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT event, status, duration_ms, error_type, labels_json, recorded_at
+                FROM workflow_events
+                WHERE job_id = ?
+                ORDER BY recorded_at
+                """,
+                (job_id,),
+            ).fetchall()
+
+        return [
+            {
+                "event": str(row["event"]),
+                "status": str(row["status"]),
+                "duration_ms": float(row["duration_ms"] or 0.0),
+                "error_type": str(row["error_type"]) if row["error_type"] else None,
+                "labels": json.loads(row["labels_json"]) if row["labels_json"] else {},
+                "recorded_at": float(row["recorded_at"]),
+            }
+            for row in rows
+        ]
 
     def get_job(self, job_id: str, *, tenant_id: str | None = None) -> JobRecord | None:
         query = "SELECT * FROM jobs WHERE job_id = ?"
