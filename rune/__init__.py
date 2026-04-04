@@ -349,6 +349,13 @@ def _run_preflight_cost_check(
         raise typer.Exit(1)
 
     if not result:
+        if vastai:
+            # vastai=True but no estimate returned — unexpected empty result; fail closed.
+            console.print(
+                "[red]Cost estimation returned no result despite vastai=True; "
+                "refusing to proceed fail-closed.[/red]"
+            )
+            raise typer.Exit(1)
         return
 
     projected_cost: float = float(result.get("projected_cost_usd", 0.0))
