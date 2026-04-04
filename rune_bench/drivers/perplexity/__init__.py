@@ -39,9 +39,12 @@ class PerplexityDriverClient:
         Returns:
             The textual answer from Perplexity.
         """
+        normalized_model = model.strip()
+        if not normalized_model:
+            raise RuntimeError("Perplexity model must be a non-empty string.")
         params: dict = {
             "question": question,
-            "model": model.strip(),
+            "model": normalized_model,
         }
 
         debug_log(
