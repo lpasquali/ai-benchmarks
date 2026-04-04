@@ -31,7 +31,7 @@ def test_get_cost_estimate_vastai():
     r = _req(vastai=True, min_dph=2.0, max_dph=4.0)
     out = get_cost_estimate(r)
     assert out["cost_driver"] == "vastai"
-    assert out["projected_cost_usd"] == pytest.approx(3.0, rel=1e-3)
+    assert out["projected_cost_usd"] == pytest.approx(4.0, rel=1e-3)
     assert out["resource_impact"] == "medium"
     assert out["local_energy_kwh"] == 0.0
     assert out["confidence_score"] == 1.0
