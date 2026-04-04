@@ -17,9 +17,8 @@ from __future__ import annotations
 import threading
 import time
 from collections import defaultdict
-from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Generator, Protocol
+from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from rune_bench.job_store import JobStore
@@ -131,8 +130,47 @@ def get_collector() -> MetricsCollector:
     return getattr(_tls, "collector", _null)
 
 
-@contextmanager
-def span(event: str, **labels: object) -> Generator[None, None, None]:
+class _SpanContext:
+    """Class-based context manager for span() — avoids PEP-479 issues with generators."""
+
+    def __init__(self, event: str, **labels: object) -> None:
+        self._event = event
+        self._labels = labels
+        self._start: float = 0.0
+        self._exc: BaseException | None = None
+
+    def __enter__(self) -> "_SpanContext":
+        self._start = time.monotonic()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object,
+    ) -> bool:
+        self._exc = exc_val
+        duration_ms = (time.monotonic() - self._start) * 1000
+        status = "error" if exc_val is not None else "ok"
+        error_type = type(exc_val).__name__ if exc_val is not None else None
+        job_id: str | None = getattr(_tls, "job_id", None)
+        ev = MetricsEvent(
+            event=self._event,
+            status=status,
+            duration_ms=duration_ms,
+            labels=dict(self._labels),
+            recorded_at=time.time(),
+            job_id=job_id,
+            error_type=error_type,
+        )
+        try:
+            get_collector().record(ev)
+        except Exception:
+            pass  # never let metrics errors propagate into the caller
+        return False  # never suppress exceptions
+
+
+def span(event: str, **labels: object) -> _SpanContext:
     """Time a block and record its outcome to the current thread's collector.
 
     On success the event status is ``"ok"``; on any exception it is ``"error"``
@@ -144,28 +182,4 @@ def span(event: str, **labels: object) -> Generator[None, None, None]:
         with span("vastai.offer_search", model="llama3.1:8b"):
             offer = OfferFinder(sdk).find_best(...)
     """
-    start = time.monotonic()
-    exc: BaseException | None = None
-    try:
-        yield
-    except BaseException as e:
-        exc = e
-        raise
-    finally:
-        duration_ms = (time.monotonic() - start) * 1000
-        status = "error" if exc is not None else "ok"
-        error_type = type(exc).__name__ if exc is not None else None
-        job_id: str | None = getattr(_tls, "job_id", None)
-        ev = MetricsEvent(
-            event=event,
-            status=status,
-            duration_ms=duration_ms,
-            labels=dict(labels),
-            recorded_at=time.time(),
-            job_id=job_id,
-            error_type=error_type,
-        )
-        try:
-            get_collector().record(ev)
-        except Exception:
-            pass  # never let metrics errors propagate into the caller
+    return _SpanContext(event, **labels)
