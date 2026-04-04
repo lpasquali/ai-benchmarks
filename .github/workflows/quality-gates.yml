@@ -645,15 +645,33 @@ jobs:
 
   # ─── CD gate (push to main/develop only) ─────────────────────────────────────
   # Parallel native-arch builds (no QEMU) + manifest merge.
-  # Each arch job pushes a platform-specific image tag; the publish job
-  # combines them into a single multi-arch manifest via imagetools.
+  # image-meta derives the shared tag once; build-amd64 and build-arm64 run
+  # concurrently on native runners; publish-image-and-notify-charts merges
+  # them into a single multi-arch manifest via imagetools.
 
-  build-amd64:
-    name: RuneGate/CD/Build-amd64
+  image-meta:
+    name: RuneGate/CD/Image-Meta
     if: github.event_name == 'push' && needs.changes.outputs.docker == 'true' && needs.merge-gate.result == 'success'
     needs:
       - changes
       - merge-gate
+    runs-on: ubuntu-latest
+    outputs:
+      image_name: ${{ steps.meta.outputs.image_name }}
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+    steps:
+      - name: Derive image tag
+        id: meta
+        run: |
+          REF_SLUG="${GITHUB_REF_NAME//\//-}"
+          IMAGE_TAG="${REF_SLUG}-${GITHUB_SHA::7}"
+          echo "image_name=ghcr.io/lpasquali/rune" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+
+  build-amd64:
+    name: RuneGate/CD/Build-amd64
+    needs:
+      - image-meta
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -666,13 +684,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Derive image tag
-        id: meta
-        run: |
-          REF_SLUG="${GITHUB_REF_NAME//\//-}"
-          IMAGE_TAG="${REF_SLUG}-${GITHUB_SHA::7}"
-          echo "image_name=ghcr.io/lpasquali/rune" >> "$GITHUB_OUTPUT"
-          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
       - name: Build and push rune image (amd64)
         uses: docker/build-push-action@v7
         with:
@@ -680,16 +691,14 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ${{ steps.meta.outputs.image_name }}:${{ steps.meta.outputs.image_tag }}-amd64
+          tags: ${{ needs.image-meta.outputs.image_name }}:${{ needs.image-meta.outputs.image_tag }}-amd64
           cache-from: type=registry,ref=ghcr.io/lpasquali/rune:buildcache-amd64
           cache-to: type=registry,ref=ghcr.io/lpasquali/rune:buildcache-amd64,mode=max
 
   build-arm64:
     name: RuneGate/CD/Build-arm64
-    if: github.event_name == 'push' && needs.changes.outputs.docker == 'true' && needs.merge-gate.result == 'success'
     needs:
-      - changes
-      - merge-gate
+      - image-meta
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
@@ -702,13 +711,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Derive image tag
-        id: meta
-        run: |
-          REF_SLUG="${GITHUB_REF_NAME//\//-}"
-          IMAGE_TAG="${REF_SLUG}-${GITHUB_SHA::7}"
-          echo "image_name=ghcr.io/lpasquali/rune" >> "$GITHUB_OUTPUT"
-          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
       - name: Build and push rune image (arm64)
         uses: docker/build-push-action@v7
         with:
@@ -716,16 +718,14 @@ jobs:
           file: ./Dockerfile
           platforms: linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.image_name }}:${{ steps.meta.outputs.image_tag }}-arm64
+          tags: ${{ needs.image-meta.outputs.image_name }}:${{ needs.image-meta.outputs.image_tag }}-arm64
           cache-from: type=registry,ref=ghcr.io/lpasquali/rune:buildcache-arm64
           cache-to: type=registry,ref=ghcr.io/lpasquali/rune:buildcache-arm64,mode=max
 
   publish-image-and-notify-charts:
     name: RuneGate/CD/Publish-Image-and-Notify-Charts
-    if: github.event_name == 'push' && needs.changes.outputs.docker == 'true' && needs.merge-gate.result == 'success'
     needs:
-      - changes
-      - merge-gate
+      - image-meta
       - build-amd64
       - build-arm64
     runs-on: ubuntu-latest
@@ -739,19 +739,12 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Derive image tag
-        id: meta
-        run: |
-          REF_SLUG="${GITHUB_REF_NAME//\//-}"
-          IMAGE_TAG="${REF_SLUG}-${GITHUB_SHA::7}"
-          echo "image_name=ghcr.io/lpasquali/rune" >> "$GITHUB_OUTPUT"
-          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
       - name: Create and push multi-arch manifest
         run: |
           docker buildx imagetools create \
-            --tag ${{ steps.meta.outputs.image_name }}:${{ steps.meta.outputs.image_tag }} \
-            ${{ steps.meta.outputs.image_name }}:${{ steps.meta.outputs.image_tag }}-amd64 \
-            ${{ steps.meta.outputs.image_name }}:${{ steps.meta.outputs.image_tag }}-arm64
+            --tag ${{ needs.image-meta.outputs.image_name }}:${{ needs.image-meta.outputs.image_tag }} \
+            ${{ needs.image-meta.outputs.image_name }}:${{ needs.image-meta.outputs.image_tag }}-amd64 \
+            ${{ needs.image-meta.outputs.image_name }}:${{ needs.image-meta.outputs.image_tag }}-arm64
       - name: Notify rune-charts to sync image tag
         env:
           CROSS_REPO_TOKEN: ${{ secrets.RUNE_CHARTS_BOT_TOKEN }}
@@ -770,8 +763,8 @@ jobs:
             "event_type": "image-published",
             "client_payload": {
               "source_repo": "${GITHUB_REPOSITORY}",
-              "image_name": "${{ steps.meta.outputs.image_name }}",
-              "image_tag": "${{ steps.meta.outputs.image_tag }}"
+              "image_name": "${{ needs.image-meta.outputs.image_name }}",
+              "image_tag": "${{ needs.image-meta.outputs.image_tag }}"
             }
           }
           JSON
