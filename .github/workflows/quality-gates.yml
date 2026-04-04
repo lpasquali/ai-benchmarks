@@ -314,7 +314,7 @@ jobs:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64
-          push: true
+          push: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
           tags: ghcr.io/lpasquali/rune:ci-${{ github.sha }}-amd64
           cache-from: type=registry,ref=ghcr.io/lpasquali/rune:buildcache-amd64
           cache-to: type=registry,ref=ghcr.io/lpasquali/rune:buildcache-amd64,mode=max
@@ -322,11 +322,11 @@ jobs:
   smoke-cli-api:
     name: RuneGate/CLI-and-API-Smoke/Python+Containers
     needs: [changes, security-secrets, build-image]
-    if: needs.changes.outputs.docker == 'true'
+    if: needs.changes.outputs.docker == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
+      packages: read
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -383,13 +383,13 @@ jobs:
   security-sbom:
     name: RuneGate/Security/SBOM-and-CVE-Policy
     needs: [changes, build-image]
-    if: needs.changes.outputs.docker == 'true'
+    if: needs.changes.outputs.docker == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     permissions:
       id-token: write      # required for SLSA provenance attestation
       attestations: write  # required for SLSA provenance attestation
       contents: read
-      packages: write
+      packages: read
     steps:
       - uses: actions/checkout@v6
       - uses: docker/login-action@v3
