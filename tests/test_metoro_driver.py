@@ -242,3 +242,52 @@ def test_main_skips_empty_lines(monkeypatch: pytest.MonkeyPatch, capsys: pytest.
     metoro_main.main()
 
     assert capsys.readouterr().out.strip() == ""
+
+
+# ---------------------------------------------------------------------------
+# MetoroDriverClient / MetoroRunner alias tests
+# ---------------------------------------------------------------------------
+
+from pathlib import Path
+from unittest.mock import MagicMock
+
+from rune_bench.drivers.metoro import MetoroDriverClient, MetoroRunner
+
+
+def test_metoro_runner_is_alias() -> None:
+    assert MetoroRunner is MetoroDriverClient
+
+
+def test_metoro_client_ask_returns_answer(tmp_path: Path) -> None:
+    kubeconfig = tmp_path / "kubeconfig"
+    kubeconfig.write_text("apiVersion: v1\n")
+
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {"answer": "all healthy"}
+
+    client = MetoroDriverClient(kubeconfig, transport=mock_transport)
+    result = client.ask("Is everything OK?", "llama3")
+
+    assert result == "all healthy"
+    mock_transport.call.assert_called_once()
+    action, params = mock_transport.call.call_args[0]
+    assert action == "ask"
+    assert params["question"] == "Is everything OK?"
+
+
+def test_metoro_client_raises_on_missing_answer(tmp_path: Path) -> None:
+    kubeconfig = tmp_path / "kubeconfig"
+    kubeconfig.write_text("apiVersion: v1\n")
+
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {"services": []}
+
+    client = MetoroDriverClient(kubeconfig, transport=mock_transport)
+    with pytest.raises(RuntimeError, match="did not include an answer"):
+        client.ask("q", "m")
+
+
+def test_metoro_client_raises_on_missing_kubeconfig(tmp_path: Path) -> None:
+    missing = tmp_path / "no-such-kubeconfig"
+    with pytest.raises(FileNotFoundError):
+        MetoroDriverClient(missing)

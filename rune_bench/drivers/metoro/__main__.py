@@ -13,7 +13,7 @@ Supported actions
 ask
     params: question (str), kubeconfig_path (str),
             service (str, optional), time_range (dict, optional)
-    result: {"answer": str, "telemetry": list | None}
+    result: {"answer": str, "services": list | None, "traces": list | None}
 
 info
     params: (none)
@@ -25,8 +25,8 @@ from __future__ import annotations
 import json
 import os
 import sys
-import urllib.request
-import urllib.error
+
+from rune_bench.common.http_client import make_http_request, normalize_url
 
 
 def _handle_ask(params: dict) -> dict:
@@ -41,7 +41,8 @@ def _handle_ask(params: dict) -> dict:
             "Obtain an API key from https://app.metoro.io and export it."
         )
 
-    base_url = os.environ.get("RUNE_METORO_BASE_URL", "https://app.metoro.io/api")
+    raw_base = os.environ.get("RUNE_METORO_BASE_URL", "https://app.metoro.io/api")
+    base_url = normalize_url(raw_base, "Metoro")
     url = f"{base_url.rstrip('/')}/ai/explain"
 
     body: dict = {"question": question}
@@ -50,36 +51,21 @@ def _handle_ask(params: dict) -> dict:
     if time_range:
         body["time_range"] = time_range
 
-    data = json.dumps(body).encode()
-    req = urllib.request.Request(
+    resp_body = make_http_request(
         url,
-        data=data,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        },
         method="POST",
+        payload=body,
+        action="query Metoro API",
+        headers={"Authorization": f"Bearer {api_key}"},
     )
 
-    try:
-        with urllib.request.urlopen(req) as resp:  # noqa: S310
-            resp_body = json.loads(resp.read().decode())
-    except urllib.error.HTTPError as exc:
-        detail = ""
-        try:
-            detail = exc.read().decode()
-        except Exception:  # noqa: BLE001
-            pass
-        raise RuntimeError(
-            f"Metoro API returned HTTP {exc.code}: {detail or exc.reason}"
-        ) from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"Metoro API request failed: {exc.reason}") from exc
-
     answer = resp_body.get("explanation") or resp_body.get("answer") or ""
-    telemetry = resp_body.get("telemetry")
+    # Map API telemetry to spec-defined services/traces shape
+    telemetry = resp_body.get("telemetry") or {}
+    services = telemetry.get("services") if isinstance(telemetry, dict) else None
+    traces = telemetry.get("traces") if isinstance(telemetry, dict) else None
 
-    return {"answer": answer, "telemetry": telemetry}
+    return {"answer": answer, "services": services, "traces": traces}
 
 
 def _handle_info(_params: dict) -> dict:

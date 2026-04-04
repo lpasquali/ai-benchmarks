@@ -249,3 +249,48 @@ def test_main_skips_empty_lines(monkeypatch: pytest.MonkeyPatch, capsys: pytest.
     glean_main.main()
 
     assert capsys.readouterr().out.strip() == ""
+
+
+# ---------------------------------------------------------------------------
+# GleanDriverClient / GleanRunner alias tests
+# ---------------------------------------------------------------------------
+
+from unittest.mock import MagicMock
+
+from rune_bench.drivers.glean import GleanDriverClient, GleanRunner
+
+
+def test_glean_runner_is_alias() -> None:
+    assert GleanRunner is GleanDriverClient
+
+
+def test_glean_client_ask_returns_answer() -> None:
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {"answer": "here is what I found"}
+
+    client = GleanDriverClient(transport=mock_transport)
+    result = client.ask("What is our deployment process?", "unused-model")
+
+    assert result == "here is what I found"
+    mock_transport.call.assert_called_once()
+    action, params = mock_transport.call.call_args[0]
+    assert action == "ask"
+    assert params["question"] == "What is our deployment process?"
+
+
+def test_glean_client_raises_on_missing_answer() -> None:
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {"sources": []}
+
+    client = GleanDriverClient(transport=mock_transport)
+    with pytest.raises(RuntimeError, match="did not include an answer"):
+        client.ask("q", "m")
+
+
+def test_glean_client_raises_on_empty_answer() -> None:
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {"answer": ""}
+
+    client = GleanDriverClient(transport=mock_transport)
+    with pytest.raises(RuntimeError, match="empty answer"):
+        client.ask("q", "m")

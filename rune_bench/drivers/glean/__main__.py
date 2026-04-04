@@ -11,7 +11,7 @@ Wire protocol (v1):
 Supported actions
 -----------------
 ask
-    params: question (str)
+    params: question (str), mode (str, optional, "chat"|"search", default "chat")
     result: {"answer": str, "sources": list | None}
 
 info
@@ -23,16 +23,22 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import urllib.request
 import urllib.error
 
+_SAFE_INSTANCE_RE = re.compile(r'^[a-z0-9-]+$')
+
 
 def _handle_ask(params: dict) -> dict:
     question: str = params["question"]
+    mode: str = params.get("mode", "chat")
+    if mode not in ("chat", "search"):
+        raise RuntimeError(f"Invalid mode {mode!r}: must be 'chat' or 'search'")
 
     token = os.environ.get("RUNE_GLEAN_API_TOKEN", "")
-    instance = os.environ.get("RUNE_GLEAN_INSTANCE", "")
+    instance = os.environ.get("RUNE_GLEAN_INSTANCE", "").strip()
 
     if not token:
         raise RuntimeError(
@@ -44,13 +50,20 @@ def _handle_ask(params: dict) -> dict:
             "RUNE_GLEAN_INSTANCE environment variable is not set. "
             "Set it to your Glean instance subdomain (e.g. 'mycompany')."
         )
+    if not _SAFE_INSTANCE_RE.match(instance):
+        raise RuntimeError(
+            f"RUNE_GLEAN_INSTANCE must only contain lowercase letters, digits, "
+            f"and hyphens (got {instance!r})."
+        )
 
     base_url = f"https://{instance}-be.glean.com/api/v1"
-    url = f"{base_url}/chat"
+    endpoint = "chat" if mode == "chat" else "search"
+    url = f"{base_url}/{endpoint}"
 
-    body: dict = {
-        "messages": [{"role": "user", "content": question}],
-    }
+    if mode == "chat":
+        body: dict = {"messages": [{"role": "user", "content": question}]}
+    else:
+        body = {"query": question}
 
     data = json.dumps(body).encode()
     req = urllib.request.Request(
@@ -64,7 +77,7 @@ def _handle_ask(params: dict) -> dict:
     )
 
     try:
-        with urllib.request.urlopen(req) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
             resp_body = json.loads(resp.read().decode())
     except urllib.error.HTTPError as exc:
         detail = ""
