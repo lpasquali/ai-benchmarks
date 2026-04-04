@@ -18,3 +18,10 @@ coverage.out
 gosec-report.json
 license-checks.json
 .venv-ci-lic
+
+# Virtual environments
+.venv/
+venv/
+
+# Build artifacts
+*.egg-info/
