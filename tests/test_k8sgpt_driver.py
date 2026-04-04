@@ -316,3 +316,22 @@ def test_client_ask_raises_on_none_answer(tmp_path: Path) -> None:
 
 def test_runner_alias() -> None:
     assert K8sGPTRunner is K8sGPTDriverClient
+
+
+def test_format_findings_with_string_error() -> None:
+    """_format_findings must not iterate character-by-character when error is a string."""
+    results = {
+        "results": [
+            {
+                "kind": "Pod",
+                "name": "default/broken",
+                "error": "Back-off pulling image",
+                "details": "",
+                "parent_object": "",
+            }
+        ]
+    }
+    output = k8sgpt_main._format_findings(results["results"])
+    assert "Back-off pulling image" in output
+    # If iterated char-by-char the result would have "B", "a", "c", ... on separate lines
+    assert "Error: B\n" not in output

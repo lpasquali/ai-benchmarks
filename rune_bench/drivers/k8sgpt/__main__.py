@@ -35,7 +35,12 @@ def _format_findings(results: list[dict]) -> str:
     for i, item in enumerate(results, 1):
         kind = item.get("kind", "Unknown")
         name = item.get("name", "unknown")
-        errors = item.get("error", [])
+        errors_raw = item.get("error", [])
+        # Normalize: k8sgpt may emit error as a str, a list[dict], or a list[str]
+        if isinstance(errors_raw, (str, dict)):
+            errors = [errors_raw]
+        else:
+            errors = list(errors_raw)
         details = item.get("details", "")
         parent = item.get("parent_object", "")
 
