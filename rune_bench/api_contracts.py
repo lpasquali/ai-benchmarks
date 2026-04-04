@@ -68,6 +68,7 @@ class RunBenchmarkRequest:
     ollama_warmup_timeout: int
     kubeconfig: str
     vastai_stop_instance: bool
+    attestation_required: bool = False
 
     @classmethod
     def from_cli(
@@ -85,6 +86,7 @@ class RunBenchmarkRequest:
         ollama_warmup_timeout: int,
         kubeconfig: Path,
         vastai_stop_instance: bool,
+        attestation_required: bool = False,
     ) -> "RunBenchmarkRequest":
         return cls(
             vastai=vastai,
@@ -99,6 +101,7 @@ class RunBenchmarkRequest:
             ollama_warmup_timeout=ollama_warmup_timeout,
             kubeconfig=str(kubeconfig),
             vastai_stop_instance=vastai_stop_instance,
+            attestation_required=attestation_required,
         )
 
     def to_dict(self) -> dict:

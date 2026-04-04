@@ -132,7 +132,22 @@ def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
     return {"answer": answer}
 
 
+def _verify_attestation(target: str) -> None:
+    """Run PCR attestation for *target*; raises RuntimeError on failure."""
+    from rune_bench.attestation.factory import get_driver
+
+    driver = get_driver()
+    result = driver.verify(target)
+    if not result.passed:
+        raise RuntimeError(
+            f"Attestation failed for scheduling target {target!r}: {result.message}"
+        )
+
+
 def run_benchmark(request: RunBenchmarkRequest) -> dict:
+    if request.attestation_required:
+        _verify_attestation(request.kubeconfig)
+
     provider = _make_resource_provider_for_benchmark(request)
     result = provider.provision()
 
