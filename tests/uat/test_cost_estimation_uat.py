@@ -1,15 +1,24 @@
 """UAT tests for cost estimation drivers.
 
-These tests validate the accuracy and plausibility of all cost estimation
-drivers exposed by /v1/estimates.  They are skipped by default in CI; run
-them explicitly with:
+These tests validate the accuracy and plausibility of the cost estimation logic
+implemented in ``rune_bench.common.costs.CostEstimator``.  They exercise
+``CostEstimator.estimate()`` directly; the HTTP wiring of ``POST /v1/estimates``
+(``api_backend.get_cost_estimate``) is covered by ``tests/test_cost_estimation.py``.
 
+They are skipped by default in CI unless ``-m uat`` is passed explicitly.
+To exclude them in CI pipelines that do not set ``-m uat``, add ``-m "not uat"``
+to your ``pytest`` invocation:
+
+    # Skip UAT (default CI):
+    pytest -m "not uat"
+
+    # Run UAT explicitly:
     pytest -m uat tests/uat/test_cost_estimation_uat.py
 
 UAT requirements (rune#39):
-1. Vast.ai estimate returns a plausible $/hr value.
+1. Vast.ai estimate returns a plausible total projected cost for a short run.
 2. Azure returns a value from the retail API or a documented stub.
-3. AWS/GCP stubs are within 20% of official spot prices.
+3. AWS/GCP stub rates are within 20% of official on-demand reference prices.
 4. Shadow calculation for local hardware TDP vs energy rate confirms amortization logic.
 5. Any test run where projected_cost_usd > $1.00 raises CostLimitExceededError
    (enforced via the uat_cost_guard fixture below).
@@ -108,10 +117,10 @@ def uat_cost_guard(request: pytest.FixtureRequest) -> Generator[None, None, None
 
 @pytest.mark.uat
 def test_uat_vastai_estimate_plausible_value() -> None:
-    """Vast.ai estimate for a 10-minute run should be between $0.01 and $1.00.
+    """Vast.ai projected cost for a 10-minute run should be between $0.01 and $1.00.
 
-    A 10-minute benchmark at max $3.00/hr should cost $0.50 — well within the
-    plausible range for a short GPU job.
+    A 10-minute benchmark at max $3.00/hr incurs a total cost of $0.50 —
+    well within the plausible range for a short GPU job.
     """
     estimator = CostEstimator()
     req = _req(vastai=True, min_dph=2.0, max_dph=3.0, estimated_duration_seconds=600)
@@ -126,7 +135,10 @@ def test_uat_vastai_estimate_plausible_value() -> None:
 
 @pytest.mark.uat
 def test_uat_vastai_estimate_uses_max_dph() -> None:
-    """Projected cost must use max_dph as the ceiling rate."""
+    """Projected total cost must use max_dph as the ceiling rate.
+
+    15 minutes at $2.00/hr = $0.50 total projected cost.
+    """
     estimator = CostEstimator()
     req = _req(vastai=True, min_dph=1.0, max_dph=2.0, estimated_duration_seconds=900)
     result = _run(estimator.estimate(req))
@@ -221,13 +233,13 @@ def test_uat_azure_estimate_falls_back_to_stub_on_api_failure(
 
 
 # ---------------------------------------------------------------------------
-# UAT: AWS stub — within 20% of official spot price
+# UAT: AWS stub — within 20% of official on-demand reference price
 # ---------------------------------------------------------------------------
 
-# Official AWS p3.2xlarge (V100) on-demand price: ~$3.06/hr; spot: ~$1.00–$1.50/hr.
-# The stub uses $2.50/hr which is within 20% of the on-demand reference.
-_AWS_REFERENCE_RATE_USD_PER_HR = 2.50   # documented stub rate
-_AWS_OFFICIAL_UPPER_BOUND = 3.06        # AWS p3.2xlarge on-demand (us-east-1)
+# Official AWS p3.2xlarge (1× V100, 16 GB) on-demand price in us-east-1: ~$3.06/hr.
+# RUNE stub uses $2.50/hr as a conservative mid-point estimate.
+# Deviation from on-demand reference: |2.50 - 3.06| / 3.06 ≈ 18.3% — within 20%.
+_AWS_REFERENCE_RATE_USD_PER_HR = 3.06   # AWS p3.2xlarge on-demand (us-east-1)
 _TOLERANCE = 0.20                       # 20%
 
 
@@ -236,7 +248,11 @@ def test_uat_aws_stub_within_20_percent_of_official_price() -> None:
     """AWS stub rate should be within 20% of the published on-demand price.
 
     Reference: AWS p3.2xlarge (1× V100, 16 GB) on-demand in us-east-1 = $3.06/hr.
-    RUNE stub rate: $2.50/hr.  Difference: ~18.3% — within the 20% tolerance.
+    RUNE stub rate: $2.50/hr.  Deviation: ~18.3% — within the 20% tolerance.
+
+    The test verifies the implied per-hour rate embedded in the 10-minute
+    projected_cost_usd value, not a spot price (spot prices fluctuate and
+    cannot be reliably validated in UAT without live credentials).
     """
     estimator = CostEstimator()
     # 10 minutes → at most ~$0.42 — well under $1.00 ceiling
@@ -246,30 +262,33 @@ def test_uat_aws_stub_within_20_percent_of_official_price() -> None:
     assert result.cost_driver == "aws"
 
     implied_hourly_rate = result.projected_cost_usd / (600 / 3600)
-    deviation = abs(implied_hourly_rate - _AWS_OFFICIAL_UPPER_BOUND) / _AWS_OFFICIAL_UPPER_BOUND
+    deviation = abs(implied_hourly_rate - _AWS_REFERENCE_RATE_USD_PER_HR) / _AWS_REFERENCE_RATE_USD_PER_HR
     assert deviation <= _TOLERANCE, (
         f"AWS stub rate ${implied_hourly_rate:.2f}/hr deviates {deviation:.1%} "
-        f"from official ${_AWS_OFFICIAL_UPPER_BOUND:.2f}/hr (tolerance {_TOLERANCE:.0%})"
+        f"from on-demand reference ${_AWS_REFERENCE_RATE_USD_PER_HR:.2f}/hr (tolerance {_TOLERANCE:.0%})"
     )
 
 
 # ---------------------------------------------------------------------------
-# UAT: GCP stub — within 20% of official spot price
+# UAT: GCP stub — within 20% of official on-demand reference price
 # ---------------------------------------------------------------------------
 
-# Official GCP n1-standard-8 + Tesla V100 (us-central1): ~$2.48–$2.70/hr on-demand.
-# The stub uses $2.20/hr which is within 20% of the reference.
-_GCP_REFERENCE_RATE_USD_PER_HR = 2.48   # GCP a2-highgpu-1g on-demand approximation
+# Reference: GCP n1-standard-8 + Tesla V100 (us-central1) on-demand ≈ $2.48/hr.
+# This matches the tier the $2.20/hr stub approximates.
+# Deviation: |2.20 - 2.48| / 2.48 ≈ 11.3% — within 20%.
+_GCP_REFERENCE_RATE_USD_PER_HR = 2.48   # GCP n1 + V100 on-demand (us-central1)
 _GCP_TOLERANCE = 0.20
 
 
 @pytest.mark.uat
 def test_uat_gcp_stub_within_20_percent_of_official_price() -> None:
-    """GCP stub rate should be within 20% of the published on-demand price.
+    """GCP stub rate should be within 20% of the on-demand reference price.
 
-    Reference: GCP a2-highgpu-1g (1× A100 40 GB) on-demand in us-central1 ≈ $3.67/hr.
-    Using a V100-equivalent reference ($2.48/hr) to match the stub tier.
-    RUNE stub rate: $2.20/hr.  Difference: ~11.3% — within the 20% tolerance.
+    Reference: GCP n1-standard-8 + Tesla V100 (us-central1) on-demand ≈ $2.48/hr.
+    RUNE stub rate: $2.20/hr.  Deviation: ~11.3% — within the 20% tolerance.
+
+    The test verifies the implied per-hour rate embedded in the 10-minute
+    projected_cost_usd value against the on-demand (not spot) reference price.
     """
     estimator = CostEstimator()
     req = _req(gcp=True, estimated_duration_seconds=600)
@@ -281,7 +300,7 @@ def test_uat_gcp_stub_within_20_percent_of_official_price() -> None:
     deviation = abs(implied_hourly_rate - _GCP_REFERENCE_RATE_USD_PER_HR) / _GCP_REFERENCE_RATE_USD_PER_HR
     assert deviation <= _GCP_TOLERANCE, (
         f"GCP stub rate ${implied_hourly_rate:.2f}/hr deviates {deviation:.1%} "
-        f"from reference ${_GCP_REFERENCE_RATE_USD_PER_HR:.2f}/hr (tolerance {_GCP_TOLERANCE:.0%})"
+        f"from on-demand reference ${_GCP_REFERENCE_RATE_USD_PER_HR:.2f}/hr (tolerance {_GCP_TOLERANCE:.0%})"
     )
 
 
@@ -297,6 +316,8 @@ def test_uat_local_hardware_shadow_calculation_energy_only() -> None:
     Example: 300 W GPU, $0.12/kWh, 10-minute run.
       energy_kwh = (300/1000) × (600/3600) = 0.05 kWh
       energy_cost = 0.05 × 0.12 = $0.006
+      projected_cost_usd = round($0.006, 2) = $0.01
+    (CostEstimator rounds projected_cost_usd to 2 decimal places.)
     """
     estimator = CostEstimator()
     req = _req(
