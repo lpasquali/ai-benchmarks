@@ -7,7 +7,6 @@ This file only handles CLI argument parsing, Rich output, and orchestration.
 """
 
 from pathlib import Path
-import asyncio
 import os
 import socket
 from typing import Callable
@@ -25,7 +24,6 @@ except ImportError:
 
 from rune_bench.api_client import RuneApiClient
 from rune_bench.api_contracts import (
-    CostEstimationRequest,
     RunAgenticAgentRequest,
     RunBenchmarkRequest,
     RunOllamaInstanceRequest,
@@ -38,7 +36,6 @@ from rune_bench.common import (
     load_config,
     peek_profile_from_argv,
 )
-from rune_bench.common.costs import CostEstimator
 from rune_bench.debug import set_debug
 from rune_bench.metrics import InMemoryCollector, set_collector, clear_collector
 from rune_bench.backends.ollama import OllamaClient, OllamaModelCapabilities, OllamaModelManager
@@ -47,7 +44,7 @@ from rune_bench.workflows import (
     SpendGateAction,
     UserAbortedError,
     VastAIProvisioningResult,
-    _DEFAULT_SPEND_THRESHOLD,
+    DEFAULT_SPEND_THRESHOLD,
     evaluate_spend_gate,
     list_existing_ollama_models,
     list_running_ollama_models,
@@ -373,10 +370,10 @@ def _run_preflight_cost_check(
     ))
 
     try:
-        threshold = float(os.environ.get("RUNE_SPEND_WARNING_THRESHOLD", str(_DEFAULT_SPEND_THRESHOLD)))
+        threshold = float(os.environ.get("RUNE_SPEND_WARNING_THRESHOLD", str(DEFAULT_SPEND_THRESHOLD)))
     except (ValueError, TypeError):
         console.print("[yellow]Warning: Invalid RUNE_SPEND_WARNING_THRESHOLD value; using default $5.00.[/yellow]")
-        threshold = _DEFAULT_SPEND_THRESHOLD
+        threshold = DEFAULT_SPEND_THRESHOLD
 
     action = evaluate_spend_gate(projected_cost, threshold=threshold, yes=yes)
 

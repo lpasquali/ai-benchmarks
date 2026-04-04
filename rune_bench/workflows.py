@@ -5,6 +5,7 @@ This module keeps orchestration/business logic out of the CLI layer.
 
 from __future__ import annotations
 
+import asyncio
 import os
 from dataclasses import dataclass
 from enum import Enum
@@ -32,7 +33,7 @@ class UserAbortedError(RuntimeError):
     """Raised when an interactive confirmation is rejected by the user."""
 
 
-_DEFAULT_SPEND_THRESHOLD = 5.00
+DEFAULT_SPEND_THRESHOLD = 5.00
 
 
 class SpendGateAction(str, Enum):
@@ -275,8 +276,6 @@ def run_preflight_cost_check(
     Raises FailClosedError when no cost driver is configured.
     Raises RuntimeError when estimation is unavailable.
     """
-    import asyncio
-
     if not vastai:
         return {}
 
