@@ -4,8 +4,9 @@ Run as::
 
     python -m rune_bench.drivers.dagger
 
-or via the ``rune-dagger-driver`` console script (if installed with
-``pip install rune[dagger]``).
+or via installing the ``dagger-io`` package directly::
+
+    pip install dagger-io
 
 Wire protocol (v1):
     stdin  line: {"action": "ACTION", "params": {...}, "id": "UUID"}
@@ -14,7 +15,8 @@ Wire protocol (v1):
 Supported actions
 -----------------
 ask
-    params: question (str), model (str, optional), ollama_url (str, optional)
+    params: question (str), model (str, optional), ollama_url (str, optional),
+            pipeline (str, optional) — named pipeline template from pipelines/ dir
     result: {"answer": str, "pipeline_log": str}
 
 info
@@ -28,16 +30,36 @@ import json
 import sys
 
 
+def _load_pipeline_command(pipeline: str, question: str) -> str:
+    """Load a named pipeline template from pipelines/ and substitute {question}."""
+    import pathlib
+    pipelines_dir = pathlib.Path(__file__).parent.parent.parent.parent / "pipelines"
+    template_path = pipelines_dir / f"{pipeline}.sh"
+    if template_path.exists():
+        return template_path.read_text().replace("{question}", question)
+    raise RuntimeError(
+        f"Pipeline template {pipeline!r} not found. "
+        f"Expected at {template_path}"
+    )
+
+
 def _handle_ask(params: dict) -> dict:
     question: str = params["question"]
     model: str | None = params.get("model")
     ollama_url: str | None = params.get("ollama_url")
+    pipeline: str | None = params.get("pipeline")
+
+    # Resolve the shell command: named pipeline template or direct question
+    if pipeline:
+        command = _load_pipeline_command(pipeline, question)
+    else:
+        command = question
 
     try:
-        import dagger  # noqa: F811
+        import dagger
     except ImportError:
         raise RuntimeError(
-            "Dagger driver requires: pip install rune[dagger]"
+            "Dagger driver requires the dagger-io package: pip install dagger-io"
         ) from None
 
     import asyncio
@@ -45,7 +67,7 @@ def _handle_ask(params: dict) -> dict:
     pipeline_log_lines: list[str] = []
 
     async def run_pipeline(
-        question: str,
+        cmd: str,
         model: str | None = None,
         ollama_url: str | None = None,
     ) -> str:
@@ -60,13 +82,13 @@ def _handle_ask(params: dict) -> dict:
                 container = container.with_env_variable("OLLAMA_URL", ollama_url)
                 pipeline_log_lines.append(f"Set OLLAMA_URL={ollama_url}")
 
-            # Execute the question as a shell command
-            pipeline_log_lines.append(f"Executing: sh -c {question!r}")
-            result = await container.with_exec(["sh", "-c", question]).stdout()
+            # Execute the resolved command
+            pipeline_log_lines.append(f"Executing: sh -c {cmd!r}")
+            result = await container.with_exec(["sh", "-c", cmd]).stdout()
             return result
 
     try:
-        result = asyncio.run(run_pipeline(question, model, ollama_url))
+        result = asyncio.run(run_pipeline(command, model, ollama_url))
     except Exception as exc:
         raise RuntimeError(f"Dagger pipeline failed: {exc}") from exc
 
