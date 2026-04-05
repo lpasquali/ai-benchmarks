@@ -72,13 +72,6 @@ _STUBS = [
         "https://docs.midjourney.com/",
         "midjourney",
     ),
-    (
-        "rune_bench.drivers.dagger",
-        "DaggerDriverClient",
-        "RUNE_DAGGER_API_KEY",
-        "https://dagger.io/",
-        "dagger",
-    ),
 ]
 
 

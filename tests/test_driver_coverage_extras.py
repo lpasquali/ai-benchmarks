@@ -75,7 +75,7 @@ def test_dagger_handle_info() -> None:
 
 
 def test_dagger_load_pipeline_missing() -> None:
-    with pytest.raises(RuntimeError, match="Pipeline template"):
+    with pytest.raises(FileNotFoundError, match="Pipeline template"):
         dagger_main._load_pipeline_command("nonexistent_pipeline", "test")
 
 

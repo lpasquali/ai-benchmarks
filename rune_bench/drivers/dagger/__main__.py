@@ -86,7 +86,7 @@ def _handle_ask(params: dict) -> dict:
 
     # Lazy import: dagger-io may not be installed
     try:
-        import dagger  # noqa: F401 -- presence check
+        import dagger  # type: ignore[import-not-found]  # noqa: F401 -- presence check
     except ImportError:
         raise RuntimeError(
             "Dagger driver requires the dagger-io package: pip install dagger-io"
