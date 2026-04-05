@@ -15,6 +15,9 @@ ask
             ollama_url (str, optional)
     result: {"answer": str, "incidents": list}
 
+    .. note:: The ``triage_actions`` field is not yet included in the result.
+       A future version will add recommended actions alongside the triage summary.
+
 info
     params: (none)
     result: {"name": "pagerduty", "version": "1", "actions": [...]}
@@ -25,32 +28,50 @@ from __future__ import annotations
 import json
 import os
 import sys
-import urllib.request
+
+from rune_bench.common.http_client import make_http_request, normalize_url
 
 _PAGERDUTY_API_BASE = "https://api.pagerduty.com"
 
 
-def _pd_request(path: str, api_key: str) -> dict:
+def _pd_request(path: str, api_key: str, *, action: str | None = None) -> dict:
     """Make an authenticated GET request to the PagerDuty REST v2 API."""
+    if action is None:
+        # Derive a human-readable action from the endpoint path.
+        segment = path.lstrip("/").split("?")[0].replace("/", " ")
+        action = f"fetch PagerDuty {segment}"
     url = f"{_PAGERDUTY_API_BASE}{path}"
-    req = urllib.request.Request(
+    return make_http_request(
         url,
+        method="GET",
+        action=action,
         headers={
             "Authorization": f"Token token={api_key}",
-            "Content-Type": "application/json",
+            "Accept": "application/vnd.pagerduty+json;version=2",
         },
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
-        return json.loads(resp.read().decode())
 
 
 def _fetch_open_incidents(api_key: str) -> list[dict]:
-    """Fetch triggered and acknowledged incidents from PagerDuty."""
-    data = _pd_request(
-        "/incidents?statuses[]=triggered&statuses[]=acknowledged",
-        api_key,
-    )
-    return data.get("incidents", [])
+    """Fetch triggered and acknowledged incidents from PagerDuty.
+
+    Paginates through all result pages using the ``more`` flag and ``offset``
+    parameter returned by the PagerDuty REST v2 API.
+    """
+    all_incidents: list[dict] = []
+    limit = 25
+    offset = 0
+    while True:
+        data = _pd_request(
+            f"/incidents?statuses[]=triggered&statuses[]=acknowledged&limit={limit}&offset={offset}",
+            api_key,
+            action="fetch PagerDuty incidents",
+        )
+        all_incidents.extend(data.get("incidents", []))
+        if not data.get("more", False):
+            break
+        offset += limit
+    return all_incidents
 
 
 def _fetch_alerts_for_incident(incident_id: str, api_key: str) -> list[dict]:
@@ -86,16 +107,14 @@ def _format_incident_data(incidents: list[dict], alerts_by_incident: dict[str, l
 
 def _call_ollama(prompt: str, model: str, ollama_url: str) -> str:
     """Call the Ollama /api/generate endpoint for triage synthesis."""
-    url = f"{ollama_url.rstrip('/')}/api/generate"
-    payload = json.dumps({"model": model, "prompt": prompt, "stream": False}).encode()
-    req = urllib.request.Request(
+    base = normalize_url(ollama_url, "Ollama")
+    url = f"{base.rstrip('/')}/api/generate"
+    result = make_http_request(
         url,
-        data=payload,
-        headers={"Content-Type": "application/json"},
         method="POST",
+        payload={"model": model, "prompt": prompt, "stream": False},
+        action="synthesize via Ollama",
     )
-    with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
-        result = json.loads(resp.read().decode())
     return result.get("response", "")
 
 
@@ -112,6 +131,10 @@ def _handle_ask(params: dict) -> dict:
         )
 
     incidents = _fetch_open_incidents(api_key)
+
+    # Short-circuit: skip alert fetching and LLM synthesis when there are no incidents.
+    if not incidents:
+        return {"answer": "No open incidents found.", "incidents": []}
 
     alerts_by_incident: dict[str, list[dict]] = {}
     for inc in incidents:

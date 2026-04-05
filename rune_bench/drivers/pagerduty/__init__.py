@@ -3,7 +3,7 @@
 This is a hybrid agent: PagerDuty REST API for data retrieval plus Ollama for
 triage synthesis.  The driver process
 (``rune_bench.drivers.pagerduty.__main__``) calls the PagerDuty REST v2 API
-via :mod:`urllib.request` and therefore requires no external dependencies
+via :func:`~rune_bench.common.http_client.make_http_request` and therefore requires no external dependencies
 beyond a valid ``RUNE_PAGERDUTY_API_KEY`` env var.
 """
 
@@ -25,11 +25,11 @@ class PagerDutyDriverClient:
 
     def __init__(
         self,
-        kubeconfig: Path,
+        kubeconfig: Path | None = None,
         *,
         transport: DriverTransport | None = None,
     ) -> None:
-        if not kubeconfig.exists():
+        if kubeconfig is not None and not kubeconfig.exists():
             raise FileNotFoundError(f"kubeconfig not found: {kubeconfig}")
         self._kubeconfig = kubeconfig
         self._transport: DriverTransport = transport or make_driver_transport("pagerduty")
@@ -50,6 +50,8 @@ class PagerDutyDriverClient:
             "question": question,
             "model": model.strip(),
         }
+        if self._kubeconfig is not None:
+            params["kubeconfig_path"] = str(self._kubeconfig)
         if ollama_url:
             params["ollama_url"] = ollama_url
 
