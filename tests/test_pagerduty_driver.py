@@ -44,32 +44,6 @@ _SAMPLE_ALERTS = [
 ]
 
 
-def _mock_urlopen(responses: dict):
-    """Return a context-manager factory that returns canned JSON responses keyed by URL substring."""
-
-    class FakeResponse:
-        def __init__(self, data: bytes) -> None:
-            self._data = data
-
-        def read(self) -> bytes:
-            return self._data
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            pass
-
-    def _urlopen(req, *args, **kwargs):
-        url = req.full_url if hasattr(req, "full_url") else str(req)
-        for key, payload in responses.items():
-            if key in url:
-                return FakeResponse(json.dumps(payload).encode())
-        raise RuntimeError(f"Unmocked URL: {url}")
-
-    return _urlopen
-
-
 # ---------------------------------------------------------------------------
 # _handle_ask — missing API key
 # ---------------------------------------------------------------------------

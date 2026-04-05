@@ -15,6 +15,9 @@ ask
             ollama_url (str, optional)
     result: {"answer": str, "incidents": list}
 
+    .. note:: The ``triage_actions`` field is not yet included in the result.
+       A future version will add recommended actions alongside the triage summary.
+
 info
     params: (none)
     result: {"name": "pagerduty", "version": "1", "actions": [...]}
@@ -31,13 +34,17 @@ from rune_bench.common.http_client import make_http_request, normalize_url
 _PAGERDUTY_API_BASE = "https://api.pagerduty.com"
 
 
-def _pd_request(path: str, api_key: str) -> dict:
+def _pd_request(path: str, api_key: str, *, action: str | None = None) -> dict:
     """Make an authenticated GET request to the PagerDuty REST v2 API."""
+    if action is None:
+        # Derive a human-readable action from the endpoint path.
+        segment = path.lstrip("/").split("?")[0].replace("/", " ")
+        action = f"fetch PagerDuty {segment}"
     url = f"{_PAGERDUTY_API_BASE}{path}"
     return make_http_request(
         url,
         method="GET",
-        action="fetch PagerDuty incidents",
+        action=action,
         headers={
             "Authorization": f"Token token={api_key}",
             "Accept": "application/vnd.pagerduty+json;version=2",
@@ -46,12 +53,25 @@ def _pd_request(path: str, api_key: str) -> dict:
 
 
 def _fetch_open_incidents(api_key: str) -> list[dict]:
-    """Fetch triggered and acknowledged incidents from PagerDuty."""
-    data = _pd_request(
-        "/incidents?statuses[]=triggered&statuses[]=acknowledged",
-        api_key,
-    )
-    return data.get("incidents", [])
+    """Fetch triggered and acknowledged incidents from PagerDuty.
+
+    Paginates through all result pages using the ``more`` flag and ``offset``
+    parameter returned by the PagerDuty REST v2 API.
+    """
+    all_incidents: list[dict] = []
+    limit = 25
+    offset = 0
+    while True:
+        data = _pd_request(
+            f"/incidents?statuses[]=triggered&statuses[]=acknowledged&limit={limit}&offset={offset}",
+            api_key,
+            action="fetch PagerDuty incidents",
+        )
+        all_incidents.extend(data.get("incidents", []))
+        if not data.get("more", False):
+            break
+        offset += limit
+    return all_incidents
 
 
 def _fetch_alerts_for_incident(incident_id: str, api_key: str) -> list[dict]:
@@ -111,6 +131,10 @@ def _handle_ask(params: dict) -> dict:
         )
 
     incidents = _fetch_open_incidents(api_key)
+
+    # Short-circuit: skip alert fetching and LLM synthesis when there are no incidents.
+    if not incidents:
+        return {"answer": "No open incidents found.", "incidents": []}
 
     alerts_by_incident: dict[str, list[dict]] = {}
     for inc in incidents:
