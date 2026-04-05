@@ -5,9 +5,8 @@ import pytest
 
 import rune_bench.api_backend as api_backend
 import rune_bench.workflows as workflows
-from rune_bench.common import make_http_request
 from rune_bench.common.models import ModelSelector
-from rune_bench.backends.ollama import OllamaClient, OllamaModelCapabilities
+from rune_bench.backends.ollama import OllamaClient
 from rune_bench.backends.ollama import OllamaModelManager
 
 

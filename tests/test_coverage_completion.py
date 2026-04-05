@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
 
 import pytest
 import typer
@@ -262,7 +261,6 @@ def test_bedrock_backend_requires_region():
 def test_vastai_provider_provision_and_teardown(monkeypatch):
     from unittest.mock import MagicMock
     from rune_bench.resources.vastai.provider import VastAIProvider
-    from rune_bench.resources.base import ProvisioningResult
 
     fake_provision_result = MagicMock()
     fake_provision_result.ollama_url = "http://host:11434"
