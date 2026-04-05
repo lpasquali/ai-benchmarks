@@ -134,17 +134,17 @@ def test_uat_vastai_estimate_plausible_value() -> None:
 
 
 @pytest.mark.uat
-def test_uat_vastai_estimate_uses_max_dph() -> None:
-    """Projected total cost must use max_dph as the ceiling rate.
+def test_uat_vastai_estimate_uses_midpoint_rate() -> None:
+    """Projected total cost uses the midpoint of min_dph and max_dph.
 
-    15 minutes at $2.00/hr = $0.50 total projected cost.
+    15 minutes at the midpoint of $1.00–$2.00/hr ($1.50/hr) = $0.375 total.
     """
     estimator = CostEstimator()
     req = _req(vastai=True, min_dph=1.0, max_dph=2.0, estimated_duration_seconds=900)
     result = _run(estimator.estimate(req))
 
-    # 15 minutes at $2.00/hr = $0.50
-    expected = 2.0 * (900 / 3600)
+    # 15 minutes at midpoint $1.50/hr = $0.375 → rounded to $0.38
+    expected = round((1.0 + 2.0) / 2 * (900 / 3600), 2)
     assert result.projected_cost_usd == pytest.approx(expected, rel=0.01)
 
 
