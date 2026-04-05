@@ -1,4 +1,4 @@
-"""Metoro agentic runner stub.
+"""Metoro agentic runner -- delegates to the Metoro driver.
 
 Scope:      SRE  |  Rank 4  |  Rating 4.0
 Capability: Uses eBPF for autonomous service mapping and debugging.
@@ -7,7 +7,7 @@ Docs:       https://metoro.io/docs
 Ecosystem:  CNCF / eBPF
 
 Implementation notes:
-- Auth:     METORO_API_KEY env var
+- Auth:     RUNE_METORO_API_KEY env var
 - SDK:      REST API (no official Python SDK as of writing)
             Base URL: https://app.metoro.io/api  (or self-hosted endpoint)
 - Key endpoints:
@@ -19,20 +19,6 @@ Implementation notes:
 - `model` / `ollama_url` may be passed to the self-hosted Metoro AI endpoint.
 """
 
-from pathlib import Path
+from rune_bench.drivers.metoro import MetoroDriverClient
 
-
-class MetoroRunner:
-    """SRE agent: eBPF-powered service mapping and autonomous debugging via Metoro."""
-
-    def __init__(self, kubeconfig: Path) -> None:
-        if not kubeconfig.exists():
-            raise FileNotFoundError(f"kubeconfig not found: {kubeconfig}")
-        self._kubeconfig = kubeconfig
-
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
-        """Invoke Metoro AI explanation and return the analysis as a string."""
-        raise NotImplementedError(
-            "MetoroRunner is not yet implemented. "
-            "See https://metoro.io/docs/api for implementation details."
-        )
+MetoroRunner = MetoroDriverClient
