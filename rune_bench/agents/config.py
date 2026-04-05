@@ -8,6 +8,7 @@ agent factories never need to touch ``os.getenv`` directly.
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 @dataclass
@@ -16,16 +17,17 @@ class AgentConfig:
 
     api_key: str | None = None
     base_url: str | None = None
-    kubeconfig: str | None = None
+    kubeconfig: Path | None = None
     extra: dict = field(default_factory=dict)
 
 
 def resolve_agent_config(agent_name: str) -> AgentConfig:
     """Build an :class:`AgentConfig` from environment variables."""
     prefix = f"RUNE_{agent_name.upper()}_"
+    kubeconfig_raw = os.getenv("RUNE_KUBECONFIG") or os.getenv("KUBECONFIG")
     return AgentConfig(
         api_key=os.getenv(f"{prefix}API_KEY"),
         base_url=os.getenv(f"{prefix}BASE_URL"),
-        kubeconfig=os.getenv("RUNE_KUBECONFIG") or os.getenv("KUBECONFIG"),
+        kubeconfig=Path(kubeconfig_raw) if kubeconfig_raw else None,
         extra={},
     )
