@@ -43,7 +43,11 @@ def _handle_ask(params: dict) -> dict:
             "Request API access at https://elicit.com/api"
         )
 
-    url = f"{os.environ.get('RUNE_ELICIT_API_BASE', 'https://elicit.com').rstrip('/')}/api/v1/search"
+    base = os.environ.get("RUNE_ELICIT_API_BASE", "https://elicit.com").rstrip("/")
+    # Strip trailing /api to avoid double /api/api paths
+    if base.endswith("/api"):
+        base = base[:-4]
+    url = f"{base}/api/v1/search"
     body = json.dumps({"query": question, "limit": 10}).encode()
     req = urllib.request.Request(
         url,
@@ -57,12 +61,17 @@ def _handle_ask(params: dict) -> dict:
 
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
-            data = json.loads(resp.read().decode())
+            raw = resp.read().decode()
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode() if exc.fp else str(exc)
         raise RuntimeError(f"Elicit API error ({exc.code}): {detail}") from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"Elicit API connection error: {exc.reason}") from exc
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Elicit API returned non-JSON response: {raw[:200]}") from exc
 
     papers: list[dict] = data if isinstance(data, list) else data.get("papers", data.get("results", []))
 
