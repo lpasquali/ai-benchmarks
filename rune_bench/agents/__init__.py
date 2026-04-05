@@ -1,4 +1,4 @@
-"""Agents for cluster investigation and diagnostics."""
+"""Multi-domain agent registry, configuration, and execution APIs."""
 
 from .base import AgentResult, AgentRunner
 from .config import AgentConfig, resolve_agent_config
