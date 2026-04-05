@@ -31,6 +31,18 @@ import json
 import os
 import sys
 
+_MODEL_PREFIXES = ("ollama/", "ollama_chat/")
+
+_SENTINEL = object()
+
+
+def _normalize_model(model: str) -> str:
+    """Strip provider prefixes (e.g. 'ollama/', 'ollama_chat/') from model name."""
+    for prefix in _MODEL_PREFIXES:
+        if model.startswith(prefix):
+            return model[len(prefix):]
+    return model
+
 
 def _handle_ask(params: dict) -> dict:
     question: str = params["question"]
@@ -41,26 +53,37 @@ def _handle_ask(params: dict) -> dict:
         from crewai import Agent, Crew, Task
     except ImportError as exc:
         raise RuntimeError(
-            "CrewAI driver requires: pip install crewai  "
-            "(crewai package)"
+            "CrewAI driver requires: pip install crewai"
         ) from exc
 
-    # Configure Ollama via LiteLLM environment variables
+    normalized = _normalize_model(model)
+
+    # Configure Ollama via LiteLLM environment variables, restoring previous
+    # value after the request to avoid env var leaking across requests in the
+    # long-lived stdio loop.
+    prev_api_base = os.environ.get("OPENAI_API_BASE", _SENTINEL)
     if ollama_url:
         os.environ["OPENAI_API_BASE"] = f"{ollama_url.rstrip('/')}/v1"
 
-    agent = Agent(
-        role="Analyst",
-        goal=question,
-        llm=f"ollama/{model}",
-    )
-    task = Task(
-        description=question,
-        agent=agent,
-        expected_output="A detailed analysis",
-    )
-    crew = Crew(agents=[agent], tasks=[task], verbose=False)
-    result = crew.kickoff()
+    try:
+        agent = Agent(
+            role="Analyst",
+            goal=question,
+            llm=f"ollama/{normalized}",
+        )
+        task = Task(
+            description=question,
+            agent=agent,
+            expected_output="A detailed analysis",
+        )
+        crew = Crew(agents=[agent], tasks=[task], verbose=False)
+        result = crew.kickoff()
+    finally:
+        # Restore previous OPENAI_API_BASE value
+        if prev_api_base is _SENTINEL:
+            os.environ.pop("OPENAI_API_BASE", None)
+        else:
+            os.environ["OPENAI_API_BASE"] = prev_api_base  # type: ignore[assignment]
 
     return {"answer": result.raw}
 

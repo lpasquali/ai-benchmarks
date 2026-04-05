@@ -104,4 +104,8 @@ def test_not_configured_error_is_runtime_error():
 
 
 def test_builtin_agent_count():
-    assert len(_BUILTIN_AGENTS) == 23
+    # Use a lower bound rather than exact count so adding new agents doesn't
+    # break this test.  Also verify key agents are present.
+    assert len(_BUILTIN_AGENTS) >= 23
+    for expected in ("holmes", "langgraph", "crewai"):
+        assert expected in _BUILTIN_AGENTS, f"{expected!r} missing from _BUILTIN_AGENTS"
