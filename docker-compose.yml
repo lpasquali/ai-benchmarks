@@ -28,6 +28,13 @@ name: rune
 
 services:
 
+  # ── RUNE Docs ─────────────────────────────────────────────────────────────
+  rune-docs:
+    image: ghcr.io/lpasquali/rune-docs:latest
+    ports:
+      - "8000:80"
+    restart: unless-stopped
+
   # ── RUNE Web UI ───────────────────────────────────────────────────────────
   rune-ui:
     image: ghcr.io/lpasquali/rune-ui:latest
