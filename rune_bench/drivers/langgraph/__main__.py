@@ -22,7 +22,7 @@ Dependencies
 ------------
 Requires ``langgraph`` and ``langchain-ollama`` to be installed::
 
-    pip install langgraph
+    pip install langgraph langchain-ollama
 """
 
 from __future__ import annotations
@@ -30,6 +30,16 @@ from __future__ import annotations
 import json
 import sys
 from typing import Any, TypedDict
+
+_MODEL_PREFIXES = ("ollama/", "ollama_chat/")
+
+
+def _normalize_model(model: str) -> str:
+    """Strip provider prefixes (e.g. 'ollama/', 'ollama_chat/') from model name."""
+    for prefix in _MODEL_PREFIXES:
+        if model.startswith(prefix):
+            return model[len(prefix):]
+    return model
 
 try:
     from langchain_ollama import ChatOllama
@@ -55,12 +65,11 @@ def _handle_ask(params: dict) -> dict:
 
     if StateGraph is None or ChatOllama is None:
         raise RuntimeError(
-            "LangGraph driver requires: pip install langgraph  "
-            "(langgraph and langchain-ollama packages)"
+            "LangGraph driver requires: pip install langgraph langchain-ollama"
         )
 
     # Build ChatOllama LLM
-    llm_kwargs: dict[str, Any] = {"model": model}
+    llm_kwargs: dict[str, Any] = {"model": _normalize_model(model)}
     if ollama_url:
         llm_kwargs["base_url"] = ollama_url
     llm = ChatOllama(**llm_kwargs)
@@ -86,7 +95,7 @@ def _handle_info(_params: dict) -> dict:
         "name": "langgraph",
         "version": "1",
         "actions": ["ask", "info"],
-        "note": "Requires optional dependencies: pip install langgraph",
+        "note": "Requires optional dependencies: pip install langgraph langchain-ollama",
     }
 
 
