@@ -1,6 +1,6 @@
 """Protocol definition for agentic runner implementations."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 
