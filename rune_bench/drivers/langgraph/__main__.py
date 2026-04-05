@@ -37,8 +37,8 @@ def _handle_ask(params: dict) -> dict:
     ollama_url: str | None = params.get("ollama_url")
 
     try:
-        from langchain_openai import ChatOpenAI
-        from langgraph.prebuilt import create_react_agent
+        from langchain_openai import ChatOpenAI  # type: ignore[import-not-found]
+        from langgraph.prebuilt import create_react_agent  # type: ignore[import-not-found]
     except ImportError as exc:
         raise RuntimeError(
             "LangGraph driver requires: pip install rune[langgraph]  "
