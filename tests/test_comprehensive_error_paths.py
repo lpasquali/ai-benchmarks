@@ -1,5 +1,3 @@
-import sys
-from pathlib import Path
 from unittest.mock import MagicMock
 from urllib.request import Request, urlopen
 
@@ -11,7 +9,6 @@ import rune_bench.api_server as api_server
 import rune_bench.workflows as workflows
 from rune_bench.agents.sre.holmes import HolmesRunner
 from rune_bench.api_client import RuneApiClient
-from rune_bench.backends.ollama import OllamaClient
 from rune_bench.resources.vastai import InstanceManager
 from rune_bench.resources.vastai import OfferFinder
 from rune_bench.resources.vastai import TemplateLoader
