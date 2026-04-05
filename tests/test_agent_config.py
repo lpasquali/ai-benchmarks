@@ -23,6 +23,7 @@ def test_resolve_reads_prefixed_env_vars(monkeypatch):
 def test_resolve_returns_none_when_unset(monkeypatch):
     monkeypatch.delenv("RUNE_FOOBAR_API_KEY", raising=False)
     monkeypatch.delenv("RUNE_FOOBAR_BASE_URL", raising=False)
+    monkeypatch.delenv("RUNE_KUBECONFIG", raising=False)
     monkeypatch.delenv("KUBECONFIG", raising=False)
 
     cfg = resolve_agent_config("foobar")
