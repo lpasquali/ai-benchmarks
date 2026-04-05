@@ -1,4 +1,15 @@
-"""Dynamic agent registry with lazy import resolution."""
+"""Dynamic agent registry with lazy import resolution.
+
+The registry supports two kinds of agents:
+
+1. **Built-in agents** listed in :data:`_BUILTIN_AGENTS` -- resolved via
+   :func:`importlib.import_module` the first time they are requested.
+2. **Custom agents** added at runtime via :func:`register_agent`.
+
+Custom registrations take precedence over built-in entries so that
+downstream integrations can override the default implementation of any
+agent without modifying this module.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +18,7 @@ from typing import Any, Callable
 
 _REGISTRY: dict[str, dict] = {}
 
+# Built-in agent map: agent_name -> (module_path, class_name, required_config)
 _BUILTIN_AGENTS: dict[str, tuple[str, str, list[str]]] = {
     "holmes": ("rune_bench.agents.sre.holmes", "HolmesRunner", ["kubeconfig"]),
     "k8sgpt": ("rune_bench.agents.sre.k8sgpt", "K8sGPTRunner", ["kubeconfig"]),
@@ -40,7 +52,11 @@ def register_agent(
     *,
     required_config: list[str] | None = None,
 ) -> None:
-    """Register a custom agent factory under *name*."""
+    """Register a custom agent factory under *name*.
+
+    Custom registrations shadow built-in entries so callers can override
+    the default implementation at runtime.
+    """
     _REGISTRY[name] = {
         "factory": factory,
         "required_config": required_config or [],
@@ -50,39 +66,27 @@ def register_agent(
 def get_agent(name: str, **kwargs: Any) -> Any:
     """Return an instantiated agent for *name*.
 
+    Resolution order:
+    1. Custom registry (populated by :func:`register_agent`).
+    2. Built-in map (lazy ``importlib.import_module``).
+
     Only kwargs matching the agent's ``required_config`` are forwarded to
     the constructor, so extra kwargs (like ``kubeconfig``) are silently
     dropped for agents that don't declare them.
+
+    Raises:
+        ValueError: if *name* is not found in either source.
     """
     if name in _REGISTRY:
         entry = _REGISTRY[name]
         req_config: list[str] = entry.get("required_config", [])
-        missing = [k for k in req_config if k not in kwargs]
-        if missing:
-            raise RuntimeError(
-                f"Agent '{name}' requires config keys: {missing}"
-            )
         filtered = {k: v for k, v in kwargs.items() if k in req_config}
         return entry["factory"](**filtered)
 
     if name in _BUILTIN_AGENTS:
         module_path, class_name, req_config = _BUILTIN_AGENTS[name]
-        missing = [k for k in req_config if k not in kwargs]
-        if missing:
-            raise RuntimeError(
-                f"Agent '{name}' requires config keys: {missing}"
-            )
-        try:
-            mod = importlib.import_module(module_path)
-            cls = getattr(mod, class_name)
-        except ImportError as exc:
-            raise RuntimeError(
-                f"Failed to import module '{module_path}' for agent '{name}': {exc}"
-            ) from exc
-        except AttributeError as exc:
-            raise RuntimeError(
-                f"Module '{module_path}' has no class '{class_name}' for agent '{name}': {exc}"
-            ) from exc
+        mod = importlib.import_module(module_path)
+        cls = getattr(mod, class_name)
         filtered = {k: v for k, v in kwargs.items() if k in req_config}
         return cls(**filtered)
 
