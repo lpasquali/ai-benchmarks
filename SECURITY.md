@@ -1,39 +1,10 @@
 # Security Policy
 
-We take the security of `rune` very seriously.
+RUNE security policies, vulnerability reporting, and compliance targets are now consolidated in the central [rune-docs](https://github.com/lpasquali/rune-docs) repository.
 
-## Supported Versions
-
-Currently, only the main branch (`master` or `main`) and the latest tagged release are actively supported with security updates.
-
-| Version | Supported          |
-| ------- | ------------------ |
-| v1.x    | :white_check_mark: |
-| < v1.0  | :x:                |
+- **[SECRETS](https://github.com/lpasquali/rune-docs/blob/main/docs/delivery/SECRETS.md)** — Security policies and vulnerability handling.
+- **[COMPLIANCE](https://github.com/lpasquali/rune-docs/blob/main/docs/delivery/PIPELINES.md)** — SLSA L3 and IEC 62443 ML4 targets.
 
 ## Reporting a Vulnerability
-
-If you discover a security vulnerability within `rune`, please do **not** open a public issue.
-
-Instead, please send an e-mail to **[luca@bucaniere.us]**.
-
-All security vulnerabilities will be promptly addressed. We will try to get back to you within 48 hours to acknowledge the report and briefly detail how and when we plan to address it.
-
-Once the vulnerability is resolved, a security advisory will be published, and you will be credited for the discovery if you so choose.
-
-## Mandatory Merge Protection
-
-The repository must enforce branch protection on target branches (`main`, `develop`) so pull requests cannot be merged when checks fail.
-
-Required policy:
-
-- Require status checks to pass before merging.
-- Mark `Merge Gate` as a required status check.
-- Do not allow bypassing required checks for regular contributors.
-
-Security policy gate in CI:
-
-- SBOM is generated and scanned by multiple scanners.
-- If any **fixable** vulnerability has CVSS score > 8.8, CI fails and merge is blocked.
-- Unfixable vulnerabilities above the threshold are logged as warnings and require VEX/risk-acceptance tracking within the patch SLA.
-- Because `Merge Gate` is required, PR merge is blocked when a fixable CVSS > 8.8 is detected.
+Please see the reporting instructions in [SECRETS](https://github.com/lpasquali/rune-docs/blob/main/docs/delivery/SECRETS.md#vulnerability-handling).
+Direct contact: **[luca@bucaniere.us]**.
