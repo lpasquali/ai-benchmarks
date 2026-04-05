@@ -264,6 +264,29 @@ def test_extract_target_url_fallback() -> None:
 
 
 # ---------------------------------------------------------------------------
+# _check_authorization
+# ---------------------------------------------------------------------------
+
+
+def test_check_authorization_skips_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("RUNE_BURPGPT_ALLOWED_TARGETS", raising=False)
+    # Should not raise
+    burp_main._check_authorization("https://any-target.com")
+
+
+def test_check_authorization_allows_listed_target(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RUNE_BURPGPT_ALLOWED_TARGETS", "example.com, target.local")
+    # Should not raise
+    burp_main._check_authorization("https://target.local/path")
+
+
+def test_check_authorization_raises_on_unlisted_target(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RUNE_BURPGPT_ALLOWED_TARGETS", "example.com")
+    with pytest.raises(RuntimeError, match="not in RUNE_BURPGPT_ALLOWED_TARGETS"):
+        burp_main._check_authorization("https://unauthorized.com")
+
+
+# ---------------------------------------------------------------------------
 # _handle_info
 # ---------------------------------------------------------------------------
 
