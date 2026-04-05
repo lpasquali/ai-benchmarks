@@ -35,7 +35,7 @@ def test_handle_ask_raises_on_missing_deps(monkeypatch: pytest.MonkeyPatch) -> N
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
 
-    with pytest.raises(RuntimeError, match="pip install rune\\[langgraph\\]"):
+    with pytest.raises(RuntimeError, match="pip install langgraph"):
         lg_main._handle_ask({"question": "test", "model": "llama3.1:8b"})
 
 
@@ -86,6 +86,10 @@ def test_handle_ask_runs_graph(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "langchain_ollama", mock_langchain_ollama)
     monkeypatch.setitem(sys.modules, "langgraph", mock_langgraph)
     monkeypatch.setitem(sys.modules, "langgraph.graph", mock_langgraph_graph)
+    monkeypatch.setattr(lg_main, "ChatOllama", mock_chat_ollama_cls)
+    monkeypatch.setattr(lg_main, "StateGraph", FakeStateGraph)
+    monkeypatch.setattr(lg_main, "START", "__start__")
+    monkeypatch.setattr(lg_main, "END", "__end__")
 
     result = lg_main._handle_ask({
         "question": "What is AI?",
@@ -141,6 +145,10 @@ def test_handle_ask_passthrough_params(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "langchain_ollama", mock_langchain_ollama)
     monkeypatch.setitem(sys.modules, "langgraph", types.ModuleType("langgraph"))
     monkeypatch.setitem(sys.modules, "langgraph.graph", mock_langgraph_graph)
+    monkeypatch.setattr(lg_main, "ChatOllama", mock_chat_ollama_cls)
+    monkeypatch.setattr(lg_main, "StateGraph", FakeStateGraph)
+    monkeypatch.setattr(lg_main, "START", "__start__")
+    monkeypatch.setattr(lg_main, "END", "__end__")
 
     lg_main._handle_ask({
         "question": "Explain quantum computing",
@@ -194,6 +202,10 @@ def test_handle_ask_without_ollama_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "langchain_ollama", mock_langchain_ollama)
     monkeypatch.setitem(sys.modules, "langgraph", types.ModuleType("langgraph"))
     monkeypatch.setitem(sys.modules, "langgraph.graph", mock_langgraph_graph)
+    monkeypatch.setattr(lg_main, "ChatOllama", mock_chat_ollama_cls)
+    monkeypatch.setattr(lg_main, "StateGraph", FakeStateGraph)
+    monkeypatch.setattr(lg_main, "START", "__start__")
+    monkeypatch.setattr(lg_main, "END", "__end__")
 
     lg_main._handle_ask({"question": "q", "model": "m"})
 

@@ -35,7 +35,7 @@ def test_handle_ask_raises_on_missing_deps(monkeypatch: pytest.MonkeyPatch) -> N
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
 
-    with pytest.raises(RuntimeError, match="pip install rune\\[crewai\\]"):
+    with pytest.raises(RuntimeError, match="pip install crewai"):
         crewai_main._handle_ask({"question": "test", "model": "llama3.1:8b"})
 
 
