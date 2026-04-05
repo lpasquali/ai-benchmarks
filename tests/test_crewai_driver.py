@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import sys
 import types
 from unittest.mock import MagicMock
@@ -109,7 +110,14 @@ def test_handle_ask_ollama_model_format(monkeypatch: pytest.MonkeyPatch) -> None
 def test_handle_ask_sets_openai_api_base(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify OPENAI_API_BASE is set to {ollama_url}/v1 for LiteLLM routing."""
     mock_crewai = types.ModuleType("crewai")
-    mock_crewai.Agent = MagicMock(return_value=MagicMock())
+
+    captured_env = {}
+
+    def capture_env(*args, **kwargs):
+        captured_env["OPENAI_API_BASE"] = os.environ.get("OPENAI_API_BASE")
+        return MagicMock()
+
+    mock_crewai.Agent = capture_env
     mock_crewai.Task = MagicMock(return_value=MagicMock())
 
     mock_crew_instance = MagicMock()
@@ -126,14 +134,23 @@ def test_handle_ask_sets_openai_api_base(monkeypatch: pytest.MonkeyPatch) -> Non
         "ollama_url": "http://ollama:11434",
     })
 
-    import os
-    assert os.environ.get("OPENAI_API_BASE") == "http://ollama:11434/v1"
+    assert captured_env["OPENAI_API_BASE"] == "http://ollama:11434/v1"
+    # Verify it was restored
+    assert os.environ.get("OPENAI_API_BASE") is None
 
 
 def test_handle_ask_without_ollama_url(monkeypatch: pytest.MonkeyPatch) -> None:
     """When ollama_url is omitted, OPENAI_API_BASE should not be set."""
     mock_crewai = types.ModuleType("crewai")
-    mock_crewai.Agent = MagicMock(return_value=MagicMock())
+
+    captured_env = {"called": False}
+
+    def capture_env(*args, **kwargs):
+        captured_env["called"] = True
+        captured_env["OPENAI_API_BASE"] = os.environ.get("OPENAI_API_BASE")
+        return MagicMock()
+
+    mock_crewai.Agent = capture_env
     mock_crewai.Task = MagicMock(return_value=MagicMock())
 
     mock_crew_instance = MagicMock()
@@ -145,8 +162,8 @@ def test_handle_ask_without_ollama_url(monkeypatch: pytest.MonkeyPatch) -> None:
 
     crewai_main._handle_ask({"question": "q", "model": "m"})
 
-    import os
-    assert os.environ.get("OPENAI_API_BASE") is None
+    assert captured_env["called"] is True
+    assert captured_env["OPENAI_API_BASE"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -243,3 +260,36 @@ def test_main_skips_empty_lines(
     crewai_main.main()
 
     assert capsys.readouterr().out.strip() == ""
+
+
+# ---------------------------------------------------------------------------
+# CrewAIDriverClient
+# ---------------------------------------------------------------------------
+
+
+def test_crewai_driver_client_ask() -> None:
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {"answer": "crew result"}
+
+    from rune_bench.drivers.crewai import CrewAIDriverClient
+    client = CrewAIDriverClient(transport=mock_transport)
+    
+    result = client.ask("q", "m", "http://ollama:11434")
+    
+    assert result == "crew result"
+    mock_transport.call.assert_called_once_with("ask", {
+        "question": "q",
+        "model": "m",
+        "ollama_url": "http://ollama:11434"
+    })
+
+
+def test_crewai_driver_client_ask_raises_on_missing_answer() -> None:
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {}
+
+    from rune_bench.drivers.crewai import CrewAIDriverClient
+    client = CrewAIDriverClient(transport=mock_transport)
+    
+    with pytest.raises(RuntimeError, match="did not include an answer"):
+        client.ask("q", "m")

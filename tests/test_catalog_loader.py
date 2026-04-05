@@ -8,14 +8,11 @@ from pathlib import Path
 import pytest
 
 from rune_bench.catalog import (
-    Catalog,
     ChainSpec,
-    ScopeSpec,
     load_catalog,
     load_from_csv,
     merge_chains,
 )
-from rune_bench.catalog.loader import _DEFAULTS_DIR
 
 
 # ---------------------------------------------------------------------------
