@@ -135,13 +135,16 @@ def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
             timeout_seconds=request.ollama_warmup_timeout,
         )
     agent_name = getattr(request, "agent", "holmes")
-    if agent_name != "holmes":
-        # Non-default agent: resolve via registry directly.
-        agent_kwargs: dict[str, Any] = {"kubeconfig": Path(request.kubeconfig)}
-        runner = get_agent(agent_name, **agent_kwargs)
-    else:
+    kubeconfig_path = Path(request.kubeconfig) if request.kubeconfig else None
+    agent_kwargs: dict[str, Any] = {}
+    if kubeconfig_path is not None:
+        agent_kwargs["kubeconfig"] = kubeconfig_path
+    if agent_name == "holmes":
         # Default path -- preserves monkeypatch compatibility in existing tests.
-        runner = _make_agent_runner(Path(request.kubeconfig))
+        runner = _make_agent_runner(**agent_kwargs)
+    else:
+        # Non-default agent: registry's get_agent() filters kwargs by required_config.
+        runner = get_agent(agent_name, **agent_kwargs)
     answer = runner.ask(
         question=request.question,
         model=request.model,
