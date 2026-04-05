@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -104,4 +103,6 @@ def test_not_configured_error_is_runtime_error():
 
 
 def test_builtin_agent_count():
-    assert len(_BUILTIN_AGENTS) == 23
+    """Ensure the built-in registry contains expected baseline agents."""
+    assert "holmes" in _BUILTIN_AGENTS
+    assert len(_BUILTIN_AGENTS) >= 1

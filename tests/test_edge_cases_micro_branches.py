@@ -11,7 +11,6 @@ from urllib.request import Request, urlopen
 import rune
 import rune.api as rune_api_module
 import rune_bench.api_backend as api_backend
-import rune_bench.api_client as api_client_module
 import rune_bench.api_server as api_server
 import rune_bench.backends.ollama as ollama_models_module
 import rune_bench.workflows as workflows

@@ -20,7 +20,7 @@ info
 
 Dependencies
 ------------
-Requires ``langgraph`` and ``langchain-ollama`` to be installed::
+Requires ``langgraph`` and ``langchain-openai`` to be installed::
 
     pip install rune[langgraph]
 """
@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import json
 import sys
-from typing import Any
 
 
 def _handle_ask(params: dict) -> dict:
@@ -38,41 +37,32 @@ def _handle_ask(params: dict) -> dict:
     ollama_url: str | None = params.get("ollama_url")
 
     try:
-        from langchain_ollama import ChatOllama
-        from langgraph.graph import END, START, StateGraph
+        from langchain_openai import ChatOpenAI
+        from langgraph.prebuilt import create_react_agent
     except ImportError as exc:
         raise RuntimeError(
             "LangGraph driver requires: pip install rune[langgraph]  "
-            "(langgraph and langchain-ollama packages)"
+            "(langgraph and langchain-openai packages)"
         ) from exc
 
-    # Build ChatOllama LLM
-    llm_kwargs: dict[str, Any] = {"model": model}
-    if ollama_url:
-        llm_kwargs["base_url"] = ollama_url
-    llm = ChatOllama(**llm_kwargs)
+    # LangChain's ChatOpenAI can be used to talk to Ollama's OpenAI-compatible API
+    llm = ChatOpenAI(
+        model=model,
+        base_url=f"{ollama_url.rstrip('/')}/v1" if ollama_url else "http://localhost:11434/v1",
+        api_key="ollama",  # Required but ignored by Ollama
+    )
 
-    # Define a simple single-node research graph.
-    # This is intentionally minimal — a foundation for users to extend.
-    from typing import TypedDict
+    # A simple ReAct agent with no tools - can be extended later
+    agent = create_react_agent(llm, tools=[])
+    result = agent.invoke({"messages": [("user", question)]})
 
-    class GraphState(TypedDict):
-        question: str
-        answer: str
+    # Extract the last message content
+    messages = result.get("messages", [])
+    if not messages:
+        raise RuntimeError("LangGraph agent returned no messages.")
 
-    def research_node(state: GraphState) -> dict:
-        response = llm.invoke(state["question"])
-        return {"answer": response.content}
-
-    graph = StateGraph(GraphState)
-    graph.add_node("research", research_node)
-    graph.add_edge(START, "research")
-    graph.add_edge("research", END)
-
-    compiled = graph.compile()
-    result = compiled.invoke({"question": question, "answer": ""})
-
-    return {"answer": result["answer"]}
+    answer = messages[-1].content
+    return {"answer": answer}
 
 
 def _handle_info(_params: dict) -> dict:

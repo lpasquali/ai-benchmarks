@@ -32,6 +32,14 @@ import os
 import sys
 
 
+def _normalize_model(model: str) -> str:
+    """Strip provider prefixes (e.g. ``ollama/``, ``ollama_chat/``) from model names."""
+    for prefix in ("ollama_chat/", "ollama/"):
+        if model.startswith(prefix):
+            model = model[len(prefix):]
+    return model.strip()
+
+
 def _handle_ask(params: dict) -> dict:
     question: str = params["question"]
     model: str = params["model"]
@@ -45,24 +53,34 @@ def _handle_ask(params: dict) -> dict:
             "(crewai package)"
         ) from exc
 
-    # Configure Ollama via LiteLLM environment variables
+    normalized_model = _normalize_model(model)
+
+    # Configure Ollama via LiteLLM environment variables for this request only.
+    previous_openai_api_base = os.environ.get("OPENAI_API_BASE")
     if ollama_url:
         os.environ["OPENAI_API_BASE"] = f"{ollama_url.rstrip('/')}/v1"
+    else:
+        os.environ.pop("OPENAI_API_BASE", None)
 
-    agent = Agent(
-        role="Analyst",
-        goal=question,
-        llm=f"ollama/{model}",
-    )
-    task = Task(
-        description=question,
-        agent=agent,
-        expected_output="A detailed analysis",
-    )
-    crew = Crew(agents=[agent], tasks=[task], verbose=False)
-    result = crew.kickoff()
-
-    return {"answer": result.raw}
+    try:
+        agent = Agent(
+            role="Analyst",
+            goal=question,
+            llm=f"ollama/{normalized_model}",
+        )
+        task = Task(
+            description=question,
+            agent=agent,
+            expected_output="A detailed analysis",
+        )
+        crew = Crew(agents=[agent], tasks=[task], verbose=False)
+        result = crew.kickoff()
+        return {"answer": result.raw}
+    finally:
+        if previous_openai_api_base is None:
+            os.environ.pop("OPENAI_API_BASE", None)
+        else:
+            os.environ["OPENAI_API_BASE"] = previous_openai_api_base
 
 
 def _handle_info(_params: dict) -> dict:
