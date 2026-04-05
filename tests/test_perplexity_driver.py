@@ -1,8 +1,7 @@
 """Tests for rune_bench.drivers.perplexity — driver entry point and client.
 
-The driver subprocess calls the Perplexity REST API via urllib.request.
-urllib.request.urlopen is monkeypatched throughout so no real API calls
-are made.
+The driver subprocess calls the Perplexity REST API via make_http_request.
+make_http_request is monkeypatched throughout so no real API calls are made.
 """
 
 from __future__ import annotations
@@ -13,36 +12,6 @@ import json
 import pytest
 
 import rune_bench.drivers.perplexity.__main__ as perplexity_main
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _make_api_response(answer: str = "the answer", citations: list | None = None) -> bytes:
-    """Build a fake Perplexity API JSON response body."""
-    body: dict = {
-        "choices": [{"message": {"content": answer}}],
-    }
-    if citations is not None:
-        body["citations"] = citations
-    return json.dumps(body).encode()
-
-
-class _FakeHTTPResponse:
-    """Minimal context-manager wrapping bytes so urlopen can be mocked."""
-
-    def __init__(self, data: bytes) -> None:
-        self._data = data
-
-    def read(self) -> bytes:
-        return self._data
-
-    def __enter__(self):  # noqa: ANN204
-        return self
-
-    def __exit__(self, *_: object) -> None:
-        pass
 
 
 # ---------------------------------------------------------------------------
