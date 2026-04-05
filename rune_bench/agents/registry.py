@@ -57,13 +57,32 @@ def get_agent(name: str, **kwargs: Any) -> Any:
     if name in _REGISTRY:
         entry = _REGISTRY[name]
         req_config: list[str] = entry.get("required_config", [])
+        missing = [k for k in req_config if k not in kwargs]
+        if missing:
+            raise RuntimeError(
+                f"Agent '{name}' requires config keys: {missing}"
+            )
         filtered = {k: v for k, v in kwargs.items() if k in req_config}
         return entry["factory"](**filtered)
 
     if name in _BUILTIN_AGENTS:
         module_path, class_name, req_config = _BUILTIN_AGENTS[name]
-        mod = importlib.import_module(module_path)
-        cls = getattr(mod, class_name)
+        missing = [k for k in req_config if k not in kwargs]
+        if missing:
+            raise RuntimeError(
+                f"Agent '{name}' requires config keys: {missing}"
+            )
+        try:
+            mod = importlib.import_module(module_path)
+            cls = getattr(mod, class_name)
+        except ImportError as exc:
+            raise RuntimeError(
+                f"Failed to import module '{module_path}' for agent '{name}': {exc}"
+            ) from exc
+        except AttributeError as exc:
+            raise RuntimeError(
+                f"Module '{module_path}' has no class '{class_name}' for agent '{name}': {exc}"
+            ) from exc
         filtered = {k: v for k, v in kwargs.items() if k in req_config}
         return cls(**filtered)
 
