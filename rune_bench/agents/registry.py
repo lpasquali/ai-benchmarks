@@ -66,8 +66,13 @@ def register_agent(
 def get_agent(name: str, **kwargs: Any) -> Any:
     """Return an instantiated agent for *name*.
 
+    Resolution order:
+    1. Custom registry (populated by :func:`register_agent`).
+    2. Built-in map (lazy ``importlib.import_module``).
+
     Only kwargs matching the agent's ``required_config`` are forwarded to
-    the constructor.
+    the constructor, so extra kwargs (like ``kubeconfig``) are silently
+    dropped for agents that don't declare them.
 
     Raises:
         ValueError: if *name* is not found in either source.
