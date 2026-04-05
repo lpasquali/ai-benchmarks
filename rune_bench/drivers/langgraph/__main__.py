@@ -29,7 +29,23 @@ from __future__ import annotations
 
 import json
 import sys
-from typing import Any
+from typing import Any, TypedDict
+
+try:
+    from langchain_ollama import ChatOllama
+    from langgraph.graph import END, START, StateGraph
+except ImportError:
+    # Optional dependencies handled in _handle_ask
+    ChatOllama = None  # type: ignore
+    StateGraph = None  # type: ignore
+    START = None  # type: ignore
+    END = None  # type: ignore
+
+
+class GraphState(TypedDict):
+    """State for the LangGraph workflow."""
+    question: str
+    answer: str
 
 
 def _handle_ask(params: dict) -> dict:
@@ -37,14 +53,11 @@ def _handle_ask(params: dict) -> dict:
     model: str = params["model"]
     ollama_url: str | None = params.get("ollama_url")
 
-    try:
-        from langchain_ollama import ChatOllama
-        from langgraph.graph import END, START, StateGraph
-    except ImportError as exc:
+    if StateGraph is None or ChatOllama is None:
         raise RuntimeError(
             "LangGraph driver requires: pip install langgraph  "
             "(langgraph and langchain-ollama packages)"
-        ) from exc
+        )
 
     # Build ChatOllama LLM
     llm_kwargs: dict[str, Any] = {"model": model}
@@ -53,13 +66,6 @@ def _handle_ask(params: dict) -> dict:
     llm = ChatOllama(**llm_kwargs)
 
     # Define a simple single-node research graph.
-    # This is intentionally minimal — a foundation for users to extend.
-    from typing import TypedDict
-
-    class GraphState(TypedDict):
-        question: str
-        answer: str
-
     def research_node(state: GraphState) -> dict:
         response = llm.invoke(state["question"])
         return {"answer": response.content}
