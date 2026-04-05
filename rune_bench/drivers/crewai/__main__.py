@@ -22,7 +22,7 @@ Dependencies
 ------------
 Requires ``crewai`` to be installed::
 
-    pip install rune[crewai]
+    pip install crewai
 """
 
 from __future__ import annotations
@@ -31,13 +31,17 @@ import json
 import os
 import sys
 
+_MODEL_PREFIXES = ("ollama/", "ollama_chat/")
+
+_SENTINEL = object()
+
 
 def _normalize_model(model: str) -> str:
-    """Strip provider prefixes (e.g. ``ollama/``, ``ollama_chat/``) from model names."""
-    for prefix in ("ollama_chat/", "ollama/"):
+    """Strip provider prefixes (e.g. 'ollama/', 'ollama_chat/') from model name."""
+    for prefix in _MODEL_PREFIXES:
         if model.startswith(prefix):
-            model = model[len(prefix):]
-    return model.strip()
+            return model[len(prefix):]
+    return model
 
 
 def _handle_ask(params: dict) -> dict:
@@ -49,24 +53,23 @@ def _handle_ask(params: dict) -> dict:
         from crewai import Agent, Crew, Task  # type: ignore[import-not-found]
     except ImportError as exc:
         raise RuntimeError(
-            "CrewAI driver requires: pip install rune[crewai]  "
-            "(crewai package)"
+            "CrewAI driver requires: pip install crewai"
         ) from exc
 
-    normalized_model = _normalize_model(model)
+    normalized = _normalize_model(model)
 
-    # Configure Ollama via LiteLLM environment variables for this request only.
-    previous_openai_api_base = os.environ.get("OPENAI_API_BASE")
+    # Configure Ollama via LiteLLM environment variables, restoring previous
+    # value after the request to avoid env var leaking across requests in the
+    # long-lived stdio loop.
+    prev_api_base = os.environ.get("OPENAI_API_BASE", _SENTINEL)
     if ollama_url:
         os.environ["OPENAI_API_BASE"] = f"{ollama_url.rstrip('/')}/v1"
-    else:
-        os.environ.pop("OPENAI_API_BASE", None)
 
     try:
         agent = Agent(
             role="Analyst",
             goal=question,
-            llm=f"ollama/{normalized_model}",
+            llm=f"ollama/{normalized}",
         )
         task = Task(
             description=question,
@@ -75,12 +78,14 @@ def _handle_ask(params: dict) -> dict:
         )
         crew = Crew(agents=[agent], tasks=[task], verbose=False)
         result = crew.kickoff()
-        return {"answer": result.raw}
     finally:
-        if previous_openai_api_base is None:
+        # Restore previous OPENAI_API_BASE value
+        if prev_api_base is _SENTINEL:
             os.environ.pop("OPENAI_API_BASE", None)
         else:
-            os.environ["OPENAI_API_BASE"] = previous_openai_api_base
+            os.environ["OPENAI_API_BASE"] = prev_api_base  # type: ignore[assignment]
+
+    return {"answer": result.raw}
 
 
 def _handle_info(_params: dict) -> dict:
@@ -88,7 +93,7 @@ def _handle_info(_params: dict) -> dict:
         "name": "crewai",
         "version": "1",
         "actions": ["ask", "info"],
-        "note": "Requires optional dependencies: pip install rune[crewai]",
+        "note": "Requires optional dependencies: pip install crewai",
     }
 
 

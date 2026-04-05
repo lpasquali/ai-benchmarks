@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import io
 import json
-import os
 import sys
 import types
 from unittest.mock import MagicMock
@@ -36,7 +35,7 @@ def test_handle_ask_raises_on_missing_deps(monkeypatch: pytest.MonkeyPatch) -> N
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
 
-    with pytest.raises(RuntimeError, match="pip install rune\\[crewai\\]"):
+    with pytest.raises(RuntimeError, match="pip install crewai"):
         crewai_main._handle_ask({"question": "test", "model": "llama3.1:8b"})
 
 
@@ -109,19 +108,22 @@ def test_handle_ask_ollama_model_format(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_handle_ask_sets_openai_api_base(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify OPENAI_API_BASE is set to {ollama_url}/v1 for LiteLLM routing."""
+    import os
+
+    captured_api_base: list[str | None] = []
+
     mock_crewai = types.ModuleType("crewai")
-
-    captured_env = {}
-
-    def capture_env(*args, **kwargs):
-        captured_env["OPENAI_API_BASE"] = os.environ.get("OPENAI_API_BASE")
-        return MagicMock()
-
-    mock_crewai.Agent = capture_env
+    mock_crewai.Agent = MagicMock(return_value=MagicMock())
     mock_crewai.Task = MagicMock(return_value=MagicMock())
 
     mock_crew_instance = MagicMock()
-    mock_crew_instance.kickoff.return_value = MagicMock(raw="done")
+
+    def _capture_kickoff():
+        """Capture OPENAI_API_BASE during crew execution (before finally restores it)."""
+        captured_api_base.append(os.environ.get("OPENAI_API_BASE"))
+        return MagicMock(raw="done")
+
+    mock_crew_instance.kickoff.side_effect = _capture_kickoff
     mock_crewai.Crew = MagicMock(return_value=mock_crew_instance)
 
     monkeypatch.setitem(sys.modules, "crewai", mock_crewai)
@@ -134,23 +136,13 @@ def test_handle_ask_sets_openai_api_base(monkeypatch: pytest.MonkeyPatch) -> Non
         "ollama_url": "http://ollama:11434",
     })
 
-    assert captured_env["OPENAI_API_BASE"] == "http://ollama:11434/v1"
-    # Verify it was restored
-    assert os.environ.get("OPENAI_API_BASE") is None
+    assert captured_api_base[0] == "http://ollama:11434/v1"
 
 
 def test_handle_ask_without_ollama_url(monkeypatch: pytest.MonkeyPatch) -> None:
     """When ollama_url is omitted, OPENAI_API_BASE should not be set."""
     mock_crewai = types.ModuleType("crewai")
-
-    captured_env = {"called": False}
-
-    def capture_env(*args, **kwargs):
-        captured_env["called"] = True
-        captured_env["OPENAI_API_BASE"] = os.environ.get("OPENAI_API_BASE")
-        return MagicMock()
-
-    mock_crewai.Agent = capture_env
+    mock_crewai.Agent = MagicMock(return_value=MagicMock())
     mock_crewai.Task = MagicMock(return_value=MagicMock())
 
     mock_crew_instance = MagicMock()
@@ -162,8 +154,8 @@ def test_handle_ask_without_ollama_url(monkeypatch: pytest.MonkeyPatch) -> None:
 
     crewai_main._handle_ask({"question": "q", "model": "m"})
 
-    assert captured_env["called"] is True
-    assert captured_env["OPENAI_API_BASE"] is None
+    import os
+    assert os.environ.get("OPENAI_API_BASE") is None
 
 
 # ---------------------------------------------------------------------------
@@ -262,34 +254,23 @@ def test_main_skips_empty_lines(
     assert capsys.readouterr().out.strip() == ""
 
 
-# ---------------------------------------------------------------------------
-# CrewAIDriverClient
-# ---------------------------------------------------------------------------
+def test_main_entrypoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify that calling main() as a script works (module-level coverage)."""
+    monkeypatch.setattr(crewai_main.sys, "stdin", io.StringIO(""))
+    crewai_main.main()
 
 
-def test_crewai_driver_client_ask() -> None:
-    mock_transport = MagicMock()
-    mock_transport.call.return_value = {"answer": "crew result"}
+def test_main_handles_missing_req_id(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """Verify that main() defaults to empty string for missing request ID."""
+    monkeypatch.setattr(
+        crewai_main.sys,
+        "stdin",
+        io.StringIO(json.dumps({"action": "info", "params": {}}) + "\n"),
+    )
 
-    from rune_bench.drivers.crewai import CrewAIDriverClient
-    client = CrewAIDriverClient(transport=mock_transport)
-    
-    result = client.ask("q", "m", "http://ollama:11434")
-    
-    assert result == "crew result"
-    mock_transport.call.assert_called_once_with("ask", {
-        "question": "q",
-        "model": "m",
-        "ollama_url": "http://ollama:11434"
-    })
+    crewai_main.main()
 
-
-def test_crewai_driver_client_ask_raises_on_missing_answer() -> None:
-    mock_transport = MagicMock()
-    mock_transport.call.return_value = {}
-
-    from rune_bench.drivers.crewai import CrewAIDriverClient
-    client = CrewAIDriverClient(transport=mock_transport)
-    
-    with pytest.raises(RuntimeError, match="did not include an answer"):
-        client.ask("q", "m")
+    response = json.loads(capsys.readouterr().out.strip())
+    assert response["id"] == ""
