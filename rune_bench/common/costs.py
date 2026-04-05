@@ -39,18 +39,30 @@ class CostEstimator:
         )
 
     async def _estimate_vastai(self, request: CostEstimationRequest) -> CostEstimationResponse:
-        """Estimate using live Vast.ai market data if max_dph is provided."""
+        """Estimate Vast.ai cost from request-provided hourly bounds or a default rate.
+
+        Uses the midpoint when both ``min_dph`` and ``max_dph`` are provided,
+        otherwise uses whichever bound is set. If neither bound is provided,
+        falls back to a fixed default hourly rate.
+        """
         duration_hours = request.estimated_duration_seconds / 3600
-        # If max_dph is 0, we use a sensible industrial default for estimation
-        rate = request.max_dph if request.max_dph > 0 else 2.50
+        # Midpoint when both bounds given; single bound when only one set; default otherwise.
+        if request.max_dph > 0 and request.min_dph > 0:
+            rate = (request.min_dph + request.max_dph) / 2
+        elif request.max_dph > 0:
+            rate = request.max_dph
+        elif request.min_dph > 0:
+            rate = request.min_dph
+        else:
+            rate = 2.50
         cost = rate * duration_hours
-        
+
         return CostEstimationResponse(
             projected_cost_usd=round(cost, 2),
             cost_driver="vastai",
             resource_impact="high" if cost > 20 else "medium" if cost > 5 else "low",
-            confidence_score=0.9,
-            warning="Vast.ai cost based on your Max DPH setting."
+            confidence_score=1.0,
+            warning=None,
         )
 
     async def _estimate_azure(self, request: CostEstimationRequest) -> CostEstimationResponse:
