@@ -89,12 +89,17 @@ def test_handle_ask_raises_when_api_key_missing(monkeypatch: pytest.MonkeyPatch)
 def test_handle_ask_fetches_incidents(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RUNE_PAGERDUTY_API_KEY", "test-token")
 
-    mock = _mock_urlopen({
+    responses = {
         "/incidents?statuses": {"incidents": _SAMPLE_INCIDENTS},
         "/incidents/P1234/alerts": {"alerts": _SAMPLE_ALERTS},
         "/incidents/P5678/alerts": {"alerts": []},
-    })
-    monkeypatch.setattr(pd_main.urllib.request, "urlopen", mock)
+    }
+    def fake_request(url, **kwargs):
+        for key, payload in responses.items():
+            if key in url:
+                return payload
+        raise RuntimeError(f"Unmocked URL: {url}")
+    monkeypatch.setattr(pd_main, "make_http_request", fake_request)
 
     result = pd_main._handle_ask({"question": "triage", "model": ""})
 
@@ -113,13 +118,18 @@ def test_handle_ask_fetches_incidents(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_handle_ask_calls_ollama_for_synthesis(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RUNE_PAGERDUTY_API_KEY", "test-token")
 
-    mock = _mock_urlopen({
+    responses = {
         "/incidents?statuses": {"incidents": _SAMPLE_INCIDENTS},
         "/incidents/P1234/alerts": {"alerts": _SAMPLE_ALERTS},
         "/incidents/P5678/alerts": {"alerts": []},
         "/api/generate": {"response": "Triage: CPU incident is P1, disk is P2."},
-    })
-    monkeypatch.setattr(pd_main.urllib.request, "urlopen", mock)
+    }
+    def fake_request(url, **kwargs):
+        for key, payload in responses.items():
+            if key in url:
+                return payload
+        raise RuntimeError(f"Unmocked URL: {url}")
+    monkeypatch.setattr(pd_main, "make_http_request", fake_request)
 
     result = pd_main._handle_ask({
         "question": "what should I fix first?",
@@ -139,12 +149,17 @@ def test_handle_ask_calls_ollama_for_synthesis(monkeypatch: pytest.MonkeyPatch) 
 def test_handle_ask_returns_raw_data_without_llm(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RUNE_PAGERDUTY_API_KEY", "test-token")
 
-    mock = _mock_urlopen({
+    responses = {
         "/incidents?statuses": {"incidents": _SAMPLE_INCIDENTS},
         "/incidents/P1234/alerts": {"alerts": _SAMPLE_ALERTS},
         "/incidents/P5678/alerts": {"alerts": []},
-    })
-    monkeypatch.setattr(pd_main.urllib.request, "urlopen", mock)
+    }
+    def fake_request(url, **kwargs):
+        for key, payload in responses.items():
+            if key in url:
+                return payload
+        raise RuntimeError(f"Unmocked URL: {url}")
+    monkeypatch.setattr(pd_main, "make_http_request", fake_request)
 
     # No model or ollama_url — should return formatted raw data
     result = pd_main._handle_ask({"question": "triage", "model": ""})
@@ -163,10 +178,11 @@ def test_handle_ask_returns_raw_data_without_llm(monkeypatch: pytest.MonkeyPatch
 def test_handle_ask_no_incidents(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RUNE_PAGERDUTY_API_KEY", "test-token")
 
-    mock = _mock_urlopen({
-        "/incidents?statuses": {"incidents": []},
-    })
-    monkeypatch.setattr(pd_main.urllib.request, "urlopen", mock)
+    def fake_request(url, **kwargs):
+        if "/incidents" in url:
+            return {"incidents": []}
+        raise RuntimeError(f"Unmocked URL: {url}")
+    monkeypatch.setattr(pd_main, "make_http_request", fake_request)
 
     result = pd_main._handle_ask({"question": "any issues?", "model": ""})
 
