@@ -64,7 +64,6 @@ def test_preflight_http_backend_requires_client():
 
 def test_preflight_raises_fail_closed_error():
     """FailClosedError propagates when no cost driver is configured in CostEstimator."""
-    from rune_bench.api_contracts import CostEstimationRequest
 
     # Patch CostEstimator.estimate to raise FailClosedError
     with patch("rune_bench.common.costs.CostEstimator.estimate", side_effect=FailClosedError("no driver")):
