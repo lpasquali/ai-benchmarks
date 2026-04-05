@@ -53,11 +53,14 @@ class _FakeHTTPResponse:
 def test_handle_ask_returns_answer_and_citations(monkeypatch: pytest.MonkeyPatch) -> None:
     citations = ["https://example.com/a", "https://example.com/b"]
     monkeypatch.setenv("RUNE_PERPLEXITY_API_KEY", "test-key")
-    monkeypatch.setattr(
-        perplexity_main.urllib.request,
-        "urlopen",
-        lambda req: _FakeHTTPResponse(_make_api_response("research result", citations)),
-    )
+
+    def fake_request(url, **kwargs):
+        return {
+            "choices": [{"message": {"content": "research result"}}],
+            "citations": citations,
+        }
+
+    monkeypatch.setattr(perplexity_main, "make_http_request", fake_request)
 
     result = perplexity_main._handle_ask({"question": "What is RUNE?"})
 
@@ -68,44 +71,42 @@ def test_handle_ask_returns_answer_and_citations(monkeypatch: pytest.MonkeyPatch
 def test_handle_ask_defaults_model_to_sonar_pro(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict = {}
 
-    def fake_urlopen(req: perplexity_main.urllib.request.Request) -> _FakeHTTPResponse:
-        captured["body"] = json.loads(req.data)
-        captured["headers"] = dict(req.headers)
-        return _FakeHTTPResponse(_make_api_response())
+    def fake_request(url, *, method=None, payload=None, action=None, headers=None):
+        captured["payload"] = payload
+        captured["headers"] = headers
+        return {"choices": [{"message": {"content": "the answer"}}]}
 
     monkeypatch.setenv("RUNE_PERPLEXITY_API_KEY", "test-key")
-    monkeypatch.setattr(perplexity_main.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(perplexity_main, "make_http_request", fake_request)
 
     perplexity_main._handle_ask({"question": "q"})
 
-    assert captured["body"]["model"] == "sonar-pro"
+    assert captured["payload"]["model"] == "sonar-pro"
     assert captured["headers"]["Authorization"] == "Bearer test-key"
 
 
 def test_handle_ask_uses_custom_model(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict = {}
 
-    def fake_urlopen(req: perplexity_main.urllib.request.Request) -> _FakeHTTPResponse:
-        captured["body"] = json.loads(req.data)
-        return _FakeHTTPResponse(_make_api_response())
+    def fake_request(url, *, method=None, payload=None, action=None, headers=None):
+        captured["payload"] = payload
+        return {"choices": [{"message": {"content": "the answer"}}]}
 
     monkeypatch.setenv("RUNE_PERPLEXITY_API_KEY", "test-key")
-    monkeypatch.setattr(perplexity_main.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(perplexity_main, "make_http_request", fake_request)
 
     perplexity_main._handle_ask({"question": "q", "model": "sonar-deep-research"})
 
-    assert captured["body"]["model"] == "sonar-deep-research"
+    assert captured["payload"]["model"] == "sonar-deep-research"
 
 
 def test_handle_ask_citations_absent(monkeypatch: pytest.MonkeyPatch) -> None:
     """When the API response has no 'citations' key, return an empty list."""
     monkeypatch.setenv("RUNE_PERPLEXITY_API_KEY", "test-key")
-    # Build response without citations key
-    body = json.dumps({"choices": [{"message": {"content": "ans"}}]}).encode()
     monkeypatch.setattr(
-        perplexity_main.urllib.request,
-        "urlopen",
-        lambda req: _FakeHTTPResponse(body),
+        perplexity_main,
+        "make_http_request",
+        lambda *a, **kw: {"choices": [{"message": {"content": "ans"}}]},
     )
 
     result = perplexity_main._handle_ask({"question": "q"})
@@ -113,6 +114,14 @@ def test_handle_ask_citations_absent(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result["answer"] == "ans"
     assert result["citations"] == []
 
+
+
+
+def test_handle_ask_empty_model_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When model is empty string, raise RuntimeError."""
+    monkeypatch.setenv("RUNE_PERPLEXITY_API_KEY", "test-key")
+    with pytest.raises(RuntimeError, match="non-empty string"):
+        perplexity_main._handle_ask({"question": "q", "model": "   "})
 
 # ---------------------------------------------------------------------------
 # _handle_ask — missing API key
