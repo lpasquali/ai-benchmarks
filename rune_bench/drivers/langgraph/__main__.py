@@ -20,15 +20,42 @@ info
 
 Dependencies
 ------------
-Requires ``langgraph`` and ``langchain-openai`` to be installed::
+Requires ``langgraph`` and ``langchain-ollama`` to be installed::
 
-    pip install rune[langgraph]
+    pip install langgraph langchain-ollama
 """
 
 from __future__ import annotations
 
 import json
 import sys
+from typing import Any, TypedDict
+
+_MODEL_PREFIXES = ("ollama/", "ollama_chat/")
+
+
+def _normalize_model(model: str) -> str:
+    """Strip provider prefixes (e.g. 'ollama/', 'ollama_chat/') from model name."""
+    for prefix in _MODEL_PREFIXES:
+        if model.startswith(prefix):
+            return model[len(prefix):]
+    return model
+
+try:
+    from langchain_ollama import ChatOllama  # type: ignore[import-not-found]
+    from langgraph.graph import END, START, StateGraph  # type: ignore[import-not-found]
+except ImportError:
+    # Optional dependencies handled in _handle_ask
+    ChatOllama = None  # type: ignore
+    StateGraph = None  # type: ignore
+    START = None  # type: ignore
+    END = None  # type: ignore
+
+
+class GraphState(TypedDict):
+    """State for the LangGraph workflow."""
+    question: str
+    answer: str
 
 
 def _handle_ask(params: dict) -> dict:
@@ -36,33 +63,31 @@ def _handle_ask(params: dict) -> dict:
     model: str = params["model"]
     ollama_url: str | None = params.get("ollama_url")
 
-    try:
-        from langchain_openai import ChatOpenAI  # type: ignore[import-not-found]
-        from langgraph.prebuilt import create_react_agent  # type: ignore[import-not-found]
-    except ImportError as exc:
+    if StateGraph is None or ChatOllama is None:
         raise RuntimeError(
-            "LangGraph driver requires: pip install rune[langgraph]  "
-            "(langgraph and langchain-openai packages)"
-        ) from exc
+            "LangGraph driver requires: pip install langgraph langchain-ollama"
+        )
 
-    # LangChain's ChatOpenAI can be used to talk to Ollama's OpenAI-compatible API
-    llm = ChatOpenAI(
-        model=model,
-        base_url=f"{ollama_url.rstrip('/')}/v1" if ollama_url else "http://localhost:11434/v1",
-        api_key="ollama",  # Required but ignored by Ollama
-    )
+    # Build ChatOllama LLM
+    llm_kwargs: dict[str, Any] = {"model": _normalize_model(model)}
+    if ollama_url:
+        llm_kwargs["base_url"] = ollama_url
+    llm = ChatOllama(**llm_kwargs)
 
-    # A simple ReAct agent with no tools - can be extended later
-    agent = create_react_agent(llm, tools=[])
-    result = agent.invoke({"messages": [("user", question)]})
+    # Define a simple single-node research graph.
+    def research_node(state: GraphState) -> dict:
+        response = llm.invoke(state["question"])
+        return {"answer": response.content}
 
-    # Extract the last message content
-    messages = result.get("messages", [])
-    if not messages:
-        raise RuntimeError("LangGraph agent returned no messages.")
+    graph = StateGraph(GraphState)
+    graph.add_node("research", research_node)
+    graph.add_edge(START, "research")
+    graph.add_edge("research", END)
 
-    answer = messages[-1].content
-    return {"answer": answer}
+    compiled = graph.compile()
+    result = compiled.invoke({"question": question, "answer": ""})
+
+    return {"answer": result["answer"]}
 
 
 def _handle_info(_params: dict) -> dict:
@@ -70,7 +95,7 @@ def _handle_info(_params: dict) -> dict:
         "name": "langgraph",
         "version": "1",
         "actions": ["ask", "info"],
-        "note": "Requires optional dependencies: pip install rune[langgraph]",
+        "note": "Requires optional dependencies: pip install langgraph langchain-ollama",
     }
 
 
