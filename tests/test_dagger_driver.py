@@ -62,7 +62,7 @@ class TestHandleAskImportError:
             "builtins.__import__",
             _import_blocker("dagger"),
         )
-        with pytest.raises(RuntimeError, match="pip install rune"):
+        with pytest.raises(RuntimeError, match="pip install dagger-io"):
             dagger_main._handle_ask({"question": "echo hi"})
 
 
