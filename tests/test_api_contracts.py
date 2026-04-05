@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from rune_bench.api_contracts import (
+    CostEstimationRequest,
     RunAgenticAgentRequest,
     RunBenchmarkRequest,
     RunOllamaInstanceRequest,
@@ -55,3 +56,12 @@ def test_benchmark_request_from_cli_converts_kubeconfig_to_string():
     payload = request.to_dict()
     assert payload["kubeconfig"] == "/home/user/.kube/config"
     assert payload["vastai_stop_instance"] is True
+
+
+def test_cost_estimation_request_to_dict():
+    req = CostEstimationRequest(vastai=True, min_dph=2.0, max_dph=3.0, estimated_duration_seconds=1800)
+    d = req.to_dict()
+    assert d["vastai"] is True
+    assert d["min_dph"] == 2.0
+    assert d["max_dph"] == 3.0
+    assert d["estimated_duration_seconds"] == 1800

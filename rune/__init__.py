@@ -349,13 +349,6 @@ def _run_preflight_cost_check(
         raise typer.Exit(1)
 
     if not result:
-        if vastai:
-            # vastai=True but no estimate returned — unexpected empty result; fail closed.
-            console.print(
-                "[red]Cost estimation returned no result despite vastai=True; "
-                "refusing to proceed fail-closed.[/red]"
-            )
-            raise typer.Exit(1)
         return
 
     projected_cost: float = float(result.get("projected_cost_usd", 0.0))
@@ -379,10 +372,7 @@ def _run_preflight_cost_check(
     try:
         threshold = float(os.environ.get("RUNE_SPEND_WARNING_THRESHOLD", str(DEFAULT_SPEND_THRESHOLD)))
     except (ValueError, TypeError):
-        console.print(
-            f"[yellow]Warning: Invalid RUNE_SPEND_WARNING_THRESHOLD value; "
-            f"using default ${DEFAULT_SPEND_THRESHOLD:.2f}.[/yellow]"
-        )
+        console.print("[yellow]Warning: Invalid RUNE_SPEND_WARNING_THRESHOLD value; using default $5.00.[/yellow]")
         threshold = DEFAULT_SPEND_THRESHOLD
 
     action = evaluate_spend_gate(projected_cost, threshold=threshold, yes=yes)
@@ -397,7 +387,7 @@ def _run_preflight_cost_check(
         )
         raise typer.Exit(1)
 
-    ack = console.input("\n[bold magenta]Proceed? [y/N]: [/bold magenta]").strip().lower()
+    ack = console.input("\n[bold magenta]Proceed with benchmark? [y/N]: [/bold magenta]").strip().lower()
     if ack not in {"y", "yes"}:
         console.print("Aborted.")
         raise typer.Exit(1)

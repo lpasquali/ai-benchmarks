@@ -144,11 +144,11 @@ def test_run_ollama_instance_paths(monkeypatch):
     assert "Provisioned contract" in test_console.export_text()
 
     monkeypatch.setattr(rune, "BACKEND_MODE", "http")
-    monkeypatch.setattr(rune, "_http_client", lambda: type("C", (), {"get_cost_estimate": lambda self, *_a, **_k: {"projected_cost_usd": 1.0, "cost_driver": "vastai", "resource_impact": "low", "warning": None}, "submit_ollama_instance_job": lambda self, payload, idempotency_key=None: "job-1", "wait_for_job": lambda self, *args, **kwargs: {"result": {"mode": "vastai", "contract_id": 2, "ollama_url": "http://x", "model_name": "m"}}})())
+    monkeypatch.setattr(rune, "_http_client", lambda: type("C", (), {"submit_ollama_instance_job": lambda self, payload, idempotency_key=None: "job-1", "wait_for_job": lambda self, *args, **kwargs: {"result": {"mode": "vastai", "contract_id": 2, "ollama_url": "http://x", "model_name": "m"}}, "get_cost_estimate": lambda self, *_a, **_k: {"projected_cost_usd": 1.0, "cost_driver": "vastai", "resource_impact": "medium", "local_energy_kwh": 0.0, "confidence_score": 1.0, "warning": None}})())
     rune.run_ollama_instance(vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url=None, debug=False, idempotency_key="id1")
     assert "Selected model" in test_console.export_text()
 
-    monkeypatch.setattr(rune, "_http_client", lambda: type("C", (), {"get_cost_estimate": lambda self, *_a, **_k: {}, "submit_ollama_instance_job": lambda self, payload, idempotency_key=None: "job-1", "wait_for_job": lambda self, *args, **kwargs: {"result": {}}})())
+    monkeypatch.setattr(rune, "_http_client", lambda: type("C", (), {"submit_ollama_instance_job": lambda self, payload, idempotency_key=None: "job-1", "wait_for_job": lambda self, *args, **kwargs: {"result": {}}})())
     with pytest.raises(typer.Exit):
         rune.run_ollama_instance(vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url="u", debug=False, idempotency_key=None)
 
