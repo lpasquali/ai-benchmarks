@@ -82,7 +82,7 @@ def test_handle_ask_empty_instance(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_handle_ask_returns_answer_and_sources(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("RUNE_GLEAN_API_TOKEN", "glean-tok-123")
+    monkeypatch.setenv("RUNE_GLEAN_API_TOKEN", "dummy-token")
     monkeypatch.setenv("RUNE_GLEAN_INSTANCE", "acme")
     captured: dict = {}
 
@@ -102,7 +102,7 @@ def test_handle_ask_returns_answer_and_sources(monkeypatch: pytest.MonkeyPatch) 
     assert result["answer"] == "PTO is 20 days per year."
     assert result["sources"][0]["title"] == "HR Handbook"
     assert captured["url"] == "https://acme-be.glean.com/api/v1/chat"
-    assert captured["headers"]["Authorization"] == "Bearer glean-tok-123"
+    assert captured["headers"]["Authorization"] == "Bearer dummy-token"
     assert captured["body"]["messages"][0]["content"] == "What is our PTO policy?"
 
 
@@ -116,6 +116,34 @@ def test_handle_ask_falls_back_to_content_field(monkeypatch: pytest.MonkeyPatch)
 
     result = glean_main._handle_ask({"question": "q"})
     assert result["answer"] == "fallback content"
+
+
+def test_handle_ask_search_mode_uses_search_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RUNE_GLEAN_API_TOKEN", "tok")
+    monkeypatch.setenv("RUNE_GLEAN_INSTANCE", "acme")
+    captured: dict = {}
+
+    def fake_urlopen(req, **_kw):  # noqa: ANN001, ANN003
+        captured["url"] = req.full_url
+        captured["body"] = json.loads(req.data.decode())
+        return _FakeResponse({"answer": "search result", "sources": []})
+
+    monkeypatch.setattr(glean_main.urllib.request, "urlopen", fake_urlopen)
+
+    result = glean_main._handle_ask({"question": "deployment docs", "mode": "search"})
+
+    assert captured["url"] == "https://acme-be.glean.com/api/v1/search"
+    assert captured["body"]["query"] == "deployment docs"
+    assert "messages" not in captured["body"]
+    assert result["answer"] == "search result"
+
+
+def test_handle_ask_invalid_mode_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RUNE_GLEAN_API_TOKEN", "tok")
+    monkeypatch.setenv("RUNE_GLEAN_INSTANCE", "acme")
+
+    with pytest.raises(RuntimeError, match="Invalid mode"):
+        glean_main._handle_ask({"question": "q", "mode": "summarize"})
 
 
 def test_handle_ask_citations_field(monkeypatch: pytest.MonkeyPatch) -> None:

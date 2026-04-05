@@ -51,11 +51,12 @@ def _handle_ask(params: dict) -> dict:
     if time_range:
         body["time_range"] = time_range
 
+    endpoint = url.rsplit("/", maxsplit=1)[-1]
     resp_body = make_http_request(
         url,
         method="POST",
         payload=body,
-        action="query Metoro API",
+        action=f"query Metoro /{endpoint}",
         headers={"Authorization": f"Bearer {api_key}"},
     )
 

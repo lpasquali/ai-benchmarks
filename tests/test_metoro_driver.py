@@ -1,7 +1,8 @@
 """Tests for rune_bench.drivers.metoro.__main__ -- the Metoro driver entry point.
 
-The driver calls the Metoro REST API via urllib.request.  urllib.request.urlopen
-is monkeypatched throughout so no real network access is required.
+The driver calls the Metoro REST API via ``make_http_request()`` from
+``rune_bench.common.http_client``.  That helper is monkeypatched throughout
+so no real network access is required.
 """
 
 from __future__ import annotations
@@ -12,28 +13,6 @@ import json
 import pytest
 
 import rune_bench.drivers.metoro.__main__ as metoro_main
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-class _FakeResponse:
-    """Minimal file-like object returned by a mocked urlopen."""
-
-    def __init__(self, body: dict, code: int = 200) -> None:
-        self._data = json.dumps(body).encode()
-        self.code = code
-
-    def read(self) -> bytes:
-        return self._data
-
-    def __enter__(self):  # noqa: ANN204
-        return self
-
-    def __exit__(self, *_a: object) -> None:
-        pass
 
 
 # ---------------------------------------------------------------------------
@@ -59,23 +38,27 @@ def test_handle_ask_empty_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_handle_ask_returns_explanation(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("RUNE_METORO_API_KEY", "test-key-123")
+    monkeypatch.setenv("RUNE_METORO_API_KEY", "dummy-key")
     captured: dict = {}
 
-    def fake_urlopen(req, **_kw):  # noqa: ANN001, ANN003
-        captured["url"] = req.full_url
-        captured["headers"] = dict(req.headers)
-        captured["body"] = json.loads(req.data.decode())
-        return _FakeResponse({"explanation": "Pod OOMKilled due to memory limit.", "telemetry": [{"metric": "mem"}]})
+    def fake_make_http_request(url, *, method, payload, action, headers, **_kw):  # noqa: ANN001, ANN003
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["body"] = payload
+        return {
+            "explanation": "Pod OOMKilled due to memory limit.",
+            "telemetry": {"services": [{"name": "web"}], "traces": [{"id": "t1"}]},
+        }
 
-    monkeypatch.setattr(metoro_main.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(metoro_main, "make_http_request", fake_make_http_request)
 
     result = metoro_main._handle_ask({"question": "Why is the pod crashing?"})
 
     assert result["answer"] == "Pod OOMKilled due to memory limit."
-    assert result["telemetry"] == [{"metric": "mem"}]
+    assert result["services"] == [{"name": "web"}]
+    assert result["traces"] == [{"id": "t1"}]
     assert captured["url"].endswith("/ai/explain")
-    assert captured["headers"]["Authorization"] == "Bearer test-key-123"
+    assert captured["headers"]["Authorization"] == "Bearer dummy-key"
     assert captured["body"]["question"] == "Why is the pod crashing?"
 
 
@@ -83,11 +66,11 @@ def test_handle_ask_with_optional_params(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setenv("RUNE_METORO_API_KEY", "key")
     captured: dict = {}
 
-    def fake_urlopen(req, **_kw):  # noqa: ANN001, ANN003
-        captured["body"] = json.loads(req.data.decode())
-        return _FakeResponse({"explanation": "ok"})
+    def fake_make_http_request(url, *, method, payload, action, headers, **_kw):  # noqa: ANN001, ANN003
+        captured["body"] = payload
+        return {"explanation": "ok"}
 
-    monkeypatch.setattr(metoro_main.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(metoro_main, "make_http_request", fake_make_http_request)
 
     metoro_main._handle_ask({
         "question": "latency?",
@@ -104,11 +87,11 @@ def test_handle_ask_custom_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RUNE_METORO_BASE_URL", "https://custom.metoro.local/api")
     captured: dict = {}
 
-    def fake_urlopen(req, **_kw):  # noqa: ANN001, ANN003
-        captured["url"] = req.full_url
-        return _FakeResponse({"explanation": "ok"})
+    def fake_make_http_request(url, **_kw):  # noqa: ANN001, ANN003
+        captured["url"] = url
+        return {"explanation": "ok"}
 
-    monkeypatch.setattr(metoro_main.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(metoro_main, "make_http_request", fake_make_http_request)
 
     metoro_main._handle_ask({"question": "q"})
     assert captured["url"] == "https://custom.metoro.local/api/ai/explain"
@@ -117,8 +100,8 @@ def test_handle_ask_custom_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_handle_ask_falls_back_to_answer_field(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RUNE_METORO_API_KEY", "key")
     monkeypatch.setattr(
-        metoro_main.urllib.request, "urlopen",
-        lambda *a, **kw: _FakeResponse({"answer": "fallback answer"}),
+        metoro_main, "make_http_request",
+        lambda *a, **kw: {"answer": "fallback answer"},
     )
 
     result = metoro_main._handle_ask({"question": "q"})
@@ -133,30 +116,24 @@ def test_handle_ask_falls_back_to_answer_field(monkeypatch: pytest.MonkeyPatch) 
 def test_handle_ask_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RUNE_METORO_API_KEY", "key")
 
-    import urllib.error
+    def fake_make_http_request(url, **_kw):  # noqa: ANN001, ANN003
+        raise RuntimeError("Failed to query Metoro /explain: access denied")
 
-    def fake_urlopen(req, **_kw):  # noqa: ANN001, ANN003
-        raise urllib.error.HTTPError(
-            req.full_url, 403, "Forbidden", {}, io.BytesIO(b"access denied"),
-        )
+    monkeypatch.setattr(metoro_main, "make_http_request", fake_make_http_request)
 
-    monkeypatch.setattr(metoro_main.urllib.request, "urlopen", fake_urlopen)
-
-    with pytest.raises(RuntimeError, match="HTTP 403"):
+    with pytest.raises(RuntimeError, match="Failed to query Metoro"):
         metoro_main._handle_ask({"question": "q"})
 
 
 def test_handle_ask_url_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RUNE_METORO_API_KEY", "key")
 
-    import urllib.error
+    def fake_make_http_request(url, **_kw):  # noqa: ANN001, ANN003
+        raise RuntimeError("Failed to query Metoro /explain: Connection refused")
 
-    def fake_urlopen(req, **_kw):  # noqa: ANN001, ANN003
-        raise urllib.error.URLError("Connection refused")
+    monkeypatch.setattr(metoro_main, "make_http_request", fake_make_http_request)
 
-    monkeypatch.setattr(metoro_main.urllib.request, "urlopen", fake_urlopen)
-
-    with pytest.raises(RuntimeError, match="request failed"):
+    with pytest.raises(RuntimeError, match="Failed to query Metoro"):
         metoro_main._handle_ask({"question": "q"})
 
 
@@ -178,7 +155,7 @@ def test_handle_info_returns_driver_metadata() -> None:
 
 
 def test_main_processes_ask_request(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
-    monkeypatch.setattr(metoro_main, "_handle_ask", lambda p: {"answer": "great answer", "telemetry": None})
+    monkeypatch.setattr(metoro_main, "_handle_ask", lambda p: {"answer": "great answer", "services": None, "traces": None})
     monkeypatch.setattr(
         metoro_main.sys,
         "stdin",
