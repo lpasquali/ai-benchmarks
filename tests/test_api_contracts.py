@@ -37,6 +37,34 @@ def test_agentic_request_from_cli_converts_kubeconfig_to_string():
     assert payload["kubeconfig"] == "/tmp/kubeconfig"
 
 
+def test_agentic_request_from_cli_kubeconfig_optional():
+    request = RunAgenticAgentRequest.from_cli(
+        question="q",
+        model="m",
+        ollama_url=None,
+        ollama_warmup=False,
+        ollama_warmup_timeout=90,
+    )
+
+    payload = request.to_dict()
+    assert payload["kubeconfig"] is None
+
+
+def test_agentic_request_kubeconfig_optional_direct():
+    request = RunAgenticAgentRequest(
+        question="q",
+        model="m",
+        ollama_url=None,
+        ollama_warmup=False,
+        ollama_warmup_timeout=90,
+        agent="dagger",
+    )
+
+    payload = request.to_dict()
+    assert payload["kubeconfig"] is None
+    assert payload["agent"] == "dagger"
+
+
 def test_benchmark_request_from_cli_converts_kubeconfig_to_string():
     request = RunBenchmarkRequest.from_cli(
         vastai=False,

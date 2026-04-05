@@ -1,0 +1,8 @@
+Place named pipeline templates here as .sh files.
+
+Each template receives the user question as $1 and is executed via
+``sh <template>.sh <question>`` by the Dagger driver.
+
+Example: hello.sh
+    #!/bin/sh
+    echo "Hello, $1"

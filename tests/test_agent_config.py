@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 
 from rune_bench.agents.config import AgentConfig, resolve_agent_config
 
