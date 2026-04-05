@@ -32,7 +32,7 @@ def _patch_mindgard(monkeypatch, stdout_data: dict, returncode: int = 0, stderr:
 
     captured: dict = {}
 
-    def fake_run(cmd, capture_output, text, check):
+    def fake_run(cmd, capture_output=False, text=False, check=False, **kwargs):
         captured["cmd"] = cmd
         return subprocess.CompletedProcess(
             cmd, returncode, stdout=json.dumps(stdout_data), stderr=stderr,
