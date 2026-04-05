@@ -233,4 +233,4 @@ See [compliance targets in rune-docs](https://github.com/lpasquali/rune-docs/blo
 
 ## License
 
-GNU General Public License v3.0. See [LICENSE](LICENSE).
+Apache License 2.0. See [LICENSE](LICENSE).
