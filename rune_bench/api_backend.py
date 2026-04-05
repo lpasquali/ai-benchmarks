@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
-from rune_bench.agents.base import AgentRunner
+from rune_bench.agents.registry import get_agent
 from rune_bench.api_contracts import (
     CostEstimationRequest,
     RunAgenticAgentRequest,
@@ -75,15 +76,23 @@ def _make_resource_provider_for_ollama_instance(request: RunOllamaInstanceReques
     return ExistingOllamaProvider(request.ollama_url)
 
 
-def _make_agent_runner(kubeconfig: Path) -> AgentRunner:
-    """Lazy factory: load HolmesRunner only when an agent run is requested.
+def _make_agent_runner(agent_name: str | Path = "holmes", *, kubeconfig: Path | None = None) -> Any:
+    """Lazy factory: resolve an agent via the registry.
 
-    Replace this function (via monkeypatch or dependency injection) to swap
-    in a different AgentRunner implementation.
+    Accepts either the new ``(agent_name, *, kubeconfig=...)`` signature or
+    the legacy ``(kubeconfig_path)`` positional call used by existing tests
+    and monkeypatches.
     """
-    from rune_bench.agents.sre.holmes import HolmesRunner
+    # Legacy call-site compat: if *agent_name* is a Path or pathlib-like object,
+    # the caller is using the old ``_make_agent_runner(kubeconfig)`` signature.
+    if isinstance(agent_name, Path):
+        kubeconfig = agent_name
+        agent_name = "holmes"
 
-    return HolmesRunner(kubeconfig)
+    kwargs: dict[str, Any] = {}
+    if kubeconfig is not None:
+        kwargs["kubeconfig"] = kubeconfig
+    return get_agent(agent_name, **kwargs)
 
 
 def list_vastai_models() -> list[dict]:
@@ -123,7 +132,27 @@ def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
             request.model,
             timeout_seconds=request.ollama_warmup_timeout,
         )
-    runner = _make_agent_runner(Path(request.kubeconfig))
+    agent_name = getattr(request, "agent", "holmes")
+
+    # Validate kubeconfig is provided when the agent requires it.
+    from rune_bench.agents.registry import _BUILTIN_AGENTS
+    builtin_entry = _BUILTIN_AGENTS.get(agent_name)
+    if builtin_entry and "kubeconfig" in builtin_entry[2] and request.kubeconfig is None:
+        raise RuntimeError(
+            f"Agent '{agent_name}' requires a kubeconfig path; "
+            "set KUBECONFIG or pass --kubeconfig"
+        )
+
+    kubeconfig_path = Path(request.kubeconfig) if request.kubeconfig else None
+    agent_kwargs: dict[str, Any] = {}
+    if kubeconfig_path is not None:
+        agent_kwargs["kubeconfig"] = kubeconfig_path
+    if agent_name == "holmes":
+        # Default path -- preserves monkeypatch compatibility in existing tests.
+        runner = _make_agent_runner(**agent_kwargs)
+    else:
+        # Non-default agent: registry's get_agent() filters kwargs by required_config.
+        runner = get_agent(agent_name, **agent_kwargs)
     answer = runner.ask(
         question=request.question,
         model=request.model,
@@ -232,4 +261,3 @@ def get_cost_estimate(request: CostEstimationRequest) -> dict:
         "confidence_score": 1.0,
         "warning": None,
     }
-
