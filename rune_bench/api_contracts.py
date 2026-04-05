@@ -28,7 +28,7 @@ class RunAgenticAgentRequest:
     ollama_url: str | None
     ollama_warmup: bool
     ollama_warmup_timeout: int
-    kubeconfig: str
+    kubeconfig: str | None = None
     agent: str = "holmes"
 
     @classmethod
@@ -40,7 +40,7 @@ class RunAgenticAgentRequest:
         ollama_url: str | None,
         ollama_warmup: bool,
         ollama_warmup_timeout: int,
-        kubeconfig: Path,
+        kubeconfig: Path | None = None,
         agent: str = "holmes",
     ) -> "RunAgenticAgentRequest":
         return cls(
@@ -49,7 +49,7 @@ class RunAgenticAgentRequest:
             ollama_url=ollama_url,
             ollama_warmup=ollama_warmup,
             ollama_warmup_timeout=ollama_warmup_timeout,
-            kubeconfig=str(kubeconfig),
+            kubeconfig=str(kubeconfig) if kubeconfig is not None else None,
             agent=agent,
         )
 

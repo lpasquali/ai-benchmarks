@@ -83,12 +83,10 @@ def _make_agent_runner(agent_name: str | Path = "holmes", *, kubeconfig: Path | 
     the legacy ``(kubeconfig_path)`` positional call used by existing tests
     and monkeypatches.
     """
-    # Legacy call-site compat: if *agent_name* is a Path (or path-like string),
+    # Legacy call-site compat: if *agent_name* is a Path or pathlib-like object,
     # the caller is using the old ``_make_agent_runner(kubeconfig)`` signature.
-    if isinstance(agent_name, Path) or (
-        isinstance(agent_name, str) and "/" in agent_name
-    ):
-        kubeconfig = Path(agent_name)
+    if isinstance(agent_name, Path):
+        kubeconfig = agent_name
         agent_name = "holmes"
 
     kwargs: dict[str, Any] = {}
@@ -135,13 +133,26 @@ def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
             timeout_seconds=request.ollama_warmup_timeout,
         )
     agent_name = getattr(request, "agent", "holmes")
-    if agent_name != "holmes":
-        # Non-default agent: pass kubeconfig; get_agent() filters based on required_config
-        agent_kwargs: dict[str, Any] = {"kubeconfig": Path(request.kubeconfig)}
-        runner = get_agent(agent_name, **agent_kwargs)
-    else:
+
+    # Validate kubeconfig is provided when the agent requires it.
+    from rune_bench.agents.registry import _BUILTIN_AGENTS
+    builtin_entry = _BUILTIN_AGENTS.get(agent_name)
+    if builtin_entry and "kubeconfig" in builtin_entry[2] and request.kubeconfig is None:
+        raise RuntimeError(
+            f"Agent '{agent_name}' requires a kubeconfig path; "
+            "set KUBECONFIG or pass --kubeconfig"
+        )
+
+    kubeconfig_path = Path(request.kubeconfig) if request.kubeconfig else None
+    agent_kwargs: dict[str, Any] = {}
+    if kubeconfig_path is not None:
+        agent_kwargs["kubeconfig"] = kubeconfig_path
+    if agent_name == "holmes":
         # Default path -- preserves monkeypatch compatibility in existing tests.
-        runner = _make_agent_runner(Path(request.kubeconfig))
+        runner = _make_agent_runner(**agent_kwargs)
+    else:
+        # Non-default agent: registry's get_agent() filters kwargs by required_config.
+        runner = get_agent(agent_name, **agent_kwargs)
     answer = runner.ask(
         question=request.question,
         model=request.model,
