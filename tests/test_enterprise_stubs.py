@@ -8,7 +8,6 @@ Each stub must:
 from __future__ import annotations
 
 import importlib
-import os
 from unittest.mock import MagicMock
 
 import pytest
@@ -313,10 +312,10 @@ def test_main_loop_invalid_json(
 ) -> None:
     """``main()`` must handle invalid JSON gracefully."""
     import io
-    import json as _json
+    import json
 
     main_mod = importlib.import_module(f"{module_path}.__main__")
     monkeypatch.setattr("sys.stdin", io.StringIO("not-json\n"))
     main_mod.main()
-    resp = _json.loads(capsys.readouterr().out.strip())
+    resp = json.loads(capsys.readouterr().out.strip())
     assert resp["status"] == "error"

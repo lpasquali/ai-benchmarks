@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from rune_bench.agents.config import AgentConfig, resolve_agent_config
@@ -18,14 +16,13 @@ def test_resolve_reads_prefixed_env_vars(monkeypatch):
 
     assert cfg.api_key == "pplx-secret"
     assert cfg.base_url == "https://api.perplexity.ai"
-    assert cfg.kubeconfig == Path("/home/user/.kube/config")
+    assert cfg.kubeconfig == "/home/user/.kube/config"
     assert cfg.extra == {}
 
 
 def test_resolve_returns_none_when_unset(monkeypatch):
     monkeypatch.delenv("RUNE_FOOBAR_API_KEY", raising=False)
     monkeypatch.delenv("RUNE_FOOBAR_BASE_URL", raising=False)
-    monkeypatch.delenv("RUNE_KUBECONFIG", raising=False)
     monkeypatch.delenv("KUBECONFIG", raising=False)
 
     cfg = resolve_agent_config("foobar")

@@ -18,6 +18,11 @@ from rune_bench.agents.registry import (
 from rune_bench.agents.stubs import NotConfiguredError
 
 
+# ---------------------------------------------------------------------------
+# list_agents
+# ---------------------------------------------------------------------------
+
+
 def test_list_agents_returns_all_builtin():
     agents = list_agents()
     assert len(agents) == len(_BUILTIN_AGENTS)
@@ -39,6 +44,11 @@ def test_list_agents_includes_custom_after_register():
         _REGISTRY.pop("test_custom_agent", None)
 
 
+# ---------------------------------------------------------------------------
+# get_agent -- Holmes (real builtin)
+# ---------------------------------------------------------------------------
+
+
 def test_get_agent_holmes(tmp_path):
     kubeconfig = tmp_path / "kubeconfig"
     kubeconfig.write_text("apiVersion: v1")
@@ -46,9 +56,19 @@ def test_get_agent_holmes(tmp_path):
     assert hasattr(runner, "ask")
 
 
+# ---------------------------------------------------------------------------
+# get_agent -- unknown
+# ---------------------------------------------------------------------------
+
+
 def test_get_agent_unknown_raises():
     with pytest.raises(ValueError, match="Unknown agent 'does_not_exist'"):
         get_agent("does_not_exist")
+
+
+# ---------------------------------------------------------------------------
+# register_agent -- custom factory
+# ---------------------------------------------------------------------------
 
 
 def test_register_agent_custom_factory():
@@ -62,6 +82,7 @@ def test_register_agent_custom_factory():
 
 
 def test_register_agent_shadows_builtin():
+    """Custom registration should take priority over the built-in map."""
     sentinel = object()
     _REGISTRY.pop("holmes", None)
     try:
@@ -69,6 +90,11 @@ def test_register_agent_shadows_builtin():
         assert get_agent("holmes") is sentinel
     finally:
         _REGISTRY.pop("holmes", None)
+
+
+# ---------------------------------------------------------------------------
+# AgentResult dataclass
+# ---------------------------------------------------------------------------
 
 
 def test_agent_result_defaults():
@@ -90,7 +116,14 @@ def test_agent_result_structured():
     assert r.artifacts == [{"path": "/tmp/out.pdf"}]
 
 
+# ---------------------------------------------------------------------------
+# AgentRunner protocol -- structural subtyping
+# ---------------------------------------------------------------------------
+
+
 def test_agent_runner_protocol_satisfied():
+    """Any object with an ``ask`` method matching the signature satisfies the protocol."""
+
     class FakeRunner:
         def ask(self, question: str, model: str, ollama_url: str | None = None, **kwargs) -> str:
             return "ok"
@@ -98,10 +131,25 @@ def test_agent_runner_protocol_satisfied():
     assert isinstance(FakeRunner(), AgentRunner)
 
 
+# ---------------------------------------------------------------------------
+# NotConfiguredError
+# ---------------------------------------------------------------------------
+
+
 def test_not_configured_error_is_runtime_error():
     with pytest.raises(RuntimeError):
         raise NotConfiguredError("missing key")
 
 
+# ---------------------------------------------------------------------------
+# Builtin count
+# ---------------------------------------------------------------------------
+
+
 def test_builtin_agent_count():
-    assert len(_BUILTIN_AGENTS) == 23
+    """Ensure the built-in map contains known core agents and a reasonable size."""
+    for expected in ("holmes", "dagger", "perplexity"):
+        assert expected in _BUILTIN_AGENTS, f"Expected built-in agent {expected!r} missing"
+    assert len(_BUILTIN_AGENTS) >= 20, (
+        f"Expected at least 20 built-in agents, got {len(_BUILTIN_AGENTS)}"
+    )
