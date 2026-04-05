@@ -380,7 +380,7 @@ def test_api_backend_functions(monkeypatch, tmp_path):
     kubeconfig.write_text("apiVersion: v1\n")
     warmed = []
     monkeypatch.setattr(api_backend, "warmup_existing_ollama_model", lambda *_args, **_kwargs: warmed.append(True) or "m")
-    monkeypatch.setattr(api_backend, "_make_agent_runner", lambda path: type("R", (), {"ask": lambda self, **_: "answer"})())
+    monkeypatch.setattr(api_backend, "_make_agent_runner", lambda *_args, **_kwargs: type("R", (), {"ask": lambda self, **_: "answer"})())
     areq = api_backend.RunAgenticAgentRequest(question="q", model="m", ollama_url="http://x", ollama_warmup=True, ollama_warmup_timeout=1, kubeconfig=str(kubeconfig))
     assert api_backend.run_agentic_agent(areq) == {"answer": "answer"}
     assert warmed == [True]
