@@ -23,15 +23,6 @@ Implementation notes:
 
 
 
-class DaggerRunner:
-    """Ops/Misc agent: autonomous CI/CD pipeline orchestration via Dagger."""
+from rune_bench.drivers.dagger import DaggerDriverClient
 
-    def __init__(self) -> None:
-        pass
-
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
-        """Run a Dagger pipeline and return the output."""
-        raise NotImplementedError(
-            "DaggerRunner is not yet implemented. "
-            "See https://docs.dagger.io/integrations/python/ for Python SDK details."
-        )
+DaggerRunner = DaggerDriverClient
