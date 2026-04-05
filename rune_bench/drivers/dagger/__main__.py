@@ -1,12 +1,8 @@
-"""Dagger driver entry point — receives JSON actions on stdin, writes results to stdout.
+"""Dagger driver entry point -- receives JSON actions on stdin, writes results to stdout.
 
 Run as::
 
     python -m rune_bench.drivers.dagger
-
-or via installing the ``dagger-io`` package directly::
-
-    pip install dagger-io
 
 Wire protocol (v1):
     stdin  line: {"action": "ACTION", "params": {...}, "id": "UUID"}
@@ -15,87 +11,95 @@ Wire protocol (v1):
 Supported actions
 -----------------
 ask
-    params: question (str), model (str, optional), ollama_url (str, optional),
-            pipeline (str, optional) — named pipeline template from pipelines/ dir
-    result: {"answer": str, "pipeline_log": str}
+    params: question (str), model (str), ollama_url (str, optional),
+            pipeline (str, optional)
+    result: {"answer": str}
 
 info
     params: (none)
     result: {"name": "dagger", "version": "1", "actions": [...]}
+
+Security
+--------
+When ``pipeline`` is not provided, the driver treats ``question`` as a raw
+shell command.  This path is gated behind the environment variable
+``RUNE_DAGGER_ALLOW_RAW_COMMANDS=true``.  If not set, a ``RuntimeError``
+is raised directing the caller to use a named pipeline template.
 """
 
 from __future__ import annotations
 
+import importlib.resources
 import json
+import os
+import subprocess
 import sys
 
 
-def _load_pipeline_command(pipeline: str, question: str) -> str:
-    """Load a named pipeline template from pipelines/ and substitute {question}."""
-    import pathlib
-    pipelines_dir = pathlib.Path(__file__).parent.parent.parent.parent / "pipelines"
-    template_path = pipelines_dir / f"{pipeline}.sh"
-    if template_path.exists():
-        return template_path.read_text().replace("{question}", question)
-    raise RuntimeError(
-        f"Pipeline template {pipeline!r} not found. "
-        f"Expected at {template_path}"
-    )
+def _load_pipeline_command(pipeline_name: str, question: str) -> list[str]:
+    """Resolve a named pipeline template and return the command to execute.
+
+    Pipeline templates are stored under
+    ``rune_bench/drivers/dagger/pipelines/`` and resolved via
+    :mod:`importlib.resources` so they work from both source trees and
+    installed packages.
+
+    Raises:
+        FileNotFoundError: if the named template does not exist.
+    """
+    try:
+        pkg = importlib.resources.files("rune_bench.drivers.dagger.pipelines")
+        template = pkg.joinpath(f"{pipeline_name}.sh")
+        if not template.is_file():  # type: ignore[union-attr]
+            raise FileNotFoundError(
+                f"Pipeline template {pipeline_name!r} not found under "
+                "rune_bench/drivers/dagger/pipelines/"
+            )
+        template_path = str(template)
+    except (TypeError, ModuleNotFoundError) as exc:
+        raise FileNotFoundError(
+            f"Cannot resolve pipeline template {pipeline_name!r}: {exc}"
+        ) from exc
+
+    return ["sh", template_path, question]
 
 
 def _handle_ask(params: dict) -> dict:
-    question: str = params["question"]
-    model: str | None = params.get("model")
-    ollama_url: str | None = params.get("ollama_url")
+    question: str = params.get("question", "")
     pipeline: str | None = params.get("pipeline")
 
-    # Resolve the shell command: named pipeline template or direct question
-    if pipeline:
-        command = _load_pipeline_command(pipeline, question)
-    else:
-        command = question
+    if not question:
+        raise RuntimeError("A question or command is required.")
 
+    if pipeline:
+        # Named pipeline template path
+        cmd = _load_pipeline_command(pipeline, question)
+    else:
+        # Raw command execution -- gated behind opt-in env var
+        allow_raw = os.environ.get("RUNE_DAGGER_ALLOW_RAW_COMMANDS", "").lower()
+        if allow_raw != "true":
+            raise RuntimeError(
+                "Raw command execution disabled; set "
+                "RUNE_DAGGER_ALLOW_RAW_COMMANDS=true or use a named pipeline"
+            )
+        cmd = ["sh", "-c", question]
+
+    # Lazy import: dagger-io may not be installed
     try:
-        import dagger
+        import dagger  # noqa: F401 -- presence check
     except ImportError:
         raise RuntimeError(
             "Dagger driver requires the dagger-io package: pip install dagger-io"
         ) from None
 
-    import asyncio
+    proc = subprocess.run(  # noqa: S603
+        cmd, capture_output=True, text=True, check=False,
+    )
+    if proc.returncode != 0:
+        detail = proc.stderr.strip() or proc.stdout.strip() or f"exit {proc.returncode}"
+        raise RuntimeError(f"Dagger pipeline failed: {detail}")
 
-    pipeline_log_lines: list[str] = []
-
-    async def run_pipeline(
-        cmd: str,
-        model: str | None = None,
-        ollama_url: str | None = None,
-    ) -> str:
-        async with dagger.Connection() as client:
-            container = client.container().from_("python:3.12-slim")
-
-            # Inject LLM config as env vars if provided
-            if model:
-                container = container.with_env_variable("MODEL", model)
-                pipeline_log_lines.append(f"Set MODEL={model}")
-            if ollama_url:
-                container = container.with_env_variable("OLLAMA_URL", ollama_url)
-                pipeline_log_lines.append(f"Set OLLAMA_URL={ollama_url}")
-
-            # Execute the resolved command
-            pipeline_log_lines.append(f"Executing: sh -c {cmd!r}")
-            result = await container.with_exec(["sh", "-c", cmd]).stdout()
-            return result
-
-    try:
-        result = asyncio.run(run_pipeline(command, model, ollama_url))
-    except Exception as exc:
-        raise RuntimeError(f"Dagger pipeline failed: {exc}") from exc
-
-    return {
-        "answer": result.strip() if result else "",
-        "pipeline_log": "\n".join(pipeline_log_lines),
-    }
+    return {"answer": proc.stdout.strip()}
 
 
 def _handle_info(_params: dict) -> dict:

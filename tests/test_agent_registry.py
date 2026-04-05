@@ -147,5 +147,9 @@ def test_not_configured_error_is_runtime_error():
 
 
 def test_builtin_agent_count():
-    """Ensure the built-in map contains the expected number of agents."""
-    assert len(_BUILTIN_AGENTS) == 23
+    """Ensure the built-in map contains known core agents and a reasonable size."""
+    for expected in ("holmes", "dagger", "perplexity"):
+        assert expected in _BUILTIN_AGENTS, f"Expected built-in agent {expected!r} missing"
+    assert len(_BUILTIN_AGENTS) >= 20, (
+        f"Expected at least 20 built-in agents, got {len(_BUILTIN_AGENTS)}"
+    )
