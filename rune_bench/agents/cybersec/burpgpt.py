@@ -1,4 +1,4 @@
-"""BurpGPT agentic runner stub.
+"""BurpGPT agentic runner -- delegates to the burpgpt driver.
 
 Scope:      Cybersec  |  Rank 4  |  Rating 3.5
 Capability: Autonomous web vulnerability scanning via LLM.
@@ -21,16 +21,18 @@ Implementation notes:
 - `model` and `ollama_url` configure the LLM backend within Burp/BurpGPT.
 """
 
+from rune_bench.drivers.burpgpt import BurpGPTDriverClient
+
 
 class BurpGPTRunner:
-    """Cybersec agent: autonomous web vulnerability scanning via BurpGPT + LLM."""
+    """Cybersec agent: autonomous web vulnerability scanning via BurpGPT + LLM.
+
+    Delegates to :class:`~rune_bench.drivers.burpgpt.BurpGPTDriverClient`.
+    """
 
     def __init__(self) -> None:
-        pass
+        self._client = BurpGPTDriverClient()
 
     def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
         """Run a BurpGPT-assisted scan and return identified vulnerabilities."""
-        raise NotImplementedError(
-            "BurpGPTRunner is not yet implemented. "
-            "See https://github.com/v87/burpgpt — note: requires Burp Suite installation."
-        )
+        return self._client.ask(question, model, ollama_url)
