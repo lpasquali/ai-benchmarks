@@ -76,7 +76,7 @@ def _make_resource_provider_for_ollama_instance(request: RunOllamaInstanceReques
     return ExistingOllamaProvider(request.ollama_url)
 
 
-def _make_agent_runner(agent_name: str = "holmes", *, kubeconfig: Path | None = None) -> Any:
+def _make_agent_runner(agent_name: str | Path = "holmes", *, kubeconfig: Path | None = None) -> Any:
     """Lazy factory: resolve an agent via the registry.
 
     Accepts either the new ``(agent_name, *, kubeconfig=...)`` signature or

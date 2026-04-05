@@ -42,8 +42,8 @@ def _normalize_model(model: str) -> str:
     return model
 
 try:
-    from langchain_ollama import ChatOllama
-    from langgraph.graph import END, START, StateGraph
+    from langchain_ollama import ChatOllama  # type: ignore[import-not-found]
+    from langgraph.graph import END, START, StateGraph  # type: ignore[import-not-found]
 except ImportError:
     # Optional dependencies handled in _handle_ask
     ChatOllama = None  # type: ignore

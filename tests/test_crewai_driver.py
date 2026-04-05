@@ -108,12 +108,22 @@ def test_handle_ask_ollama_model_format(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_handle_ask_sets_openai_api_base(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify OPENAI_API_BASE is set to {ollama_url}/v1 for LiteLLM routing."""
+    import os
+
+    captured_api_base: list[str | None] = []
+
     mock_crewai = types.ModuleType("crewai")
     mock_crewai.Agent = MagicMock(return_value=MagicMock())
     mock_crewai.Task = MagicMock(return_value=MagicMock())
 
     mock_crew_instance = MagicMock()
-    mock_crew_instance.kickoff.return_value = MagicMock(raw="done")
+
+    def _capture_kickoff():
+        """Capture OPENAI_API_BASE during crew execution (before finally restores it)."""
+        captured_api_base.append(os.environ.get("OPENAI_API_BASE"))
+        return MagicMock(raw="done")
+
+    mock_crew_instance.kickoff.side_effect = _capture_kickoff
     mock_crewai.Crew = MagicMock(return_value=mock_crew_instance)
 
     monkeypatch.setitem(sys.modules, "crewai", mock_crewai)
@@ -126,8 +136,7 @@ def test_handle_ask_sets_openai_api_base(monkeypatch: pytest.MonkeyPatch) -> Non
         "ollama_url": "http://ollama:11434",
     })
 
-    import os
-    assert os.environ.get("OPENAI_API_BASE") == "http://ollama:11434/v1"
+    assert captured_api_base[0] == "http://ollama:11434/v1"
 
 
 def test_handle_ask_without_ollama_url(monkeypatch: pytest.MonkeyPatch) -> None:
