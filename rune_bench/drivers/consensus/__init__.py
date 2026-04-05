@@ -28,13 +28,20 @@ class ConsensusDriverClient:
     ) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("consensus")
 
-    def ask(self, question: str, model: str = "", ollama_url: str | None = None) -> str:
+    def ask(
+        self,
+        question: str,
+        model: str = "",
+        ollama_url: str | None = None,
+        limit: int | None = None,
+    ) -> str:
         """Dispatch a research question to the consensus driver and return the answer.
 
         Args:
             question: Natural-language research question.
             model: Ollama model identifier for synthesis (optional).
             ollama_url: Base URL of the Ollama server (optional).
+            limit: Maximum number of papers to retrieve (optional, driver default 10).
 
         Returns:
             Synthesized answer (if model + ollama_url provided) or a
@@ -46,6 +53,8 @@ class ConsensusDriverClient:
             params["model"] = normalized_model
         if ollama_url:
             params["ollama_url"] = ollama_url
+        if limit is not None:
+            params["limit"] = limit
 
         debug_log(
             f"ConsensusDriverClient.ask: question={question!r} model={model!r} "
