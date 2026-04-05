@@ -46,7 +46,7 @@ def _handle_ask(params: dict) -> dict:
     ollama_url: str | None = params.get("ollama_url")
 
     try:
-        from crewai import Agent, Crew, Task
+        from crewai import Agent, Crew, Task  # type: ignore[import-not-found]
     except ImportError as exc:
         raise RuntimeError(
             "CrewAI driver requires: pip install rune[crewai]  "
