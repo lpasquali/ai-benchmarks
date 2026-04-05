@@ -105,7 +105,7 @@ def _synthesize_via_ollama(question: str, papers: list[dict], model: str, ollama
 
     payload = json.dumps({"model": model, "prompt": prompt, "stream": False}).encode()
     url = f"{ollama_url.rstrip('/')}/api/generate"
-    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
 
     with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
         data = json.loads(resp.read().decode())

@@ -40,7 +40,7 @@ def _pd_request(path: str, api_key: str) -> dict:
             "Content-Type": "application/json",
         },
     )
-    with urllib.request.urlopen(req) as resp:  # noqa: S310
+    with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
         return json.loads(resp.read().decode())
 
 
@@ -94,7 +94,7 @@ def _call_ollama(prompt: str, model: str, ollama_url: str) -> str:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req) as resp:  # noqa: S310
+    with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
         result = json.loads(resp.read().decode())
     return result.get("response", "")
 
