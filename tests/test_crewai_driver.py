@@ -243,3 +243,25 @@ def test_main_skips_empty_lines(
     crewai_main.main()
 
     assert capsys.readouterr().out.strip() == ""
+
+
+def test_main_entrypoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify that calling main() as a script works (module-level coverage)."""
+    monkeypatch.setattr(crewai_main.sys, "stdin", io.StringIO(""))
+    crewai_main.main()
+
+
+def test_main_handles_missing_req_id(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """Verify that main() defaults to empty string for missing request ID."""
+    monkeypatch.setattr(
+        crewai_main.sys,
+        "stdin",
+        io.StringIO(json.dumps({"action": "info", "params": {}}) + "\n"),
+    )
+
+    crewai_main.main()
+
+    response = json.loads(capsys.readouterr().out.strip())
+    assert response["id"] == ""
