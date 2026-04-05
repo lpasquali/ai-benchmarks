@@ -243,3 +243,80 @@ def test_main_loop_unknown_action(
     assert resp["status"] == "error"
     assert resp["id"] == "456"
     assert "Unknown action" in resp["error"]
+
+
+
+@pytest.mark.parametrize(
+    "module_path, class_name, env_var, onboarding_url, driver_name",
+    _STUBS,
+    ids=[s[4] for s in _STUBS],
+)
+def test_client_ask_with_api_key(
+    module_path: str,
+    class_name: str,
+    env_var: str,
+    onboarding_url: str,
+    driver_name: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Client ask() delegates to transport when the API key is set."""
+    monkeypatch.setenv(env_var, "dummy-key")
+    mod = importlib.import_module(module_path)
+    cls = getattr(mod, class_name)
+
+    transport = MagicMock()
+    transport.call.return_value = {"answer": "stub answer"}
+    client = cls(transport=transport)
+
+    result = client.ask("q", "m", ollama_url="http://localhost:11434")
+
+    assert result == "stub answer"
+    transport.call.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "module_path, class_name, env_var, onboarding_url, driver_name",
+    _STUBS,
+    ids=[s[4] for s in _STUBS],
+)
+def test_main_loop_empty_lines(
+    module_path: str,
+    class_name: str,
+    env_var: str,
+    onboarding_url: str,
+    driver_name: str,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``main()`` must silently skip empty lines."""
+    import io
+
+    main_mod = importlib.import_module(f"{module_path}.__main__")
+    monkeypatch.setattr("sys.stdin", io.StringIO("\n   \n"))
+    main_mod.main()
+    assert capsys.readouterr().out.strip() == ""
+
+
+@pytest.mark.parametrize(
+    "module_path, class_name, env_var, onboarding_url, driver_name",
+    _STUBS,
+    ids=[s[4] for s in _STUBS],
+)
+def test_main_loop_invalid_json(
+    module_path: str,
+    class_name: str,
+    env_var: str,
+    onboarding_url: str,
+    driver_name: str,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``main()`` must handle invalid JSON gracefully."""
+    import io
+    import json as _json
+
+    main_mod = importlib.import_module(f"{module_path}.__main__")
+    monkeypatch.setattr("sys.stdin", io.StringIO("not-json\n"))
+    main_mod.main()
+    resp = _json.loads(capsys.readouterr().out.strip())
+    assert resp["status"] == "error"
