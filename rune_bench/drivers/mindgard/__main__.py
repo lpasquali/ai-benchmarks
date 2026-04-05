@@ -65,7 +65,7 @@ def _handle_ask(params: dict) -> dict:
 
     from rune_bench.common.http_client import normalize_url  # local import avoids circular dep
 
-    base = normalize_url(ollama_url, "Ollama") if ollama_url else "http://localhost:11434"
+    base = normalize_url(ollama_url, "Mindgard target") if ollama_url else "http://localhost:11434"
     target_url = f"{base.rstrip('/')}/v1"
 
     cmd: list[str] = [
@@ -80,8 +80,9 @@ def _handle_ask(params: dict) -> dict:
         "--json",
     ]
 
+    timeout = int(os.environ.get("RUNE_MINDGARD_TIMEOUT", "600"))
     proc = subprocess.run(  # noqa: S603
-        cmd, capture_output=True, text=True, check=False, timeout=600,
+        cmd, capture_output=True, text=True, check=False, timeout=timeout,
     )
     if proc.returncode != 0:
         detail = proc.stderr.strip() or proc.stdout.strip() or f"exit {proc.returncode}"
