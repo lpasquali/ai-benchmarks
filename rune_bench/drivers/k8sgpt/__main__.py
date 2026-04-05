@@ -29,6 +29,14 @@ import subprocess
 import sys
 
 
+_K8S_KINDS: frozenset[str] = frozenset({
+    "pod", "service", "deployment", "replicaset", "statefulset",
+    "daemonset", "job", "cronjob", "ingress", "node",
+    "persistentvolumeclaim", "pvc", "configmap", "secret",
+    "networkpolicy", "hpa", "horizontalpodautoscaler",
+})
+
+
 def _format_findings(results: list[dict]) -> str:
     """Turn a list of k8sgpt result objects into a human-readable string."""
     lines: list[str] = []
@@ -84,14 +92,8 @@ def _handle_ask(params: dict) -> dict:
         cmd.extend(["--base-url", ollama_url])
 
     # Use the question as a resource-kind filter if it looks like a K8s kind
-    _k8s_kinds = {
-        "pod", "service", "deployment", "replicaset", "statefulset",
-        "daemonset", "job", "cronjob", "ingress", "node",
-        "persistentvolumeclaim", "pvc", "configmap", "secret",
-        "networkpolicy", "hpa", "horizontalpodautoscaler",
-    }
     hint = question.strip().lower()
-    if hint in _k8s_kinds:
+    if hint in _K8S_KINDS:
         cmd.extend(["--filter", question.strip()])
 
     env = os.environ.copy()
