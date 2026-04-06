@@ -6,7 +6,7 @@ reliability constraints, ordered by descending VRAM / DL perf.
 
 from dataclasses import dataclass
 
-from vastai import VastAI  # type: ignore[import-untyped, import-not-found]  # Reason: vastai SDK does not provide type hints
+from rune_bench.resources.vastai.sdk import VastAI
 
 from rune_bench.debug import debug_log
 
@@ -37,11 +37,11 @@ class OfferFinder:
         Raises:
             RuntimeError: if the API call fails or no offers are found.
         """
-        query = (
-            f"reliability > {reliability} "
-            f"verified=True "
-            f"dph>={min_dph} dph<={max_dph}"
-        )
+        query = {
+            "reliability": {"gt": str(reliability)},
+            "verified": {"eq": "True"},
+            "dph": {"gte": str(min_dph), "lte": str(max_dph)}
+        }
         try:
             debug_log(
                 f"Vast.ai API call: search_offers query={query!r} order={self.DEFAULT_ORDER!r} disable_bundling=True"
