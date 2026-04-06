@@ -489,7 +489,7 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
     try:
         req = Request(f"http://{host}:{port}/v1/ollama/models?ollama_url=http://x")
         with pytest.raises(HTTPError) as exc:
-            urlopen(req)
+            urlopen(req)  # nosec  # test request mock/local execution
         assert exc.value.code == 400
     finally:
         server.shutdown()

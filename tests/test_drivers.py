@@ -8,7 +8,7 @@ make_http_request are monkeypatched throughout.
 from __future__ import annotations
 
 import json
-import subprocess
+import subprocess  # nosec  # tests require subprocess
 
 import pytest
 
@@ -256,7 +256,7 @@ def test_http_transport_sends_auth_headers(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr("rune_bench.drivers.http.make_http_request", fake)
     monkeypatch.setattr("rune_bench.drivers.http.time.sleep", lambda *_: None)
 
-    transport = HttpTransport("http://driver:8080", api_token="secret", tenant="my-tenant")
+    transport = HttpTransport("http://driver:8080", api_token="secret", tenant="my-tenant")  # nosec  # test credentials
     transport.call("ask", {})
 
     assert len(captured_headers) >= 1

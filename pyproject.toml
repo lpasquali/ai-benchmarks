@@ -80,12 +80,17 @@ include = ["rune*", "rune_bench*"]
 [tool.mypy]
 python_version = "3.11"
 
+# Reason: vastai SDK does not provide type hints
 [[tool.mypy.overrides]]
-module = ["vastai", "holmes", "holmes.*", "yaml"]
+module = "vastai"
+ignore_missing_imports = true
+
+# Reason: holmesgpt package does not provide type hints
+[[tool.mypy.overrides]]
+module = ["holmes", "holmes.*"]
 ignore_missing_imports = true
 
 [tool.bandit]
 # IEC 62443 4-1 ML4 SI-1: static application security testing
-targets = ["rune", "rune_bench"]
-exclude_dirs = ["tests"]
+targets = ["rune", "rune_bench", "tests"]
 skips = ["B101"]   # assert statements used only in test/debug guards

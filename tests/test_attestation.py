@@ -12,7 +12,7 @@ Covers:
 
 from __future__ import annotations
 
-import subprocess
+import subprocess  # nosec  # tests require subprocess
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 from unittest.mock import MagicMock, patch

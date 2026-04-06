@@ -6,7 +6,7 @@ The dagger-io package is optional, so all tests mock it entirely.
 from __future__ import annotations
 
 import json
-import subprocess
+import subprocess  # nosec  # tests require subprocess
 import sys
 import types
 from unittest.mock import MagicMock, patch

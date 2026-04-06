@@ -166,13 +166,13 @@ def test_api_security_from_env(monkeypatch):
 def test_api_server_misc_paths(misc_server):
     base_url, app = misc_server
 
-    with urlopen(f"{base_url}/v1/catalog/vastai-models") as response:
+    with urlopen(f"{base_url}/v1/catalog/vastai-models") as response:  # nosec  # test request mock/local execution
         payload = json.loads(response.read().decode("utf-8"))
     assert "models" in payload
 
     req = Request(f"{base_url}/v1/ollama/models")
     with pytest.raises(HTTPError) as exc:
-        urlopen(req)
+        urlopen(req)  # nosec  # test request mock/local execution
     assert exc.value.code == 400
 
     bad_req = Request(
@@ -182,16 +182,16 @@ def test_api_server_misc_paths(misc_server):
         method="POST",
     )
     with pytest.raises(HTTPError) as exc:
-        urlopen(bad_req)
+        urlopen(bad_req)  # nosec  # test request mock/local execution
     assert exc.value.code == 400
 
     unknown_req = Request(f"{base_url}/nope")
     with pytest.raises(HTTPError) as exc:
-        urlopen(unknown_req)
+        urlopen(unknown_req)  # nosec  # test request mock/local execution
     assert exc.value.code == 404
 
     job = app.store.create_job(tenant_id="default", kind="agentic-agent", request_payload={})[0]
-    with urlopen(f"{base_url}/v1/jobs/{job}") as response:
+    with urlopen(f"{base_url}/v1/jobs/{job}") as response:  # nosec  # test request mock/local execution
         payload = json.loads(response.read().decode("utf-8"))
     assert payload["job_id"] == job
 
@@ -221,12 +221,12 @@ def test_api_server_internal_dispatch_and_failures(tmp_path):
                 "model": "m",
                 "ollama_warmup": False,
                 "ollama_warmup_timeout": 1,
-                "kubeconfig": "/tmp/k",
+                "kubeconfig": "/tmp/k",  # nosec  # test artifact paths
                 "vastai_stop_instance": False,
             },
         )
 
-    app._execute_job("missing", "agentic-agent", {"question": "q", "model": "m", "ollama_url": None, "ollama_warmup": False, "ollama_warmup_timeout": 1, "kubeconfig": "/tmp/k"})
+    app._execute_job("missing", "agentic-agent", {"question": "q", "model": "m", "ollama_url": None, "ollama_warmup": False, "ollama_warmup_timeout": 1, "kubeconfig": "/tmp/k"})  # nosec  # test artifact paths
     assert store.get_job("missing") is None
 
 

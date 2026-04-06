@@ -30,11 +30,11 @@ def test_agentic_request_from_cli_converts_kubeconfig_to_string():
         ollama_url="http://localhost:11434",
         ollama_warmup=True,
         ollama_warmup_timeout=90,
-        kubeconfig=Path("/tmp/kubeconfig"),
+        kubeconfig=Path("/tmp/kubeconfig"),  # nosec  # test artifact paths
     )
 
     payload = request.to_dict()
-    assert payload["kubeconfig"] == "/tmp/kubeconfig"
+    assert payload["kubeconfig"] == "/tmp/kubeconfig"  # nosec  # test artifact paths
 
 
 def test_agentic_request_from_cli_kubeconfig_optional():
