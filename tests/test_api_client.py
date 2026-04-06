@@ -27,14 +27,14 @@ def test_get_ollama_models_validates_payload(monkeypatch):
         client,
         "_request",
         lambda *_args, **_kwargs: {
-            "ollama_url": "http://localhost:11434",
+            "backend_url": "http://localhost:11434",
             "models": ["a", "b"],
             "running_models": ["a"],
         },
     )
 
     payload = client.get_ollama_models("http://localhost:11434")
-    assert payload["ollama_url"] == "http://localhost:11434"
+    assert payload["backend_url"] == "http://localhost:11434"
     assert payload["models"] == ["a", "b"]
     assert payload["running_models"] == ["a"]
 

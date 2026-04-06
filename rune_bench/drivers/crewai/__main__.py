@@ -11,7 +11,7 @@ Wire protocol (v1):
 Supported actions
 -----------------
 ask
-    params: question (str), model (str), ollama_url (str, optional)
+    params: question (str), model (str), backend_url (str, optional)
     result: {"answer": str}
 
 info
@@ -47,7 +47,7 @@ def _normalize_model(model: str) -> str:
 def _handle_ask(params: dict) -> dict:
     question: str = params["question"]
     model: str = params["model"]
-    ollama_url: str | None = params.get("ollama_url")
+    backend_url: str | None = params.get("backend_url")
 
     try:
         from crewai import Agent, Crew, Task  # type: ignore[import-not-found]
@@ -62,8 +62,8 @@ def _handle_ask(params: dict) -> dict:
     # value after the request to avoid env var leaking across requests in the
     # long-lived stdio loop.
     prev_api_base = os.environ.get("OPENAI_API_BASE", _SENTINEL)
-    if ollama_url:
-        os.environ["OPENAI_API_BASE"] = f"{ollama_url.rstrip('/')}/v1"
+    if backend_url:
+        os.environ["OPENAI_API_BASE"] = f"{backend_url.rstrip('/')}/v1"
 
     try:
         agent = Agent(

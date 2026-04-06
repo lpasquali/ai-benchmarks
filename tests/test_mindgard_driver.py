@@ -4,8 +4,8 @@ The driver calls the ``mindgard`` CLI as a subprocess.  subprocess.run and
 shutil.which are monkeypatched throughout so no mindgard installation is
 required.
 
-Special attention is paid to the **inverted ollama_url semantics**: in this
-driver ``ollama_url`` is the model endpoint being *attacked* (the target under
+Special attention is paid to the **inverted backend_url semantics**: in this
+driver ``backend_url`` is the model endpoint being *attacked* (the target under
 test), not a backend LLM.
 """
 
@@ -54,7 +54,7 @@ def test_handle_ask_calls_mindgard_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     result = mindgard_main._handle_ask({
         "question": "test the model",
         "model": "llama3:8b",
-        "ollama_url": "http://target:11434",
+        "backend_url": "http://target:11434",
     })
 
     # Verify CLI command structure
@@ -74,8 +74,8 @@ def test_handle_ask_calls_mindgard_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "7.5" in result["answer"]
 
 
-def test_handle_ask_inverted_ollama_url_semantics(monkeypatch: pytest.MonkeyPatch) -> None:
-    """ollama_url is the ATTACK TARGET, not the LLM backend.
+def test_handle_ask_inverted_backend_url_semantics(monkeypatch: pytest.MonkeyPatch) -> None:
+    """backend_url is the ATTACK TARGET, not the LLM backend.
 
     The URL should appear as --target with /v1 appended, meaning it points
     to the model endpoint being tested for vulnerabilities.
@@ -85,7 +85,7 @@ def test_handle_ask_inverted_ollama_url_semantics(monkeypatch: pytest.MonkeyPatc
     mindgard_main._handle_ask({
         "question": "red team this",
         "model": "gpt-4",
-        "ollama_url": "http://victim-model:8080",
+        "backend_url": "http://victim-model:8080",
     })
 
     target_idx = captured["cmd"].index("--target")
@@ -93,7 +93,7 @@ def test_handle_ask_inverted_ollama_url_semantics(monkeypatch: pytest.MonkeyPatc
     assert target_url == "http://victim-model:8080/v1"
 
 
-def test_handle_ask_default_target_without_ollama_url(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_handle_ask_default_target_without_backend_url(monkeypatch: pytest.MonkeyPatch) -> None:
     captured = _patch_mindgard(monkeypatch, {"risk_score": 0.0, "vulnerabilities": []})
 
     mindgard_main._handle_ask({"question": "q", "model": "m"})

@@ -12,7 +12,7 @@ Supported actions
 -----------------
 ask
     params: question (str), model (str), kubeconfig_path (str),
-            ollama_url (str, optional)
+            backend_url (str, optional)
     result: {"answer": str, "findings": list}
 
 info
@@ -69,7 +69,7 @@ def _handle_ask(params: dict) -> dict:
     question: str = params["question"]
     model: str = params["model"]
     kubeconfig_path: str = params["kubeconfig_path"]
-    ollama_url: str | None = params.get("ollama_url")
+    backend_url: str | None = params.get("backend_url")
 
     if shutil.which("k8sgpt") is None:
         raise RuntimeError(
@@ -88,8 +88,8 @@ def _handle_ask(params: dict) -> dict:
         "--model",
         model,
     ]
-    if ollama_url:
-        cmd.extend(["--base-url", ollama_url])
+    if backend_url:
+        cmd.extend(["--base-url", backend_url])
 
     # Use the question as a resource-kind filter if it looks like a K8s kind
     hint = question.strip().lower()

@@ -21,16 +21,16 @@ class TestCrewAIDriverClient:
         transport.call.return_value = {"answer": "crew result"}
         client = CrewAIDriverClient(transport=transport)
 
-        result = client.ask("What happened?", "llama3.1:8b", ollama_url="http://localhost:11434")
+        result = client.ask("What happened?", "llama3.1:8b", backend_url="http://localhost:11434")
 
         assert result == "crew result"
         transport.call.assert_called_once_with("ask", {
             "question": "What happened?",
             "model": "llama3.1:8b",
-            "ollama_url": "http://localhost:11434",
+            "backend_url": "http://localhost:11434",
         })
 
-    def test_ask_without_ollama_url(self) -> None:
+    def test_ask_without_backend_url(self) -> None:
         transport = MagicMock()
         transport.call.return_value = {"answer": "ok"}
         client = CrewAIDriverClient(transport=transport)
@@ -89,16 +89,16 @@ class TestLangGraphDriverClient:
         transport.call.return_value = {"answer": "lg result"}
         client = LangGraphDriverClient(transport=transport)
 
-        result = client.ask("Research topic", "llama3.1:8b", ollama_url="http://localhost:11434")
+        result = client.ask("Research topic", "llama3.1:8b", backend_url="http://localhost:11434")
 
         assert result == "lg result"
         transport.call.assert_called_once_with("ask", {
             "question": "Research topic",
             "model": "llama3.1:8b",
-            "ollama_url": "http://localhost:11434",
+            "backend_url": "http://localhost:11434",
         })
 
-    def test_ask_without_ollama_url(self) -> None:
+    def test_ask_without_backend_url(self) -> None:
         transport = MagicMock()
         transport.call.return_value = {"answer": "ok"}
         client = LangGraphDriverClient(transport=transport)

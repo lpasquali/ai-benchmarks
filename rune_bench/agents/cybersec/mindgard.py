@@ -13,7 +13,7 @@ Implementation notes:
 - Auth:     RUNE_MINDGARD_API_KEY env var  (register at https://mindgard.ai/)
 - Approach: Run automated red-team attacks against an AI model endpoint.
             Mindgard tests for jailbreaks, prompt injection, data extraction, etc.
-- ``ollama_url`` is the model endpoint being **attacked** (target under test).
+- ``backend_url`` is the model endpoint being **attacked** (target under test).
 - `model` identifies the target model.
 - `question` maps to the red-team prompt/objective.
 """

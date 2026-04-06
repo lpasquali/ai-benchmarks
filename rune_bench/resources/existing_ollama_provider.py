@@ -13,20 +13,20 @@ class ExistingOllamaProvider:
 
     def __init__(
         self,
-        ollama_url: str | None,
+        backend_url: str | None,
         *,
         model: str | None = None,
         warmup: bool = False,
         warmup_timeout: int = 120,
     ) -> None:
-        self._ollama_url = ollama_url
+        self._backend_url = backend_url
         self._model = model
         self._warmup = warmup
         self._warmup_timeout = warmup_timeout
 
     def provision(self) -> ProvisioningResult:
         server = use_existing_ollama_server(
-            self._ollama_url,
+            self._backend_url,
             model_name=self._model or "<user-selected>",
         )
         if self._warmup and self._model:
@@ -35,7 +35,7 @@ class ExistingOllamaProvider:
                 self._model,
                 timeout_seconds=self._warmup_timeout,
             )
-        return ProvisioningResult(ollama_url=server.url, model=self._model)
+        return ProvisioningResult(backend_url=server.url, model=self._model)
 
     def teardown(self, result: ProvisioningResult) -> None:
         pass

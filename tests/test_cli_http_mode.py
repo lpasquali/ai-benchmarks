@@ -49,11 +49,11 @@ def mock_rune_api_server():
 
             if path == "/v1/ollama/models":
                 query = parse_qs(parsed.query)
-                ollama_url = query.get("ollama_url", ["http://localhost:11434"])[0]
+                backend_url = query.get("backend_url", ["http://localhost:11434"])[0]
                 self._write_json(
                     200,
                     {
-                        "ollama_url": ollama_url,
+                        "backend_url": backend_url,
                         "models": ["llama3.1:8b"],
                         "running_models": ["llama3.1:8b"],
                     },
@@ -119,7 +119,7 @@ def test_cli_http_ollama_list_models(mock_rune_api_server):
             "--api-base-url",
             mock_rune_api_server,
             "ollama-list-models",
-            "--ollama-url",
+            "--backend-url",
             "http://example:11434",
         ],
     )

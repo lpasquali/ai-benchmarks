@@ -4,7 +4,7 @@ import rune_bench.workflows as workflows
 
 
 def test_use_existing_ollama_server(monkeypatch):
-    monkeypatch.setattr(workflows, "normalize_ollama_url", lambda _: "http://localhost:11434")
+    monkeypatch.setattr(workflows, "normalize_backend_url", lambda _: "http://localhost:11434")
     server = workflows.use_existing_ollama_server("localhost:11434", "model:1")
     assert server.url == "http://localhost:11434"
     assert server.model_name == "model:1"

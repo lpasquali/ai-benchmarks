@@ -35,7 +35,7 @@ def test_handle_ask_calls_holmes_cli(monkeypatch: pytest.MonkeyPatch) -> None:
         "question": "What is wrong?",
         "model": "llama3.1:8b",
         "kubeconfig_path": "/tmp/kubeconfig",  # nosec  # test artifact paths
-        "ollama_url": "http://ollama:11434",
+        "backend_url": "http://ollama:11434",
         "context_window": 131072,
         "max_output_tokens": 26214,
     })

@@ -16,7 +16,7 @@ Implementation notes:
     POST /ai/explain                  # LLM-powered incident explanation
             body: { question, service, time_range }
 - The `question` maps to the explanation query.
-- `model` / `ollama_url` may be passed to the self-hosted Metoro AI endpoint.
+- `model` / `backend_url` may be passed to the self-hosted Metoro AI endpoint.
 """
 
 from rune_bench.drivers.metoro import MetoroDriverClient

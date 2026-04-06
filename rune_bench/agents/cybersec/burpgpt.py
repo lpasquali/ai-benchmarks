@@ -18,7 +18,7 @@ Implementation notes:
               POST http://localhost:1337/v0.1/scan  body: { urls: [target] }
     Option B: Run Burp headless with a Python wrapper script.
 - `question` maps to the target URL or scan objective.
-- `model` and `ollama_url` configure the LLM backend within Burp/BurpGPT.
+- `model` and `backend_url` configure the LLM backend within Burp/BurpGPT.
 """
 
 from rune_bench.drivers.burpgpt import BurpGPTDriverClient
@@ -33,6 +33,6 @@ class BurpGPTRunner:
     def __init__(self) -> None:
         self._client = BurpGPTDriverClient()
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Run a BurpGPT-assisted scan and return identified vulnerabilities."""
-        return self._client.ask(question, model, ollama_url)
+        return self._client.ask(question, model, backend_url)

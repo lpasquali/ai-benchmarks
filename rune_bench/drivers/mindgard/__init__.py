@@ -21,7 +21,7 @@ class MindgardDriverClient:
 
     .. note::
 
-        Unlike most drivers, ``ollama_url`` here identifies the model endpoint
+        Unlike most drivers, ``backend_url`` here identifies the model endpoint
         being **attacked** (the target under test), not a backend LLM.
     """
 
@@ -32,13 +32,13 @@ class MindgardDriverClient:
     ) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("mindgard")
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Dispatch a red-team assessment to the mindgard driver and return findings.
 
         Args:
             question: Objective or prompt for the red-team assessment.
             model: Model identifier of the target under test.
-            ollama_url: Base URL of the model endpoint being **attacked**.
+            backend_url: Base URL of the model endpoint being **attacked**.
 
         Returns:
             Formatted text summarising risk scores and vulnerabilities.
@@ -47,12 +47,12 @@ class MindgardDriverClient:
             "question": question,
             "model": model,
         }
-        if ollama_url:
-            params["ollama_url"] = ollama_url
+        if backend_url:
+            params["backend_url"] = backend_url
 
         debug_log(
             f"MindgardDriverClient.ask: question={question!r} model={model!r} "
-            f"ollama_url={ollama_url or '<none>'}"
+            f"backend_url={backend_url or '<none>'}"
         )
         result = self._transport.call("ask", params)
 

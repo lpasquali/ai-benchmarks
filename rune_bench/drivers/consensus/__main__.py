@@ -11,7 +11,7 @@ Wire protocol (v1):
 Supported actions
 -----------------
 ask
-    params: question (str), model (str, optional), ollama_url (str, optional),
+    params: question (str), model (str, optional), backend_url (str, optional),
             limit (int, optional, default 10)
     result: {"answer": str, "papers": list[dict], "consensus_score": null}
 
@@ -98,13 +98,13 @@ def _format_abstracts_for_synthesis(papers: list[dict]) -> str:
     return "\n\n".join(parts)
 
 
-def _synthesize_via_ollama(question: str, papers: list[dict], model: str, ollama_url: str) -> str:
+def _synthesize_via_ollama(question: str, papers: list[dict], model: str, backend_url: str) -> str:
     """Call Ollama to synthesize an answer from the paper abstracts."""
     formatted = _format_abstracts_for_synthesis(papers)
     prompt = SYNTHESIS_PROMPT.format(question=question, formatted_abstracts=formatted)
 
     payload = json.dumps({"model": model, "prompt": prompt, "stream": False}).encode()
-    url = f"{ollama_url.rstrip('/')}/api/generate"
+    url = f"{backend_url.rstrip('/')}/api/generate"
     req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
 
     with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
@@ -131,7 +131,7 @@ def _simplify_papers(papers: list[dict]) -> list[dict]:
 def _handle_ask(params: dict) -> dict:
     question: str = params["question"]
     model: str | None = params.get("model")
-    ollama_url: str | None = params.get("ollama_url")
+    backend_url: str | None = params.get("backend_url")
     limit: int = int(params.get("limit", SEARCH_LIMIT))
 
     papers = _search_semantic_scholar(question, limit=limit)
@@ -139,8 +139,8 @@ def _handle_ask(params: dict) -> dict:
     if not papers:
         return {"answer": "No papers found for the given query.", "papers": [], "consensus_score": None}
 
-    if model and ollama_url:
-        answer = _synthesize_via_ollama(question, papers, model, ollama_url)
+    if model and backend_url:
+        answer = _synthesize_via_ollama(question, papers, model, backend_url)
     else:
         answer = _format_papers(papers)
 

@@ -4,18 +4,18 @@ from rune_bench.api_contracts import (
     CostEstimationRequest,
     RunAgenticAgentRequest,
     RunBenchmarkRequest,
-    RunOllamaInstanceRequest,
+    RunLLMInstanceRequest,
 )
 
 
-def test_run_ollama_instance_request_to_dict():
-    request = RunOllamaInstanceRequest(
+def test_run_llm_instance_request_to_dict():
+    request = RunLLMInstanceRequest(
         vastai=True,
         template_hash="tmpl",
         min_dph=2.0,
         max_dph=3.0,
         reliability=0.99,
-        ollama_url=None,
+        backend_url=None,
     )
 
     payload = request.to_dict()
@@ -27,9 +27,9 @@ def test_agentic_request_from_cli_converts_kubeconfig_to_string():
     request = RunAgenticAgentRequest.from_cli(
         question="q",
         model="m",
-        ollama_url="http://localhost:11434",
-        ollama_warmup=True,
-        ollama_warmup_timeout=90,
+        backend_url="http://localhost:11434",
+        backend_warmup=True,
+        backend_warmup_timeout=90,
         kubeconfig=Path("/tmp/kubeconfig"),  # nosec  # test artifact paths
     )
 
@@ -41,9 +41,9 @@ def test_agentic_request_from_cli_kubeconfig_optional():
     request = RunAgenticAgentRequest.from_cli(
         question="q",
         model="m",
-        ollama_url=None,
-        ollama_warmup=False,
-        ollama_warmup_timeout=90,
+        backend_url=None,
+        backend_warmup=False,
+        backend_warmup_timeout=90,
     )
 
     payload = request.to_dict()
@@ -54,9 +54,9 @@ def test_agentic_request_kubeconfig_optional_direct():
     request = RunAgenticAgentRequest(
         question="q",
         model="m",
-        ollama_url=None,
-        ollama_warmup=False,
-        ollama_warmup_timeout=90,
+        backend_url=None,
+        backend_warmup=False,
+        backend_warmup_timeout=90,
         agent="dagger",
     )
 
@@ -72,11 +72,11 @@ def test_benchmark_request_from_cli_converts_kubeconfig_to_string():
         min_dph=2.3,
         max_dph=3.0,
         reliability=0.99,
-        ollama_url="http://localhost:11434",
+        backend_url="http://localhost:11434",
         question="what is unhealthy",
         model="llama3.1:8b",
-        ollama_warmup=True,
-        ollama_warmup_timeout=90,
+        backend_warmup=True,
+        backend_warmup_timeout=90,
         kubeconfig=Path("/home/user/.kube/config"),
         vastai_stop_instance=True,
     )

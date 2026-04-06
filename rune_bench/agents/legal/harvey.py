@@ -16,7 +16,7 @@ Implementation notes:
     GET  /completions/{id}    poll for async tasks
     Returns: { analysis: str, risks: list, citations: list }
 - `question` maps to the legal query or document excerpt.
-- `model` and `ollama_url` are not used (Harvey uses its own fine-tuned models).
+- `model` and `backend_url` are not used (Harvey uses its own fine-tuned models).
 """
 
 
@@ -26,7 +26,7 @@ class HarveyAIRunner:
     def __init__(self) -> None:
         pass
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Submit a legal query to Harvey AI and return the analysis."""
         raise NotImplementedError(
             "HarveyAIRunner is not yet implemented. "

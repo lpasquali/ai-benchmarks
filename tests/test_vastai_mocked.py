@@ -83,9 +83,9 @@ def test_instance_manager_reuse_selects_best_running_candidate():
     assert selected["id"] == 1
 
 
-def test_instance_manager_pull_model_requires_ollama_url():
+def test_instance_manager_pull_model_requires_backend_url():
     with pytest.raises(RuntimeError, match="missing Ollama URL"):
-        InstanceManager(MagicMock()).pull_model(contract_id=123, model_name="foo:1", ollama_url=None)
+        InstanceManager(MagicMock()).pull_model(contract_id=123, model_name="foo:1", backend_url=None)
 
 
 def test_instance_manager_pull_model_wraps_ollama_errors(monkeypatch):
@@ -101,7 +101,7 @@ def test_instance_manager_pull_model_wraps_ollama_errors(monkeypatch):
     monkeypatch.setattr("rune_bench.resources.vastai.instance.OllamaClient", _FailingClient)
 
     with pytest.raises(RuntimeError, match="Model pull via Ollama API failed"):
-        manager.pull_model(contract_id=999, model_name="foo:1", ollama_url="http://fake:11434")
+        manager.pull_model(contract_id=999, model_name="foo:1", backend_url="http://fake:11434")
 
 
 def test_build_connection_details_extracts_direct_and_proxy_urls():
