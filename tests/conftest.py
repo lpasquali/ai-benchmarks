@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 # Provide a minimal vastai stub when the optional [vastai] extra is not installed.
 # Tests use MagicMock for all SDK interactions; this just satisfies the import.
 try:
-    import vastai  # noqa: F401  # type: ignore[import-untyped, import-not-found]  # Reason: vastai SDK does not provide type hints
+    import vastai  # type: ignore[import-untyped, import-not-found]  # noqa: F401  # Reason: missing stubs
 except ImportError:
     _vastai_stub = MagicMock()
     _vastai_stub.VastAI = MagicMock

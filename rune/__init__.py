@@ -1091,7 +1091,7 @@ def show_info() -> None:
 
     # Check vastai
     try:
-        import vastai  # noqa: F401  # type: ignore[import-untyped, import-not-found]  # Reason: vastai SDK does not provide type hints
+        import vastai  # type: ignore[import-untyped, import-not-found]  # noqa: F401  # Reason: missing stubs
         vastai_status = "[green]✓ installed[/green]"
         vastai_cmd = ""
     except ImportError:
@@ -1100,7 +1100,7 @@ def show_info() -> None:
 
     # Check holmesgpt
     try:
-        import holmes  # noqa: F401  # type: ignore[import-untyped, import-not-found]  # Reason: holmesgpt package does not provide type hints
+        import holmes  # type: ignore[import-untyped, import-not-found]  # noqa: F401  # Reason: missing stubs
         holmes_status = "[green]✓ installed[/green]"
         holmes_cmd = ""
     except ImportError:
