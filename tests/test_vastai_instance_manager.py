@@ -216,17 +216,17 @@ def test_api_server_internal_dispatch_and_failures(tmp_path):
                 "min_dph": 1,
                 "max_dph": 2,
                 "reliability": 0.9,
-                "ollama_url": None,
+                "backend_url": None,
                 "question": "q",
                 "model": "m",
-                "ollama_warmup": False,
-                "ollama_warmup_timeout": 1,
+                "backend_warmup": False,
+                "backend_warmup_timeout": 1,
                 "kubeconfig": "/tmp/k",  # nosec  # test artifact paths
                 "vastai_stop_instance": False,
             },
         )
 
-    app._execute_job("missing", "agentic-agent", {"question": "q", "model": "m", "ollama_url": None, "ollama_warmup": False, "ollama_warmup_timeout": 1, "kubeconfig": "/tmp/k"})  # nosec  # test artifact paths
+    app._execute_job("missing", "agentic-agent", {"question": "q", "model": "m", "backend_url": None, "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"})  # nosec  # test artifact paths
     assert store.get_job("missing") is None
 
 

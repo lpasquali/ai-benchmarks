@@ -8,7 +8,7 @@ import rune
 import rune_bench.api_backend as api_backend
 import rune_bench.api_server as api_server
 from rune_bench.common import make_http_request
-from rune_bench.api_contracts import RunAgenticAgentRequest, RunBenchmarkRequest, RunOllamaInstanceRequest
+from rune_bench.api_contracts import RunAgenticAgentRequest, RunBenchmarkRequest, RunLLMInstanceRequest
 from rune_bench.backends.ollama import OllamaClient
 
 
@@ -47,6 +47,33 @@ def test_rune_container_port_and_vastai_helpers(monkeypatch):
     monkeypatch.setattr(rune, "VastAI", DummyVast)
     _ = rune._vastai_sdk()
     assert captured == {"api_key": "k1", "raw": True}
+
+
+def test_resolve_backend_type_default(monkeypatch):
+    monkeypatch.delenv("RUNE_BACKEND_TYPE", raising=False)
+    assert rune._resolve_backend_type() == "ollama"
+
+
+def test_resolve_backend_type_explicit_arg(monkeypatch):
+    monkeypatch.delenv("RUNE_BACKEND_TYPE", raising=False)
+    assert rune._resolve_backend_type("ollama") == "ollama"
+
+
+def test_resolve_backend_type_from_env(monkeypatch):
+    monkeypatch.setenv("RUNE_BACKEND_TYPE", "ollama")
+    assert rune._resolve_backend_type() == "ollama"
+
+
+def test_resolve_backend_type_unsupported(monkeypatch):
+    monkeypatch.delenv("RUNE_BACKEND_TYPE", raising=False)
+    with pytest.raises(RuntimeError, match="Unsupported backend_type"):
+        rune._resolve_backend_type("unknown_backend")
+
+
+def test_resolve_backend_type_env_unsupported(monkeypatch):
+    monkeypatch.setenv("RUNE_BACKEND_TYPE", "bad")
+    with pytest.raises(RuntimeError, match="Unsupported backend_type"):
+        rune._resolve_backend_type()
 
 
 def test_serve_api_keyboard_interrupt_and_error(monkeypatch):
@@ -139,9 +166,9 @@ def test_api_server_backend_type_guards():
     agentic = RunAgenticAgentRequest(
         question="q",
         model="m",
-        ollama_url="http://localhost:11434",
-        ollama_warmup=False,
-        ollama_warmup_timeout=1,
+        backend_url="http://localhost:11434",
+        backend_warmup=False,
+        backend_warmup_timeout=1,
         kubeconfig="/tmp/k",  # nosec  # test artifact paths
     )
     benchmark = RunBenchmarkRequest(
@@ -150,21 +177,21 @@ def test_api_server_backend_type_guards():
         min_dph=1.0,
         max_dph=2.0,
         reliability=0.99,
-        ollama_url="http://localhost:11434",
+        backend_url="http://localhost:11434",
         question="q",
         model="m",
-        ollama_warmup=False,
-        ollama_warmup_timeout=1,
+        backend_warmup=False,
+        backend_warmup_timeout=1,
         kubeconfig="/tmp/k",  # nosec  # test artifact paths
         vastai_stop_instance=False,
     )
-    ollama = RunOllamaInstanceRequest(
+    ollama = RunLLMInstanceRequest(
         vastai=False,
         template_hash="t",
         min_dph=1.0,
         max_dph=2.0,
         reliability=0.99,
-        ollama_url="http://localhost:11434",
+        backend_url="http://localhost:11434",
     )
 
     with pytest.raises(RuntimeError, match="agentic-agent"):
@@ -172,16 +199,16 @@ def test_api_server_backend_type_guards():
     with pytest.raises(RuntimeError, match="benchmark"):
         api_server._run_benchmark_backend(ollama)
     with pytest.raises(RuntimeError, match="ollama-instance"):
-        api_server._run_ollama_instance_backend(agentic)
+        api_server._run_llm_instance_backend(agentic)
 
 
 def test_api_server_backend_success_paths(monkeypatch):
     agentic = RunAgenticAgentRequest(
         question="q",
         model="m",
-        ollama_url="http://localhost:11434",
-        ollama_warmup=False,
-        ollama_warmup_timeout=1,
+        backend_url="http://localhost:11434",
+        backend_warmup=False,
+        backend_warmup_timeout=1,
         kubeconfig="/tmp/k",  # nosec  # test artifact paths
     )
     benchmark = RunBenchmarkRequest(
@@ -190,33 +217,33 @@ def test_api_server_backend_success_paths(monkeypatch):
         min_dph=1.0,
         max_dph=2.0,
         reliability=0.99,
-        ollama_url="http://localhost:11434",
+        backend_url="http://localhost:11434",
         question="q",
         model="m",
-        ollama_warmup=False,
-        ollama_warmup_timeout=1,
+        backend_warmup=False,
+        backend_warmup_timeout=1,
         kubeconfig="/tmp/k",  # nosec  # test artifact paths
         vastai_stop_instance=False,
     )
-    ollama = RunOllamaInstanceRequest(
+    ollama = RunLLMInstanceRequest(
         vastai=False,
         template_hash="t",
         min_dph=1.0,
         max_dph=2.0,
         reliability=0.99,
-        ollama_url="http://localhost:11434",
+        backend_url="http://localhost:11434",
     )
 
     monkeypatch.setattr(api_server, "run_agentic_agent", lambda req: {"kind": "agentic", "q": req.question})
     monkeypatch.setattr(api_server, "run_benchmark", lambda req: {"kind": "benchmark", "m": req.model})
-    monkeypatch.setattr(api_server, "run_ollama_instance", lambda req: {"kind": "ollama", "url": req.ollama_url})
+    monkeypatch.setattr(api_server, "run_llm_instance", lambda req: {"kind": "ollama", "url": req.backend_url})
 
     assert api_server._run_agentic_backend(agentic)["kind"] == "agentic"
     assert api_server._run_benchmark_backend(benchmark)["kind"] == "benchmark"
-    assert api_server._run_ollama_instance_backend(ollama)["kind"] == "ollama"
+    assert api_server._run_llm_instance_backend(ollama)["kind"] == "ollama"
 
 
-def test_workflow_normalize_ollama_url_success(monkeypatch):
+def test_workflow_normalize_backend_url_success(monkeypatch):
     from rune_bench import workflows
 
     class DummyClient:
@@ -224,14 +251,14 @@ def test_workflow_normalize_ollama_url_success(monkeypatch):
             self.base_url = "http://normalized:11434"
 
     monkeypatch.setattr(workflows, "OllamaClient", DummyClient)
-    assert workflows.normalize_ollama_url("localhost:11434") == "http://normalized:11434"
+    assert workflows.normalize_backend_url("localhost:11434") == "http://normalized:11434"
 
 
-def test_workflow_normalize_ollama_url_missing():
+def test_workflow_normalize_backend_url_missing():
     from rune_bench import workflows
 
     with pytest.raises(RuntimeError, match="Missing Ollama URL"):
-        workflows.normalize_ollama_url(None)
+        workflows.normalize_backend_url(None)
 
 
 def test_backend_stubs_raise_not_implemented():
@@ -263,7 +290,7 @@ def test_vastai_provider_provision_and_teardown(monkeypatch):
     from rune_bench.resources.vastai.provider import VastAIProvider
 
     fake_provision_result = MagicMock()
-    fake_provision_result.ollama_url = "http://host:11434"
+    fake_provision_result.backend_url = "http://host:11434"
     fake_provision_result.model_name = "llama3.1:8b"
     fake_provision_result.contract_id = 42
 
@@ -284,7 +311,7 @@ def test_vastai_provider_provision_and_teardown(monkeypatch):
     )
 
     result = provider.provision()
-    assert result.ollama_url == "http://host:11434"
+    assert result.backend_url == "http://host:11434"
     assert result.model == "llama3.1:8b"
     assert result.provider_handle == 42
 

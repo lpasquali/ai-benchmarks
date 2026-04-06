@@ -34,13 +34,13 @@ class PagerDutyDriverClient:
         self._kubeconfig = kubeconfig
         self._transport: DriverTransport = transport or make_driver_transport("pagerduty")
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Dispatch a triage question to the pagerduty driver and return the answer.
 
         Args:
             question: Natural-language triage question.
             model: Ollama model identifier (e.g. ``"llama3.1:8b"``).
-            ollama_url: Base URL of the Ollama server (optional).
+            backend_url: Base URL of the Ollama server (optional).
 
         Returns:
             A triage summary (LLM-synthesised when Ollama is available) or
@@ -52,12 +52,12 @@ class PagerDutyDriverClient:
         }
         if self._kubeconfig is not None:
             params["kubeconfig_path"] = str(self._kubeconfig)
-        if ollama_url:
-            params["ollama_url"] = ollama_url
+        if backend_url:
+            params["backend_url"] = backend_url
 
         debug_log(
             f"PagerDutyDriverClient.ask: question={question!r} model={model!r} "
-            f"ollama_url={ollama_url or '<none>'}"
+            f"backend_url={backend_url or '<none>'}"
         )
         result = self._transport.call("ask", params)
 

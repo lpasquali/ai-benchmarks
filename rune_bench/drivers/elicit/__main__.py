@@ -11,7 +11,7 @@ Wire protocol (v1):
 Supported actions
 -----------------
 ask
-    params: question (str), model (str), ollama_url (str, optional)
+    params: question (str), model (str), backend_url (str, optional)
     result: {"answer": str, "papers": list[dict]}
 
 info

@@ -39,7 +39,7 @@ def _result(**kwargs):
         template_env="ENV=1",
         contract_id=7,
         details=_details(),
-        ollama_url="http://1.2.3.4:11434",
+        backend_url="http://1.2.3.4:11434",
         reused_existing_instance=False,
         pull_warning=None,
     )
@@ -88,12 +88,12 @@ def test_fetch_and_warmup_helpers(monkeypatch):
     test_console = Console(record=True)
     monkeypatch.setattr(rune, "console", test_console)
     monkeypatch.setattr(rune, "warmup_existing_ollama_model", lambda *_args, **_kwargs: "m")
-    rune._warmup_ollama_model(ollama_url="http://x", model_name="m", timeout_seconds=1)
+    rune._warmup_ollama_model(backend_url="http://x", model_name="m", timeout_seconds=1)
     assert "Ollama model ready" in test_console.export_text()
 
     monkeypatch.setattr(rune, "warmup_existing_ollama_model", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad")))
     with pytest.raises(typer.Exit):
-        rune._warmup_ollama_model(ollama_url="http://x", model_name="m", timeout_seconds=1)
+        rune._warmup_ollama_model(backend_url="http://x", model_name="m", timeout_seconds=1)
 
 
 def test_run_vastai_provisioning_helper(monkeypatch):
@@ -126,30 +126,30 @@ def test_run_http_job_with_progress(monkeypatch):
     assert payload["result"]["answer"] == "ok"
 
 
-def test_run_ollama_instance_paths(monkeypatch):
+def test_run_llm_instance_paths(monkeypatch):
     test_console = Console(record=True, width=200)
     monkeypatch.setattr(rune, "console", test_console)
     monkeypatch.setattr(rune, "BACKEND_MODE", "local")
     monkeypatch.setattr(rune, "use_existing_ollama_server", lambda *_args, **_kwargs: ExistingOllamaServer(url="http://x", model_name="m"))
-    rune.run_ollama_instance(vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url="u", debug=False, idempotency_key=None)
+    rune.run_llm_instance(vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url="u", debug=False, idempotency_key=None)
     assert "Existing Ollama Server" in test_console.export_text()
 
     monkeypatch.setattr(rune, "use_existing_ollama_server", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad")))
     with pytest.raises(typer.Exit):
-        rune.run_ollama_instance(vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url="u", debug=False, idempotency_key=None)
+        rune.run_llm_instance(vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url="u", debug=False, idempotency_key=None)
 
     monkeypatch.setattr(rune, "_run_vastai_provisioning", lambda **_kwargs: _result())
-    rune.run_ollama_instance(vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url=None, debug=False, idempotency_key=None)
+    rune.run_llm_instance(vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url=None, debug=False, idempotency_key=None)
     assert "Provisioned contract" in test_console.export_text()
 
     monkeypatch.setattr(rune, "BACKEND_MODE", "http")
-    monkeypatch.setattr(rune, "_http_client", lambda: type("C", (), {"submit_ollama_instance_job": lambda self, payload, idempotency_key=None: "job-1", "wait_for_job": lambda self, *args, **kwargs: {"result": {"mode": "vastai", "contract_id": 2, "ollama_url": "http://x", "model_name": "m"}}, "get_cost_estimate": lambda self, *_a, **_k: {"projected_cost_usd": 1.0, "cost_driver": "vastai", "resource_impact": "medium", "local_energy_kwh": 0.0, "confidence_score": 1.0, "warning": None}})())
-    rune.run_ollama_instance(vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url=None, debug=False, idempotency_key="id1")
+    monkeypatch.setattr(rune, "_http_client", lambda: type("C", (), {"submit_ollama_instance_job": lambda self, payload, idempotency_key=None: "job-1", "wait_for_job": lambda self, *args, **kwargs: {"result": {"mode": "vastai", "contract_id": 2, "backend_url": "http://x", "model_name": "m"}}, "get_cost_estimate": lambda self, *_a, **_k: {"projected_cost_usd": 1.0, "cost_driver": "vastai", "resource_impact": "medium", "local_energy_kwh": 0.0, "confidence_score": 1.0, "warning": None}})())
+    rune.run_llm_instance(vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url=None, debug=False, idempotency_key="id1")
     assert "Selected model" in test_console.export_text()
 
     monkeypatch.setattr(rune, "_http_client", lambda: type("C", (), {"submit_ollama_instance_job": lambda self, payload, idempotency_key=None: "job-1", "wait_for_job": lambda self, *args, **kwargs: {"result": {}}})())
     with pytest.raises(typer.Exit):
-        rune.run_ollama_instance(vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url="u", debug=False, idempotency_key=None)
+        rune.run_llm_instance(vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url="u", debug=False, idempotency_key=None)
 
 
 def test_list_commands(monkeypatch):
@@ -168,24 +168,24 @@ def test_list_commands(monkeypatch):
     with pytest.raises(typer.Exit):
         rune.vastai_list_models()
 
-    monkeypatch.setattr(rune, "_http_client", lambda: type("C", (), {"get_ollama_models": lambda self, url: {"ollama_url": url, "models": ["m"], "running_models": ["m"]}})())
-    rune.ollama_list_models(debug=False, ollama_url="http://x")
+    monkeypatch.setattr(rune, "_http_client", lambda: type("C", (), {"get_ollama_models": lambda self, url: {"backend_url": url, "models": ["m"], "running_models": ["m"]}})())
+    rune.ollama_list_models(debug=False, backend_url="http://x")
     assert "Existing Ollama Models" in test_console.export_text()
 
     monkeypatch.setattr(rune, "BACKEND_MODE", "http")
     monkeypatch.setattr(rune, "_http_client", lambda: type("C", (), {"get_ollama_models": lambda self, url: (_ for _ in ()).throw(RuntimeError("bad"))})())
     with pytest.raises(typer.Exit):
-        rune.ollama_list_models(debug=False, ollama_url="http://x")
+        rune.ollama_list_models(debug=False, backend_url="http://x")
 
     monkeypatch.setattr(rune, "BACKEND_MODE", "local")
     monkeypatch.setattr(rune, "use_existing_ollama_server", lambda *_args, **_kwargs: ExistingOllamaServer(url="http://x", model_name="m"))
     monkeypatch.setattr(rune, "list_existing_ollama_models", lambda _url: ["m"])
     monkeypatch.setattr(rune, "list_running_ollama_models", lambda _url: ["m"])
-    rune.ollama_list_models(debug=False, ollama_url="http://x")
+    rune.ollama_list_models(debug=False, backend_url="http://x")
 
     monkeypatch.setattr(rune, "list_existing_ollama_models", lambda _url: (_ for _ in ()).throw(RuntimeError("bad")))
     with pytest.raises(typer.Exit):
-        rune.ollama_list_models(debug=False, ollama_url="http://x")
+        rune.ollama_list_models(debug=False, backend_url="http://x")
 
 
 def test_run_agentic_agent_paths(monkeypatch, tmp_path):
@@ -196,28 +196,28 @@ def test_run_agentic_agent_paths(monkeypatch, tmp_path):
 
     monkeypatch.setattr(rune, "BACKEND_MODE", "http")
     monkeypatch.setattr(rune, "_http_client", lambda: type("C", (), {"submit_agentic_agent_job": lambda self, payload, idempotency_key=None: "job-1", "wait_for_job": lambda self, *args, **kwargs: {"result": {"answer": "http-answer"}}})())
-    rune.run_agentic_agent(debug=False, question="q", model="m", ollama_url=None, ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=kubeconfig, idempotency_key="id1")
+    rune.run_agentic_agent(debug=False, question="q", model="m", backend_url=None, backend_warmup=False, backend_warmup_timeout=1, kubeconfig=kubeconfig, idempotency_key="id1")
     assert "http-answer" in test_console.export_text()
 
     monkeypatch.setattr(rune, "_http_client", lambda: type("C", (), {"submit_agentic_agent_job": lambda self, payload, idempotency_key=None: (_ for _ in ()).throw(RuntimeError("bad-http")), "wait_for_job": lambda self, *args, **kwargs: {}})())
     with pytest.raises(typer.Exit):
-        rune.run_agentic_agent(debug=False, question="q", model="m", ollama_url=None, ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=kubeconfig, idempotency_key=None)
+        rune.run_agentic_agent(debug=False, question="q", model="m", backend_url=None, backend_warmup=False, backend_warmup_timeout=1, kubeconfig=kubeconfig, idempotency_key=None)
 
     monkeypatch.setattr(rune, "_http_client", lambda: type("C", (), {"submit_agentic_agent_job": lambda self, payload, idempotency_key=None: "job-1", "wait_for_job": lambda self, *args, **kwargs: {"result": {}}})())
     with pytest.raises(typer.Exit):
-        rune.run_agentic_agent(debug=False, question="q", model="m", ollama_url=None, ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=kubeconfig, idempotency_key=None)
+        rune.run_agentic_agent(debug=False, question="q", model="m", backend_url=None, backend_warmup=False, backend_warmup_timeout=1, kubeconfig=kubeconfig, idempotency_key=None)
 
     monkeypatch.setattr(rune, "BACKEND_MODE", "local")
     warmups = []
     monkeypatch.setattr(rune, "_warmup_ollama_model", lambda **_kwargs: warmups.append(True))
     monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: type("R", (), {"ask": lambda self, **_: "local-answer"})())
-    rune.run_agentic_agent(debug=False, question="q", model="m", ollama_url="http://x", ollama_warmup=True, ollama_warmup_timeout=1, kubeconfig=kubeconfig, idempotency_key=None)
+    rune.run_agentic_agent(debug=False, question="q", model="m", backend_url="http://x", backend_warmup=True, backend_warmup_timeout=1, kubeconfig=kubeconfig, idempotency_key=None)
     assert warmups == [True]
     assert "local-answer" in test_console.export_text()
 
     monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("bad")))
     with pytest.raises(typer.Exit):
-        rune.run_agentic_agent(debug=False, question="q", model="m", ollama_url=None, ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=kubeconfig, idempotency_key=None)
+        rune.run_agentic_agent(debug=False, question="q", model="m", backend_url=None, backend_warmup=False, backend_warmup_timeout=1, kubeconfig=kubeconfig, idempotency_key=None)
 
 
 def test_run_benchmark_paths(monkeypatch, tmp_path):
@@ -228,43 +228,43 @@ def test_run_benchmark_paths(monkeypatch, tmp_path):
 
     monkeypatch.setattr(rune, "BACKEND_MODE", "http")
     monkeypatch.setattr(rune, "_http_client", lambda: type("C", (), {"submit_benchmark_job": lambda self, payload, idempotency_key=None: "job-1", "wait_for_job": lambda self, *args, **kwargs: {"result": {"answer": "bench-http"}}})())
-    rune.run_benchmark(debug=False, vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url=None, question="q", model="m", ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key="i")
+    rune.run_benchmark(debug=False, vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url=None, question="q", model="m", backend_warmup=False, backend_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key="i")
     assert "bench-http" in test_console.export_text()
 
     monkeypatch.setattr(rune, "_http_client", lambda: type("C", (), {"submit_benchmark_job": lambda self, payload, idempotency_key=None: (_ for _ in ()).throw(RuntimeError("bad-http")), "wait_for_job": lambda self, *args, **kwargs: {}})())
     with pytest.raises(typer.Exit):
-        rune.run_benchmark(debug=False, vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url=None, question="q", model="m", ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
+        rune.run_benchmark(debug=False, vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url=None, question="q", model="m", backend_warmup=False, backend_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
 
     monkeypatch.setattr(rune, "_http_client", lambda: type("C", (), {"submit_benchmark_job": lambda self, payload, idempotency_key=None: "job-1", "wait_for_job": lambda self, *args, **kwargs: {"result": {}}})())
     with pytest.raises(typer.Exit):
-        rune.run_benchmark(debug=False, vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url=None, question="q", model="m", ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
+        rune.run_benchmark(debug=False, vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url=None, question="q", model="m", backend_warmup=False, backend_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
 
     monkeypatch.setattr(rune, "BACKEND_MODE", "local")
     monkeypatch.setattr(rune, "use_existing_ollama_server", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad-server")))
     with pytest.raises(typer.Exit):
-        rune.run_benchmark(debug=False, vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url="http://x", question="q", model="m", ollama_warmup=True, ollama_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
+        rune.run_benchmark(debug=False, vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url="http://x", question="q", model="m", backend_warmup=True, backend_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
 
     monkeypatch.setattr(rune, "use_existing_ollama_server", lambda *_args, **_kwargs: ExistingOllamaServer(url="http://x", model_name="m"))
     monkeypatch.setattr(rune, "_fetch_model_capabilities", lambda *_args, **_kwargs: OllamaModelCapabilities("m", 100, 20))
     monkeypatch.setattr(rune, "_warmup_ollama_model", lambda **_kwargs: None)
     monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: type("R", (), {"ask": lambda self, **_: "bench-local"})())
-    rune.run_benchmark(debug=False, vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url="http://x", question="q", model="m", ollama_warmup=True, ollama_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
+    rune.run_benchmark(debug=False, vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url="http://x", question="q", model="m", backend_warmup=True, backend_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
     assert "bench-local" in test_console.export_text()
 
     monkeypatch.setattr(rune, "_run_vastai_provisioning", lambda **_kwargs: _result())
     monkeypatch.setattr(rune, "_vastai_sdk", lambda: MagicMock())
     monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: type("R", (), {"ask": lambda self, **_: "bench-vastai"})())
     monkeypatch.setattr(rune, "stop_vastai_instance", lambda *_args, **_kwargs: TeardownResult(contract_id=7, destroyed_instance=True, destroyed_volume_ids=[], verification_ok=False, verification_message="warn"))
-    rune.run_benchmark(debug=False, vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url=None, question="q", model="m", ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
+    rune.run_benchmark(debug=False, vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url=None, question="q", model="m", backend_warmup=False, backend_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
     assert "bench-vastai" in test_console.export_text()
 
-    monkeypatch.setattr(rune, "_run_vastai_provisioning", lambda **_kwargs: _result(ollama_url=None))
+    monkeypatch.setattr(rune, "_run_vastai_provisioning", lambda **_kwargs: _result(backend_url=None))
     monkeypatch.setattr(rune, "stop_vastai_instance", lambda *_args, **_kwargs: TeardownResult(contract_id=7, destroyed_instance=True, destroyed_volume_ids=["v1"], verification_ok=True, verification_message="ok"))
     with pytest.raises(typer.Exit):
-        rune.run_benchmark(debug=False, vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url=None, question="q", model="m", ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
+        rune.run_benchmark(debug=False, vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url=None, question="q", model="m", backend_warmup=False, backend_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
 
     monkeypatch.setattr(rune, "_run_vastai_provisioning", lambda **_kwargs: _result())
     monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("agent failed")))
     monkeypatch.setattr(rune, "stop_vastai_instance", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("stop failed")))
     with pytest.raises(typer.Exit):
-        rune.run_benchmark(debug=False, vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url=None, question="q", model="m", ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
+        rune.run_benchmark(debug=False, vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url=None, question="q", model="m", backend_warmup=False, backend_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)

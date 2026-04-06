@@ -16,11 +16,11 @@ class TestElicitDriverClient:
         transport.call.return_value = {"answer": "literature review result"}
         client = ElicitDriverClient(transport=transport)
 
-        result = client.ask("What is X?", "m", ollama_url="http://localhost:11434")
+        result = client.ask("What is X?", "m", backend_url="http://localhost:11434")
         assert result == "literature review result"
         transport.call.assert_called_once()
 
-    def test_ask_without_ollama_url(self) -> None:
+    def test_ask_without_backend_url(self) -> None:
         transport = MagicMock()
         transport.call.return_value = {"answer": "ok"}
         client = ElicitDriverClient(transport=transport)
@@ -59,11 +59,11 @@ class TestMindgardDriverClient:
         transport.call.return_value = {"answer": "security assessment"}
         client = MindgardDriverClient(transport=transport)
 
-        result = client.ask("test the model", "llama3:8b", ollama_url="http://target:11434")
+        result = client.ask("test the model", "llama3:8b", backend_url="http://target:11434")
         assert result == "security assessment"
         transport.call.assert_called_once()
 
-    def test_ask_without_ollama_url(self) -> None:
+    def test_ask_without_backend_url(self) -> None:
         transport = MagicMock()
         transport.call.return_value = {"answer": "ok"}
         client = MindgardDriverClient(transport=transport)

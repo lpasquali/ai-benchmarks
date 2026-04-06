@@ -227,16 +227,16 @@ def test_driver_client_ask_custom_model() -> None:
     assert client.ask("q", model="sonar-deep-research") == "deep answer"
 
 
-def test_driver_client_ask_ignores_ollama_url() -> None:
+def test_driver_client_ask_ignores_backend_url() -> None:
     from rune_bench.drivers.perplexity import PerplexityDriverClient
 
     class FakeTransport:
         def call(self, action: str, params: dict) -> dict:
-            assert "ollama_url" not in params
+            assert "backend_url" not in params
             return {"answer": "ok"}
 
     client = PerplexityDriverClient(transport=FakeTransport())
-    assert client.ask("q", model="sonar", ollama_url="http://ignored:11434") == "ok"
+    assert client.ask("q", model="sonar", backend_url="http://ignored:11434") == "ok"
 
 
 def test_driver_client_ask_raises_on_missing_answer() -> None:

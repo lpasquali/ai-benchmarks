@@ -67,7 +67,7 @@ def test_print_vastai_result_displays_override_rows(monkeypatch):
         template_env="FOO=bar",
         contract_id=123,
         details=details,
-        ollama_url="http://1.2.3.4:11434",
+        backend_url="http://1.2.3.4:11434",
     )
 
     rune._print_vastai_result(

@@ -40,7 +40,7 @@ class VastAIProvider:
             confirm_create=lambda: True,
         )
         return ProvisioningResult(
-            ollama_url=result.ollama_url,
+            backend_url=result.backend_url,
             model=result.model_name,
             provider_handle=result.contract_id,
         )
