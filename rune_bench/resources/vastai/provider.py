@@ -1,6 +1,6 @@
 """Vast.ai LLM resource provider."""
 
-from vastai import VastAI
+from vastai import VastAI  # type: ignore[import-untyped]  # Reason: vastai SDK does not provide type hints
 
 from rune_bench.resources.base import ProvisioningResult
 

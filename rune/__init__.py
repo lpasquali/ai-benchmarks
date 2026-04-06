@@ -18,7 +18,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
 try:
-    from vastai import VastAI
+    from vastai import VastAI  # type: ignore[import-untyped]  # Reason: vastai SDK does not provide type hints
 except ImportError:
     VastAI = None  # type: ignore[assignment,misc]
 
@@ -1091,7 +1091,7 @@ def show_info() -> None:
 
     # Check vastai
     try:
-        import vastai  # noqa: F401
+        import vastai  # noqa: F401  # type: ignore[import-untyped]  # Reason: vastai SDK does not provide type hints
         vastai_status = "[green]✓ installed[/green]"
         vastai_cmd = ""
     except ImportError:
@@ -1100,7 +1100,7 @@ def show_info() -> None:
 
     # Check holmesgpt
     try:
-        import holmes  # noqa: F401
+        import holmes  # noqa: F401  # type: ignore[import-untyped]  # Reason: holmesgpt package does not provide type hints
         holmes_status = "[green]✓ installed[/green]"
         holmes_cmd = ""
     except ImportError:
