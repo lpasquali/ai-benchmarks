@@ -124,7 +124,7 @@ def test_agent_runner_protocol_satisfied():
     """Any object with an ``ask`` method matching the signature satisfies the protocol."""
 
     class FakeRunner:
-        def ask(self, question: str, model: str, ollama_url: str | None = None, **kwargs) -> str:
+        def ask(self, question: str, model: str, backend_url: str | None = None, **kwargs) -> str:
             return "ok"
 
     assert isinstance(FakeRunner(), AgentRunner)

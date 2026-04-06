@@ -17,7 +17,7 @@ Implementation notes:
     GET  /conversations/{id}  retrieve conversation and actions taken
     Returns: { response: str, actions_taken: list }
 - `question` maps to the customer/ops task description.
-- `model` and `ollama_url` are not used (Sierra uses its own hosted models).
+- `model` and `backend_url` are not used (Sierra uses its own hosted models).
 """
 
 
@@ -27,7 +27,7 @@ class SierraRunner:
     def __init__(self) -> None:
         pass
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Submit an ops task to Sierra and return the outcome."""
         raise NotImplementedError(
             "SierraRunner is not yet implemented. "

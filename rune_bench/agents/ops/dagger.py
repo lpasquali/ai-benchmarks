@@ -16,7 +16,7 @@ Implementation notes:
         result = await client.container().from_("alpine").with_exec(["echo", question]).stdout()
 - Approach: Define a pipeline as Python code using the Dagger SDK.
             The `question` can be used as a pipeline parameter/objective.
-- `model` and `ollama_url` can be injected as env vars inside container steps
+- `model` and `backend_url` can be injected as env vars inside container steps
   if the pipeline runs LLM-based tasks.
 - Returns pipeline stdout/result as the answer string.
 """

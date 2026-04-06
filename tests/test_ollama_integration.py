@@ -49,15 +49,15 @@ def _model_matches(needle: str, haystack: "list[str] | set[str]") -> bool:
 
 
 @pytest.fixture(scope="module")
-def ollama_url() -> str:
+def backend_url() -> str:
     if not _OLLAMA_URL:
         pytest.skip("OLLAMA_TEST_URL not set — skipping live Ollama integration tests")
     return _OLLAMA_URL
 
 
 @pytest.fixture(scope="module")
-def ollama_client(ollama_url: str) -> OllamaClient:
-    return OllamaClient(ollama_url)
+def ollama_client(backend_url: str) -> OllamaClient:
+    return OllamaClient(backend_url)
 
 
 @pytest.fixture(scope="module")

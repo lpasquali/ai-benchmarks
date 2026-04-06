@@ -94,7 +94,7 @@ def test_handle_ask_runs_graph(monkeypatch: pytest.MonkeyPatch) -> None:
     result = lg_main._handle_ask({
         "question": "What is AI?",
         "model": "llama3.1:8b",
-        "ollama_url": "http://ollama:11434",
+        "backend_url": "http://ollama:11434",
     })
 
     assert result["answer"] == "research result"
@@ -105,7 +105,7 @@ def test_handle_ask_runs_graph(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_handle_ask_passthrough_params(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify question, model, and ollama_url are passed through correctly."""
+    """Verify question, model, and backend_url are passed through correctly."""
     captured: dict = {}
 
     mock_langchain_ollama = types.ModuleType("langchain_ollama")
@@ -153,7 +153,7 @@ def test_handle_ask_passthrough_params(monkeypatch: pytest.MonkeyPatch) -> None:
     lg_main._handle_ask({
         "question": "Explain quantum computing",
         "model": "mistral:7b",
-        "ollama_url": "http://localhost:11434",
+        "backend_url": "http://localhost:11434",
     })
 
     assert captured["llm_kwargs"]["model"] == "mistral:7b"
@@ -161,8 +161,8 @@ def test_handle_ask_passthrough_params(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_llm.invoke.assert_called_once_with("Explain quantum computing")
 
 
-def test_handle_ask_without_ollama_url(monkeypatch: pytest.MonkeyPatch) -> None:
-    """When ollama_url is omitted, base_url should not be passed to ChatOllama."""
+def test_handle_ask_without_backend_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When backend_url is omitted, base_url should not be passed to ChatOllama."""
     captured: dict = {}
 
     mock_langchain_ollama = types.ModuleType("langchain_ollama")

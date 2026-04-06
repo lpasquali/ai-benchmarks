@@ -17,7 +17,7 @@ Implementation notes:
     GET  /investigations/{id}     poll until status == "complete"
     Returns: { summary, severity, iocs, recommended_actions }
 - `question` maps to the alert/incident description.
-- `model` and `ollama_url` are not used (Radiant uses its own hosted models).
+- `model` and `backend_url` are not used (Radiant uses its own hosted models).
 """
 
 
@@ -27,7 +27,7 @@ class RadiantSecurityRunner:
     def __init__(self) -> None:
         pass
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Submit a security incident to Radiant and return the investigation report."""
         raise NotImplementedError(
             "RadiantSecurityRunner is not yet implemented. "

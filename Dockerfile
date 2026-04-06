@@ -76,9 +76,9 @@ ENV PATH="/opt/venv/bin:$PATH" \
     RUNE_VASTAI_RELIABILITY=0.99 \
     RUNE_VASTAI_STOP_INSTANCE=false \
     \
-    RUNE_OLLAMA_URL=http://localhost:11434 \
-    RUNE_OLLAMA_WARMUP=true \
-    RUNE_OLLAMA_WARMUP_TIMEOUT=300 \
+    RUNE_BACKEND_URL=http://localhost:11434 \
+    RUNE_BACKEND_WARMUP=true \
+    RUNE_BACKEND_WARMUP_TIMEOUT=300 \
     \
     RUNE_QUESTION="" \
     RUNE_MODEL=llama3.1:8b \

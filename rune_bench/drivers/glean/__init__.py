@@ -25,13 +25,13 @@ class GleanDriverClient:
     ) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("glean")
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Dispatch a question to the Glean driver and return the answer.
 
         Args:
             question: Natural-language research question.
             model: Model identifier (unused -- Glean uses its own hosted model).
-            ollama_url: Ollama server URL (unused, kept for interface compatibility).
+            backend_url: Ollama server URL (unused, kept for interface compatibility).
 
         Returns:
             Glean's synthesised answer with source citations.

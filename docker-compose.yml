@@ -59,9 +59,9 @@ services:
       RUNE_API_HOST: 0.0.0.0
       RUNE_API_PORT: "8080"
       RUNE_API_AUTH_DISABLED: "1"          # disable auth for local dev
-      RUNE_OLLAMA_URL: http://ollama:11434
-      RUNE_OLLAMA_WARMUP: "true"
-      RUNE_OLLAMA_WARMUP_TIMEOUT: "300"
+      RUNE_BACKEND_URL: http://ollama:11434
+      RUNE_BACKEND_WARMUP: "true"
+      RUNE_BACKEND_WARMUP_TIMEOUT: "300"
       # S3 results sink — requires rune_bench/s3_sink.py (see deployment docs)
       RUNE_S3_ENABLED: "true"
       RUNE_S3_BUCKET: rune-results

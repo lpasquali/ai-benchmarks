@@ -11,7 +11,7 @@ Wire protocol (v1):
 Supported actions
 -----------------
 ask
-    params: question (str), model (str), ollama_url (str, optional)
+    params: question (str), model (str), backend_url (str, optional)
     result: {"answer": str}
 
 info
@@ -61,7 +61,7 @@ class GraphState(TypedDict):
 def _handle_ask(params: dict) -> dict:
     question: str = params["question"]
     model: str = params["model"]
-    ollama_url: str | None = params.get("ollama_url")
+    backend_url: str | None = params.get("backend_url")
 
     if StateGraph is None or ChatOllama is None:
         raise RuntimeError(
@@ -70,8 +70,8 @@ def _handle_ask(params: dict) -> dict:
 
     # Build ChatOllama LLM
     llm_kwargs: dict[str, Any] = {"model": _normalize_model(model)}
-    if ollama_url:
-        llm_kwargs["base_url"] = ollama_url
+    if backend_url:
+        llm_kwargs["base_url"] = backend_url
     llm = ChatOllama(**llm_kwargs)
 
     # Define a simple single-node research graph.

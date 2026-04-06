@@ -13,23 +13,23 @@ from urllib.parse import parse_qs, urlparse
 
 from rune_bench.api_backend import (
     get_cost_estimate,
-    list_ollama_models,
+    list_backend_models,
     list_vastai_models,
     run_agentic_agent,
     run_benchmark,
-    run_ollama_instance,
+    run_llm_instance,
 )
 from rune_bench.api_contracts import (
     CostEstimationRequest,
     RunAgenticAgentRequest,
     RunBenchmarkRequest,
-    RunOllamaInstanceRequest,
+    RunLLMInstanceRequest,
 )
 from rune_bench.job_store import JobRecord, JobStore
 from rune_bench.metrics import SQLiteMetricsCollector, clear_collector, set_collector, set_job_id, span
 
 BackendRequest: TypeAlias = (
-    RunAgenticAgentRequest | RunBenchmarkRequest | RunOllamaInstanceRequest | CostEstimationRequest
+    RunAgenticAgentRequest | RunBenchmarkRequest | RunLLMInstanceRequest | CostEstimationRequest
 )
 BackendHandler: TypeAlias = Callable[[BackendRequest], dict]
 
@@ -46,10 +46,10 @@ def _run_benchmark_backend(request: BackendRequest) -> dict:
     return run_benchmark(request)
 
 
-def _run_ollama_instance_backend(request: BackendRequest) -> dict:
-    if not isinstance(request, RunOllamaInstanceRequest):
+def _run_llm_instance_backend(request: BackendRequest) -> dict:
+    if not isinstance(request, RunLLMInstanceRequest):
         raise RuntimeError("invalid request type for ollama-instance backend")
-    return run_ollama_instance(request)
+    return run_llm_instance(request)
 
 
 def _get_cost_estimate_backend(request: BackendRequest) -> dict:
@@ -96,7 +96,7 @@ class RuneApiApplication:
         self.backend_functions = backend_functions or {
             "agentic-agent": _run_agentic_backend,
             "benchmark": _run_benchmark_backend,
-            "ollama-instance": _run_ollama_instance_backend,
+            "ollama-instance": _run_llm_instance_backend,
             "cost-estimate": _get_cost_estimate_backend,
         }
         self.store.mark_incomplete_jobs_failed()
@@ -168,12 +168,12 @@ class RuneApiApplication:
 
                 if path == "/v1/ollama/models":
                     query = parse_qs(parsed.query)
-                    ollama_url = query.get("ollama_url", [""])[0]
-                    if not ollama_url:
-                        self._write_json(400, {"error": "missing required query parameter: ollama_url"})
+                    backend_url = query.get("backend_url", [""])[0]
+                    if not backend_url:
+                        self._write_json(400, {"error": "missing required query parameter: backend_url"})
                         return
                     try:
-                        payload = list_ollama_models(ollama_url)
+                        payload = list_backend_models(backend_url)
                     except RuntimeError as exc:
                         self._write_json(400, {"error": str(exc)})
                         return
@@ -286,7 +286,7 @@ class RuneApiApplication:
         elif kind == "benchmark":
             request = RunBenchmarkRequest(**payload)
         elif kind == "ollama-instance":
-            request = RunOllamaInstanceRequest(**payload)
+            request = RunLLMInstanceRequest(**payload)
         elif kind == "cost-estimate":
             request = CostEstimationRequest(**payload)
         else:

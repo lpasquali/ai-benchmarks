@@ -23,7 +23,7 @@ class MidjourneyDriverClient:
     def __init__(self, *, transport: DriverTransport | None = None) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("midjourney")
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Send a question to the Midjourney driver.
 
         Raises:
@@ -39,6 +39,6 @@ class MidjourneyDriverClient:
         result = self._transport.call("ask", {
             "question": question,
             "model": model,
-            "ollama_url": ollama_url,
+            "backend_url": backend_url,
         })
         return result.get("answer", "")

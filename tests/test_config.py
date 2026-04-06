@@ -66,14 +66,14 @@ defaults:
 
     def test_bool_true_becomes_1(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        monkeypatch.delenv("RUNE_OLLAMA_WARMUP", raising=False)
+        monkeypatch.delenv("RUNE_BACKEND_WARMUP", raising=False)
         _write_yaml(tmp_path / "rune.yaml", """\
 version: "1"
 defaults:
-  ollama_warmup: true
+  backend_warmup: true
 """)
         load_config()
-        assert os.environ["RUNE_OLLAMA_WARMUP"] == "1"
+        assert os.environ["RUNE_BACKEND_WARMUP"] == "1"
 
     def test_bool_false_becomes_0(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -116,8 +116,8 @@ profiles:
     max_dph: 3.0
     model: mixtral:8x22b
   test:
-    ollama_url: http://localhost:11434
-    ollama_warmup: false
+    backend_url: http://localhost:11434
+    backend_warmup: false
 """
 
     def test_profile_overrides_defaults(self, tmp_path, monkeypatch):
@@ -355,7 +355,7 @@ class TestInitTemplate:
             "backend", "api_base_url", "api_tenant", "debug", "insecure",
             "api_host", "api_port",
             "vastai", "template_hash", "max_dph", "min_dph", "reliability", "vastai_stop_instance",
-            "ollama_url", "ollama_warmup", "ollama_warmup_timeout",
+            "backend_type", "backend_url", "backend_warmup", "backend_warmup_timeout",
             "question", "model", "kubeconfig",
         }
         assert set(_FIELD_ENV_MAP.keys()) == known_keys

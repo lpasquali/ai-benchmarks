@@ -16,7 +16,7 @@ Implementation notes:
     GET  /scans/{id}      poll until status == "complete"
     GET  /scans/{id}/findings  returns vulnerability list with PoC details
 - `question` maps to the target URL or scan description.
-- `model` and `ollama_url` are not used (XBOW uses its own engine).
+- `model` and `backend_url` are not used (XBOW uses its own engine).
 - Note: only run against systems you own or have explicit written permission to test.
 """
 
@@ -27,7 +27,7 @@ class XBOWRunner:
     def __init__(self) -> None:
         pass
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Run an XBOW scan and return discovered vulnerabilities."""
         raise NotImplementedError(
             "XBOWRunner is not yet implemented. "

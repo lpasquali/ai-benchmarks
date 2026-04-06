@@ -27,13 +27,13 @@ class ElicitDriverClient:
     ) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("elicit")
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Dispatch a research question to the elicit driver and return the answer.
 
         Args:
             question: Natural-language research question for literature review.
             model: Model identifier (passed through but not used by Elicit).
-            ollama_url: Ollama URL (passed through but not used by Elicit).
+            backend_url: Ollama URL (passed through but not used by Elicit).
 
         Returns:
             Formatted text synthesising the search results.
@@ -42,8 +42,8 @@ class ElicitDriverClient:
             "question": question,
             "model": model,
         }
-        if ollama_url:
-            params["ollama_url"] = ollama_url
+        if backend_url:
+            params["backend_url"] = backend_url
 
         debug_log(
             f"ElicitDriverClient.ask: question={question!r} model={model!r}"

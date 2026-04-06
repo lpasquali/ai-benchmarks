@@ -27,13 +27,13 @@ class LangGraphDriverClient:
     ) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("langgraph")
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Dispatch a question to the LangGraph driver and return the answer.
 
         Args:
             question: Natural-language research question.
             model: Ollama model identifier (e.g. ``"llama3.1:8b"``).
-            ollama_url: Base URL of the Ollama server (optional).
+            backend_url: Base URL of the Ollama server (optional).
 
         Returns:
             The LangGraph research workflow's textual answer.
@@ -42,12 +42,12 @@ class LangGraphDriverClient:
             "question": question,
             "model": model.strip(),
         }
-        if ollama_url:
-            params["ollama_url"] = ollama_url
+        if backend_url:
+            params["backend_url"] = backend_url
 
         debug_log(
             f"LangGraphDriverClient.ask: question={question!r} model={model!r} "
-            f"ollama_url={ollama_url or '<none>'}"
+            f"backend_url={backend_url or '<none>'}"
         )
         result = self._transport.call("ask", params)
 

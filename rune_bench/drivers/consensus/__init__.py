@@ -32,7 +32,7 @@ class ConsensusDriverClient:
         self,
         question: str,
         model: str = "",
-        ollama_url: str | None = None,
+        backend_url: str | None = None,
         limit: int | None = None,
     ) -> str:
         """Dispatch a research question to the consensus driver and return the answer.
@@ -40,25 +40,25 @@ class ConsensusDriverClient:
         Args:
             question: Natural-language research question.
             model: Ollama model identifier for synthesis (optional).
-            ollama_url: Base URL of the Ollama server (optional).
+            backend_url: Base URL of the Ollama server (optional).
             limit: Maximum number of papers to retrieve (optional, driver default 10).
 
         Returns:
-            Synthesized answer (if model + ollama_url provided) or a
+            Synthesized answer (if model + backend_url provided) or a
             formatted list of relevant papers.
         """
         params: dict = {"question": question}
         normalized_model = model.strip()
         if normalized_model:
             params["model"] = normalized_model
-        if ollama_url:
-            params["ollama_url"] = ollama_url
+        if backend_url:
+            params["backend_url"] = backend_url
         if limit is not None:
             params["limit"] = limit
 
         debug_log(
             f"ConsensusDriverClient.ask: question={question!r} model={model!r} "
-            f"ollama_url={ollama_url or '<none>'}"
+            f"backend_url={backend_url or '<none>'}"
         )
         result = self._transport.call("ask", params)
 

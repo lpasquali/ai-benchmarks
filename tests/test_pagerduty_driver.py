@@ -108,7 +108,7 @@ def test_handle_ask_calls_ollama_for_synthesis(monkeypatch: pytest.MonkeyPatch) 
     result = pd_main._handle_ask({
         "question": "what should I fix first?",
         "model": "llama3.1:8b",
-        "ollama_url": "http://ollama:11434",
+        "backend_url": "http://ollama:11434",
     })
 
     assert result["answer"] == "Triage: CPU incident is P1, disk is P2."
@@ -135,7 +135,7 @@ def test_handle_ask_returns_raw_data_without_llm(monkeypatch: pytest.MonkeyPatch
         raise RuntimeError(f"Unmocked URL: {url}")
     monkeypatch.setattr(pd_main, "make_http_request", fake_request)
 
-    # No model or ollama_url — should return formatted raw data
+    # No model or backend_url — should return formatted raw data
     result = pd_main._handle_ask({"question": "triage", "model": ""})
 
     assert "High CPU on web-01" in result["answer"]
@@ -239,7 +239,7 @@ def test_driver_client_ask_returns_answer(tmp_path: Path) -> None:
     call_args = mock_transport.call.call_args
     assert call_args[0][0] == "ask"
     assert call_args[0][1]["question"] == "what is happening?"
-    assert call_args[0][1]["ollama_url"] == "http://ollama:11434"
+    assert call_args[0][1]["backend_url"] == "http://ollama:11434"
 
 
 def test_driver_client_raises_on_missing_kubeconfig(tmp_path: Path) -> None:

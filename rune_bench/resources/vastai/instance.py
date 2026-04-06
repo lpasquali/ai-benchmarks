@@ -237,27 +237,27 @@ class InstanceManager:
     # Block 8 — Pull model via Ollama                                     #
     # ------------------------------------------------------------------ #
 
-    def pull_model(self, contract_id: int | str, model_name: str, ollama_url: str | None = None) -> None:
+    def pull_model(self, contract_id: int | str, model_name: str, backend_url: str | None = None) -> None:
         """Load a model into Ollama on the remote instance via Ollama API.
 
         Args:
             contract_id: The Vast.ai contract/instance id (for error context).
             model_name: The model name to load (e.g., "mistral:latest").
-            ollama_url: Ollama API URL (e.g., "http://ip:11434").
+            backend_url: Ollama API URL (e.g., "http://ip:11434").
 
         Raises:
             RuntimeError: if no Ollama URL is provided or API load fails.
         """
-        if not ollama_url:
+        if not backend_url:
             raise RuntimeError(
                 f"Cannot pull model for contract {contract_id}: missing Ollama URL"
             )
 
         try:
             debug_log(
-                f"Vast.ai Ollama model load: contract_id={contract_id} ollama_url={ollama_url} model={model_name}"
+                f"Vast.ai Ollama model load: contract_id={contract_id} backend_url={backend_url} model={model_name}"
             )
-            client = OllamaClient(ollama_url)
+            client = OllamaClient(backend_url)
             client.load_model(model_name)
         except RuntimeError as exc:
             raise RuntimeError(
