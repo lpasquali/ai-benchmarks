@@ -1,7 +1,7 @@
 """Existing Ollama server LLM resource provider."""
 
 from rune_bench.resources.base import ProvisioningResult
-from rune_bench.workflows import use_existing_ollama_server, warmup_existing_ollama_model
+from rune_bench.workflows import use_existing_backend_server, warmup_backend_model
 
 
 class ExistingOllamaProvider:
@@ -25,12 +25,12 @@ class ExistingOllamaProvider:
         self._warmup_timeout = warmup_timeout
 
     def provision(self) -> ProvisioningResult:
-        server = use_existing_ollama_server(
+        server = use_existing_backend_server(
             self._backend_url,
             model_name=self._model or "<user-selected>",
         )
         if self._warmup and self._model:
-            warmup_existing_ollama_model(
+            warmup_backend_model(
                 server.url,
                 self._model,
                 timeout_seconds=self._warmup_timeout,

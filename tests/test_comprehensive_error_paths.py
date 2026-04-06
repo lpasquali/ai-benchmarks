@@ -341,7 +341,7 @@ def test_offer_template_backend_instance_and_workflow_remaining(monkeypatch, tmp
     sdk.show_volumes.side_effect = Exception("nope")
     assert InstanceManager(sdk)._list_volumes_optional() is None
 
-    monkeypatch.setattr(workflows, "OllamaClient", lambda _url: (_ for _ in ()).throw(RuntimeError("bad")))
+    monkeypatch.setattr("rune_bench.backends.ollama.OllamaClient", lambda _url: (_ for _ in ()).throw(RuntimeError("bad")))
     with pytest.raises(RuntimeError, match="bad"):
         workflows.normalize_backend_url("x")
 
@@ -379,11 +379,11 @@ def test_offer_template_backend_instance_and_workflow_remaining(monkeypatch, tmp
 
     monkeypatch.setattr(workflows, "InstanceManager", CreatedManager)
     monkeypatch.setattr(workflows.ModelSelector, "select", lambda self, _vram: type("M", (), {"name": "m", "vram_mb": 1, "required_disk_gb": 2})())
-    monkeypatch.setattr(workflows, "list_existing_ollama_models", lambda _url: [])
-    monkeypatch.setattr(workflows, "list_running_ollama_models", lambda _url: [])
-    monkeypatch.setattr(workflows, "normalize_ollama_model_for_api", lambda model: model)
-    monkeypatch.setattr(workflows, "warmup_existing_ollama_model", lambda *_args, **_kwargs: "m")
-    res = workflows.provision_vastai_ollama(MagicMock(), template_hash="t", min_dph=1, max_dph=2, reliability=0.9, confirm_create=lambda: True)
+    monkeypatch.setattr(workflows, "list_backend_models", lambda _url: [])
+    monkeypatch.setattr(workflows, "list_running_backend_models", lambda _url: [])
+    monkeypatch.setattr(workflows, "normalize_backend_model_for_api", lambda model: model)
+    monkeypatch.setattr(workflows, "warmup_backend_model", lambda *_args, **_kwargs: "m")
+    res = workflows.provision_vastai_backend(MagicMock(), template_hash="t", min_dph=1, max_dph=2, reliability=0.9, confirm_create=lambda: True)
     assert res.pull_warning is not None
 
 
@@ -396,7 +396,7 @@ def test_api_backend_and_workflow_last_edges(monkeypatch, tmp_path):
 
     fake_client = MagicMock()
     fake_client.get_available_models.return_value = ["x"]
-    manager = api_backend.use_existing_ollama_server
+    manager = api_backend.use_existing_backend_server
     assert callable(manager)
 
 

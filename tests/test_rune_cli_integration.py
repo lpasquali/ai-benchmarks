@@ -87,11 +87,11 @@ def test_fetch_and_warmup_helpers(monkeypatch):
 
     test_console = Console(record=True)
     monkeypatch.setattr(rune, "console", test_console)
-    monkeypatch.setattr(rune, "warmup_existing_ollama_model", lambda *_args, **_kwargs: "m")
+    monkeypatch.setattr(rune, "warmup_backend_model", lambda *_args, **_kwargs: "m")
     rune._warmup_ollama_model(backend_url="http://x", model_name="m", timeout_seconds=1)
     assert "Ollama model ready" in test_console.export_text()
 
-    monkeypatch.setattr(rune, "warmup_existing_ollama_model", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad")))
+    monkeypatch.setattr(rune, "warmup_backend_model", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad")))
     with pytest.raises(typer.Exit):
         rune._warmup_ollama_model(backend_url="http://x", model_name="m", timeout_seconds=1)
 
@@ -100,15 +100,15 @@ def test_run_vastai_provisioning_helper(monkeypatch):
     test_console = Console(record=True)
     monkeypatch.setattr(rune, "console", test_console)
     monkeypatch.setattr(rune, "_vastai_sdk", lambda: MagicMock())
-    monkeypatch.setattr(rune, "provision_vastai_ollama", lambda *_args, **_kwargs: _result())
+    monkeypatch.setattr(rune, "provision_vastai_backend", lambda *_args, **_kwargs: _result())
     assert rune._run_vastai_provisioning(template_hash="t", min_dph=1, max_dph=2, reliability=0.9).contract_id == 7
 
-    monkeypatch.setattr(rune, "provision_vastai_ollama", lambda *_args, **_kwargs: (_ for _ in ()).throw(rune.UserAbortedError("stop")))
+    monkeypatch.setattr(rune, "provision_vastai_backend", lambda *_args, **_kwargs: (_ for _ in ()).throw(rune.UserAbortedError("stop")))
     with pytest.raises(typer.Exit) as exc:
         rune._run_vastai_provisioning(template_hash="t", min_dph=1, max_dph=2, reliability=0.9)
     assert exc.value.exit_code == 0
 
-    monkeypatch.setattr(rune, "provision_vastai_ollama", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad")))
+    monkeypatch.setattr(rune, "provision_vastai_backend", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad")))
     with pytest.raises(typer.Exit):
         rune._run_vastai_provisioning(template_hash="t", min_dph=1, max_dph=2, reliability=0.9)
 
@@ -130,11 +130,11 @@ def test_run_llm_instance_paths(monkeypatch):
     test_console = Console(record=True, width=200)
     monkeypatch.setattr(rune, "console", test_console)
     monkeypatch.setattr(rune, "BACKEND_MODE", "local")
-    monkeypatch.setattr(rune, "use_existing_ollama_server", lambda *_args, **_kwargs: ExistingOllamaServer(url="http://x", model_name="m"))
+    monkeypatch.setattr(rune, "use_existing_backend_server", lambda *_args, **_kwargs: ExistingOllamaServer(url="http://x", model_name="m"))
     rune.run_llm_instance(vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url="u", debug=False, idempotency_key=None)
     assert "Existing Ollama Server" in test_console.export_text()
 
-    monkeypatch.setattr(rune, "use_existing_ollama_server", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad")))
+    monkeypatch.setattr(rune, "use_existing_backend_server", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad")))
     with pytest.raises(typer.Exit):
         rune.run_llm_instance(vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url="u", debug=False, idempotency_key=None)
 
@@ -178,12 +178,12 @@ def test_list_commands(monkeypatch):
         rune.ollama_list_models(debug=False, backend_url="http://x")
 
     monkeypatch.setattr(rune, "BACKEND_MODE", "local")
-    monkeypatch.setattr(rune, "use_existing_ollama_server", lambda *_args, **_kwargs: ExistingOllamaServer(url="http://x", model_name="m"))
-    monkeypatch.setattr(rune, "list_existing_ollama_models", lambda _url: ["m"])
-    monkeypatch.setattr(rune, "list_running_ollama_models", lambda _url: ["m"])
+    monkeypatch.setattr(rune, "use_existing_backend_server", lambda *_args, **_kwargs: ExistingOllamaServer(url="http://x", model_name="m"))
+    monkeypatch.setattr(rune, "list_backend_models", lambda _url: ["m"])
+    monkeypatch.setattr(rune, "list_running_backend_models", lambda _url: ["m"])
     rune.ollama_list_models(debug=False, backend_url="http://x")
 
-    monkeypatch.setattr(rune, "list_existing_ollama_models", lambda _url: (_ for _ in ()).throw(RuntimeError("bad")))
+    monkeypatch.setattr(rune, "list_backend_models", lambda _url: (_ for _ in ()).throw(RuntimeError("bad")))
     with pytest.raises(typer.Exit):
         rune.ollama_list_models(debug=False, backend_url="http://x")
 
@@ -240,11 +240,11 @@ def test_run_benchmark_paths(monkeypatch, tmp_path):
         rune.run_benchmark(debug=False, vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url=None, question="q", model="m", backend_warmup=False, backend_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
 
     monkeypatch.setattr(rune, "BACKEND_MODE", "local")
-    monkeypatch.setattr(rune, "use_existing_ollama_server", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad-server")))
+    monkeypatch.setattr(rune, "use_existing_backend_server", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad-server")))
     with pytest.raises(typer.Exit):
         rune.run_benchmark(debug=False, vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url="http://x", question="q", model="m", backend_warmup=True, backend_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
 
-    monkeypatch.setattr(rune, "use_existing_ollama_server", lambda *_args, **_kwargs: ExistingOllamaServer(url="http://x", model_name="m"))
+    monkeypatch.setattr(rune, "use_existing_backend_server", lambda *_args, **_kwargs: ExistingOllamaServer(url="http://x", model_name="m"))
     monkeypatch.setattr(rune, "_fetch_model_capabilities", lambda *_args, **_kwargs: OllamaModelCapabilities("m", 100, 20))
     monkeypatch.setattr(rune, "_warmup_ollama_model", lambda **_kwargs: None)
     monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: type("R", (), {"ask": lambda self, **_: "bench-local"})())

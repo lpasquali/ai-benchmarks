@@ -2,14 +2,20 @@
 
 Consolidates the low-level API client (OllamaClient) and the high-level
 model lifecycle manager (OllamaModelManager) into a single backend module.
+The :class:`OllamaBackend` facade exposes every Ollama-specific operation
+so that the workflow layer remains backend-agnostic.
 """
+
+from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from typing import Any
 
 from rune_bench.backends.base import ModelCapabilities
 from rune_bench.common import make_http_request, normalize_url
 from rune_bench.debug import debug_log
+from rune_bench.metrics import span
 
 # ---------------------------------------------------------------------------
 # Public type alias — keeps existing callsites using OllamaModelCapabilities
@@ -186,3 +192,89 @@ class OllamaModelManager:
             if normalized.startswith(prefix):
                 return normalized.removeprefix(prefix)
         return normalized
+
+
+class OllamaBackend:
+    """Facade over OllamaClient + OllamaModelManager implementing LLMBackend.
+
+    Provides every Ollama-specific operation that the workflow layer needs,
+    keeping ``workflows.py`` free of Ollama implementation details.
+    """
+
+    def __init__(self, base_url: str) -> None:
+        self._manager = OllamaModelManager.create(base_url)
+
+    @property
+    def base_url(self) -> str:
+        """Return the normalized Ollama server URL."""
+        return self._manager.client.base_url
+
+    # -- URL helpers --------------------------------------------------------
+
+    @staticmethod
+    def normalize_url(url: str | None) -> str:
+        """Validate and normalize an Ollama base URL.
+
+        Adds ``http://`` when missing.  Raises ``RuntimeError`` when *url* is
+        ``None``.
+        """
+        if url is None:
+            raise RuntimeError("Missing Ollama URL")
+        client = OllamaClient(url)
+        return client.base_url
+
+    @staticmethod
+    def extract_service_url(details: Any) -> str | None:
+        """Return the Ollama endpoint from Vast.ai connection details.
+
+        Scans *details.service_urls* for port 11434 (Ollama default).
+        """
+        for svc in details.service_urls:
+            direct = str(svc.get("direct", ""))
+            proxy = str(svc.get("proxy", "")) if svc.get("proxy") else ""
+            if ":11434" in direct:
+                return direct
+            if ":11434" in proxy:
+                return proxy
+        return None
+
+    # -- Server / model operations -----------------------------------------
+
+    def get_model_capabilities(self, model: str) -> ModelCapabilities:
+        """Return best-effort capability metadata for the given model."""
+        return self._manager.client.get_model_capabilities(model)
+
+    def list_models(self) -> list[str]:
+        """Return model names available on this backend."""
+        return self._manager.list_available_models()
+
+    def list_running_models(self) -> list[str]:
+        """Return model names currently loaded/active on this backend."""
+        return self._manager.list_running_models()
+
+    def normalize_model_name(self, model_name: str) -> str:
+        """Normalize a provider-prefixed model name to the backend's native form."""
+        return self._manager.normalize_model_name(model_name)
+
+    def warmup(
+        self,
+        model_name: str,
+        *,
+        timeout_seconds: int = 120,
+        poll_interval_seconds: float = 2.0,
+        keep_alive: str = "30m",
+    ) -> str:
+        """Load a model and wait until it is ready. Return the resolved model name."""
+        api_model_name = self._manager.normalize_model_name(model_name)
+        debug_log(
+            f"OllamaBackend warmup: base_url={self.base_url} "
+            f"requested_model={model_name} api_model={api_model_name}"
+        )
+        with span("ollama.model.warmup", model=api_model_name):
+            return self._manager.warmup_model(
+                api_model_name,
+                timeout_seconds=timeout_seconds,
+                poll_interval_seconds=poll_interval_seconds,
+                keep_alive=keep_alive,
+                unload_others=True,
+            )

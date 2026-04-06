@@ -124,7 +124,7 @@ def test_rune_remaining_branches(monkeypatch, tmp_path):
         kwargs["on_poll"]("running")
         return result
 
-    monkeypatch.setattr(rune, "provision_vastai_ollama", fake_provision)
+    monkeypatch.setattr(rune, "provision_vastai_backend", fake_provision)
     monkeypatch.setattr(rune, "_vastai_sdk", lambda: MagicMock())
     rune._run_vastai_provisioning(template_hash="t", min_dph=1, max_dph=2, reliability=0.9)
 
@@ -136,7 +136,7 @@ def test_rune_remaining_branches(monkeypatch, tmp_path):
 
     # run-benchmark local existing server failure branch
     monkeypatch.setattr(rune, "BACKEND_MODE", "local")
-    monkeypatch.setattr(rune, "use_existing_ollama_server", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("bad-existing")))
+    monkeypatch.setattr(rune, "use_existing_backend_server", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("bad-existing")))
     kubeconfig = tmp_path / "kubeconfig"
     kubeconfig.write_text("apiVersion: v1\n")
     with pytest.raises(rune.typer.Exit):
@@ -451,8 +451,8 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
     from rune_bench.resources.existing_ollama_provider import ExistingOllamaProvider
 
     warmups = []
-    monkeypatch.setattr(_ep, "use_existing_ollama_server", lambda *_a, **_k: type("S", (), {"url": "http://existing"})())
-    monkeypatch.setattr(_ep, "warmup_existing_ollama_model", lambda *_a, **_k: warmups.append(True) or "m")
+    monkeypatch.setattr(_ep, "use_existing_backend_server", lambda *_a, **_k: type("S", (), {"url": "http://existing"})())
+    monkeypatch.setattr(_ep, "warmup_backend_model", lambda *_a, **_k: warmups.append(True) or "m")
     monkeypatch.setattr(
         api_backend,
         "_make_resource_provider_for_benchmark",
@@ -528,9 +528,9 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
     monkeypatch.setattr(workflows.OfferFinder, "find_best", lambda self, **_k: type("O", (), {"offer_id": 1, "total_vram_mb": 100})())
     monkeypatch.setattr(workflows.ModelSelector, "select", lambda self, _v: type("M", (), {"name": "m", "vram_mb": 1, "required_disk_gb": 1})())
     monkeypatch.setattr(workflows.TemplateLoader, "load", lambda self, _h: type("T", (), {"env": "E=1", "image": "img"})())
-    monkeypatch.setattr(workflows, "list_existing_ollama_models", lambda _u: ["m"])
-    monkeypatch.setattr(workflows, "list_running_ollama_models", lambda _u: ["m"])
-    monkeypatch.setattr(workflows, "normalize_ollama_model_for_api", lambda m: m)
+    monkeypatch.setattr(workflows, "list_backend_models", lambda _u: ["m"])
+    monkeypatch.setattr(workflows, "list_running_backend_models", lambda _u: ["m"])
+    monkeypatch.setattr(workflows, "normalize_backend_model_for_api", lambda m: m)
     res = workflows.provision_vastai_ollama(
         sdk=object(),
         template_hash="t",
