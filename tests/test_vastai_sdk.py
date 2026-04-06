@@ -1,5 +1,4 @@
 import pytest
-import httpx
 from rune_bench.resources.vastai.sdk import VastAI
 
 @pytest.fixture

@@ -1,7 +1,6 @@
 """Tests for agent registry and configuration validation."""
 
 import pytest
-from pathlib import Path
 from rune_bench.agents.registry import get_agent, register_agent, list_agents
 
 
@@ -43,7 +42,7 @@ def test_get_agent_crewai_openai_key(monkeypatch):
     # CrewAI might have other init requirements in tests, but we just want to ensure it passes the config resolution
     # However, CrewAIRunner takes api_key kwargs.
     try:
-        agent = get_agent("crewai")
+        _agent = get_agent("crewai")
         # CrewAI agent might not store api_key as attribute, but the initialization shouldn't raise a RuntimeError from our check
     except Exception as e:
         # Ignore other exceptions like ModuleNotFoundError or CrewAI init errors, just verify our RuntimeError isn't raised
