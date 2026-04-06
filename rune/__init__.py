@@ -47,14 +47,21 @@ from rune_bench.workflows import (
     VastAIProvisioningResult,
     DEFAULT_SPEND_THRESHOLD,
     evaluate_spend_gate,
-    list_existing_ollama_models,
-    list_running_ollama_models,
-    provision_vastai_ollama,
+    list_backend_models,
+    list_running_backend_models,
+    provision_vastai_backend,
     run_preflight_cost_check,
     stop_vastai_instance,
-    warmup_existing_ollama_model,
-    use_existing_ollama_server,
+    warmup_backend_model,
+    use_existing_backend_server,
 )
+
+# Backward-compatible aliases for renamed workflow functions.
+use_existing_ollama_server = use_existing_backend_server
+list_existing_ollama_models = list_backend_models
+list_running_ollama_models = list_running_backend_models
+warmup_existing_ollama_model = warmup_backend_model
+provision_vastai_ollama = provision_vastai_backend
 
 app = typer.Typer(help="RUNE — Reliability Use-case Numeric Evaluator", add_completion=False)
 console = Console()
@@ -465,7 +472,7 @@ def _warmup_ollama_model(*, backend_url: str, model_name: str, timeout_seconds: 
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
         progress.add_task(f"Loading Ollama model {model_name} and waiting until it is ready...", total=None)
         try:
-            warmed_model = warmup_existing_ollama_model(
+            warmed_model = warmup_backend_model(
                 backend_url,
                 model_name,
                 timeout_seconds=timeout_seconds,
@@ -492,7 +499,7 @@ def _run_vastai_provisioning(
             p.update(task, description=f"Waiting for running status: {status}")
 
         try:
-            return provision_vastai_ollama(
+            return provision_vastai_backend(
                 sdk,
                 template_hash=template_hash,
                 min_dph=min_dph,
@@ -649,7 +656,7 @@ def run_llm_instance(
 
     if not vastai:
         try:
-            server = use_existing_ollama_server(backend_url, model_name="<user-selected>")
+            server = use_existing_backend_server(backend_url, model_name="<user-selected>")
         except RuntimeError as exc:
             _print_error_and_exit(str(exc))
         _print_existing_ollama(server)
@@ -729,9 +736,9 @@ def ollama_list_models(
         return
 
     try:
-        normalized_url = use_existing_ollama_server(backend_url, model_name="<n/a>").url
-        models = list_existing_ollama_models(normalized_url)
-        running_models = set(list_running_ollama_models(normalized_url))
+        normalized_url = use_existing_backend_server(backend_url, model_name="<n/a>").url
+        models = list_backend_models(normalized_url)
+        running_models = set(list_running_backend_models(normalized_url))
     except RuntimeError as exc:
         _print_error_and_exit(str(exc))
 
@@ -1031,7 +1038,7 @@ def run_benchmark(
             )
     else:
         try:
-            server = use_existing_ollama_server(backend_url, model_name=selected_model_name)
+            server = use_existing_backend_server(backend_url, model_name=selected_model_name)
         except RuntimeError as exc:
             _print_error_and_exit(str(exc))
         console.print("\n[bold cyan]PHASE 1: Using Existing Ollama Server[/bold cyan]")

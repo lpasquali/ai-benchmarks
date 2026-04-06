@@ -18,10 +18,10 @@ from rune_bench.metrics import span  # noqa: F401 (used by workflows layer)
 from rune_bench.resources.base import LLMResourceProvider
 from rune_bench.resources.existing_ollama_provider import ExistingOllamaProvider
 from rune_bench.workflows import (
-    list_existing_ollama_models,
-    list_running_ollama_models,
-    use_existing_ollama_server,
-    warmup_existing_ollama_model,
+    list_backend_models as list_backend_models_wf,
+    list_running_backend_models,
+    use_existing_backend_server,
+    warmup_backend_model,
 )
 
 try:
@@ -107,11 +107,11 @@ def list_vastai_models() -> list[dict]:
 
 
 def list_backend_models(backend_url: str) -> dict:
-    server = use_existing_ollama_server(backend_url, model_name="<n/a>")
+    server = use_existing_backend_server(backend_url, model_name="<n/a>")
     return {
         "backend_url": server.url,
-        "models": list_existing_ollama_models(server.url),
-        "running_models": list_running_ollama_models(server.url),
+        "models": list_backend_models_wf(server.url),
+        "running_models": list_running_backend_models(server.url),
     }
 
 
@@ -127,7 +127,7 @@ def run_llm_instance(request: RunLLMInstanceRequest) -> dict:
 
 def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
     if request.backend_url and request.backend_warmup:
-        warmup_existing_ollama_model(
+        warmup_backend_model(
             request.backend_url,
             request.model,
             timeout_seconds=request.backend_warmup_timeout,

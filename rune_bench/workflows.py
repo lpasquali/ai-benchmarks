@@ -1,6 +1,8 @@
 """Application workflows used by the RUNE CLI.
 
 This module keeps orchestration/business logic out of the CLI layer.
+Generic dispatchers delegate to backend-specific implementations in
+``rune_bench/backends/``.
 """
 
 from __future__ import annotations
@@ -16,8 +18,8 @@ if TYPE_CHECKING:
 
 from .common import ModelSelector
 from .debug import debug_log
-from .metrics import span
-from rune_bench.backends.ollama import OllamaClient, OllamaModelManager
+from .metrics import span  # noqa: F401
+from rune_bench.backends.ollama import OllamaBackend
 
 try:
     from rune_bench.resources.vastai import ConnectionDetails, InstanceManager, OfferFinder, TeardownResult, TemplateLoader
@@ -82,42 +84,44 @@ class VastAIProvisioningResult:
     pull_warning: str | None = None
 
 
+# ---------------------------------------------------------------------------
+# Generic backend dispatchers
+# ---------------------------------------------------------------------------
+
 def normalize_backend_url(backend_url: str | None) -> str:
-    """Validate and normalize an Ollama base URL.
+    """Validate and normalize a backend base URL.
 
-    Adds ``http://`` when missing. This is a convenience wrapper that delegates
-    to OllamaClient's normalization logic.
+    Delegates to :meth:`OllamaBackend.normalize_url`.
     """
-    if backend_url is None:
-        raise RuntimeError("Missing Ollama URL")
-    client = OllamaClient(backend_url)
-    return client.base_url
+    return OllamaBackend.normalize_url(backend_url)
 
 
-def use_existing_ollama_server(backend_url: str | None, model_name: str) -> ExistingOllamaServer:
-    """Resolve an existing Ollama server target."""
+def use_existing_backend_server(backend_url: str | None, model_name: str) -> ExistingOllamaServer:
+    """Resolve an existing backend server target."""
     return ExistingOllamaServer(url=normalize_backend_url(backend_url), model_name=model_name)
 
 
-def list_existing_ollama_models(backend_url: str | None) -> list[str]:
-    """Return available model names from an existing Ollama server."""
-    manager = OllamaModelManager.create(normalize_backend_url(backend_url))
-    return manager.list_available_models()
+def list_backend_models(backend_url: str | None) -> list[str]:
+    """Return available model names from an existing backend server."""
+    url = normalize_backend_url(backend_url)
+    backend = OllamaBackend(url)
+    return backend.list_models()
 
 
-def list_running_ollama_models(backend_url: str | None) -> list[str]:
-    """Return model names currently loaded in memory on an existing Ollama server."""
-    manager = OllamaModelManager.create(normalize_backend_url(backend_url))
-    return manager.list_running_models()
+def list_running_backend_models(backend_url: str | None) -> list[str]:
+    """Return model names currently loaded in memory on an existing backend server."""
+    url = normalize_backend_url(backend_url)
+    backend = OllamaBackend(url)
+    return backend.list_running_models()
 
 
-def normalize_ollama_model_for_api(model_name: str) -> str:
-    """Convert provider-prefixed model identifiers into plain Ollama model names."""
-    manager = OllamaModelManager.create("http://localhost:11434")  # URL not used for normalization
-    return manager.normalize_model_name(model_name)
+def normalize_backend_model_for_api(model_name: str) -> str:
+    """Convert provider-prefixed model identifiers into plain backend model names."""
+    backend = OllamaBackend("http://localhost:11434")  # URL not used for normalization
+    return backend.normalize_model_name(model_name)
 
 
-def warmup_existing_ollama_model(
+def warmup_backend_model(
     backend_url: str | None,
     model_name: str,
     *,
@@ -125,26 +129,32 @@ def warmup_existing_ollama_model(
     poll_interval_seconds: float = 2.0,
     keep_alive: str = "30m",
 ) -> str:
-    """Load a model into an existing Ollama server and wait until it is running."""
-    normalized_url = normalize_backend_url(backend_url)
-    manager = OllamaModelManager.create(normalized_url)
-    api_model_name = manager.normalize_model_name(model_name)
-    debug_log(
-        f"Workflow warmup: backend_url={normalized_url} requested_model={model_name} api_model={api_model_name}"
+    """Load a model into an existing backend server and wait until it is running."""
+    url = normalize_backend_url(backend_url)
+    backend = OllamaBackend(url)
+    return backend.warmup(
+        model_name,
+        timeout_seconds=timeout_seconds,
+        poll_interval_seconds=poll_interval_seconds,
+        keep_alive=keep_alive,
     )
 
-    with span("ollama.model.warmup", model=api_model_name):
-        return manager.warmup_model(
-            api_model_name,
-            timeout_seconds=timeout_seconds,
-            poll_interval_seconds=poll_interval_seconds,
-            keep_alive=keep_alive,
-            unload_others=True,
-        )
+
+# -- Backward-compatible aliases -------------------------------------------
+# These preserve import compatibility for any callsite still using the old
+# Ollama-specific names.  They will be removed in a future release.
+use_existing_ollama_server = use_existing_backend_server
+list_existing_ollama_models = list_backend_models
+list_running_ollama_models = list_running_backend_models
+normalize_ollama_model_for_api = normalize_backend_model_for_api
+warmup_existing_ollama_model = warmup_backend_model
 
 
+# ---------------------------------------------------------------------------
+# Vast.ai provisioning workflow
+# ---------------------------------------------------------------------------
 
-def provision_vastai_ollama(
+def provision_vastai_backend(
     sdk: VastAI,
     *,
     template_hash: str,
@@ -154,7 +164,7 @@ def provision_vastai_ollama(
     confirm_create: Callable[[], bool],
     on_poll: Callable[[str], None] | None = None,
 ) -> VastAIProvisioningResult:
-    """Run the full Vast.ai + Ollama provisioning workflow.
+    """Run the full Vast.ai + backend provisioning workflow.
 
     Reuses an already-running matching instance when possible; otherwise provisions a new one.
     Ensures the selected model is present and warmed up before returning.
@@ -211,8 +221,8 @@ def provision_vastai_ollama(
         offer_id = offer.offer_id
 
     details = InstanceManager.build_connection_details(contract_id, instance_info)
-    backend_url = _extract_ollama_service_url(details)
-    debug_log(f"Workflow detected Ollama URL: {backend_url or '<missing>'}")
+    backend_url = OllamaBackend.extract_service_url(details)
+    debug_log(f"Workflow detected backend URL: {backend_url or '<missing>'}")
 
     pull_warning = None
     try:
@@ -221,11 +231,11 @@ def provision_vastai_ollama(
                 "Could not determine Ollama URL from instance service mappings (port 11434 missing)."
             )
 
-        available = set(list_existing_ollama_models(backend_url))
-        running = set(list_running_ollama_models(backend_url))
-        api_model = normalize_ollama_model_for_api(selected_model.name)
+        available = set(list_backend_models(backend_url))
+        running = set(list_running_backend_models(backend_url))
+        api_model = normalize_backend_model_for_api(selected_model.name)
         debug_log(
-            f"Workflow Ollama state: available={sorted(available)} running={sorted(running)} selected={api_model}"
+            f"Workflow backend state: available={sorted(available)} running={sorted(running)} selected={api_model}"
         )
 
         if api_model not in running:
@@ -233,7 +243,7 @@ def provision_vastai_ollama(
                 with span("vastai.model.pull", model=selected_model.name):
                     manager.pull_model(contract_id, selected_model.name, backend_url=backend_url)
 
-            warmup_existing_ollama_model(
+            warmup_backend_model(
                 backend_url,
                 selected_model.name,
                 timeout_seconds=120,
@@ -254,6 +264,10 @@ def provision_vastai_ollama(
         reused_existing_instance=reused_existing_instance,
         pull_warning=pull_warning,
     )
+
+
+# Backward-compatible alias
+provision_vastai_ollama = provision_vastai_backend
 
 
 def stop_vastai_instance(sdk: VastAI, contract_id: int | str) -> TeardownResult:
@@ -298,12 +312,7 @@ def run_preflight_cost_check(
     response = asyncio.run(estimator.estimate(cost_req))
     return response.to_dict()
 
+
 def _extract_ollama_service_url(details: ConnectionDetails) -> str | None:
-    for svc in details.service_urls:
-        direct = str(svc.get("direct", ""))
-        proxy = str(svc.get("proxy", "")) if svc.get("proxy") else ""
-        if ":11434" in direct:
-            return direct
-        if ":11434" in proxy:
-            return proxy
-    return None
+    """Backward-compatible alias for :meth:`OllamaBackend.extract_service_url`."""
+    return OllamaBackend.extract_service_url(details)
