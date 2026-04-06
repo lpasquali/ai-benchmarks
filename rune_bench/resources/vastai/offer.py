@@ -6,7 +6,7 @@ reliability constraints, ordered by descending VRAM / DL perf.
 
 from dataclasses import dataclass
 
-from vastai import VastAI  # type: ignore[import-untyped]  # Reason: vastai SDK does not provide type hints
+from vastai import VastAI  # type: ignore[import-untyped, import-not-found]  # Reason: vastai SDK does not provide type hints
 
 from rune_bench.debug import debug_log
 
