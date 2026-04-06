@@ -25,7 +25,7 @@ from rune_bench.workflows import (
 )
 
 try:
-    from vastai import VastAI
+    from vastai import VastAI  # type: ignore[import-untyped, import-not-found]  # Reason: vastai SDK does not provide type hints
 except ImportError:
     VastAI = None  # type: ignore[assignment,misc]
 
