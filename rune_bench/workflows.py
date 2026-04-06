@@ -12,7 +12,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
-    from vastai import VastAI  # type: ignore[import-untyped]  # Reason: vastai SDK does not provide type hints
+    from vastai import VastAI  # type: ignore[import-untyped, import-not-found]  # Reason: vastai SDK does not provide type hints
 
 from .common import ModelSelector
 from .debug import debug_log
