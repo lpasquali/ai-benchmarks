@@ -9,13 +9,14 @@ from pathlib import Path
 
 
 @dataclass(frozen=True)
-class RunOllamaInstanceRequest:
+class RunLLMInstanceRequest:
     vastai: bool
     template_hash: str
     min_dph: float
     max_dph: float
     reliability: float
-    ollama_url: str | None
+    backend_url: str | None
+    backend_type: str = "ollama"
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -25,9 +26,10 @@ class RunOllamaInstanceRequest:
 class RunAgenticAgentRequest:
     question: str
     model: str
-    ollama_url: str | None
-    ollama_warmup: bool
-    ollama_warmup_timeout: int
+    backend_url: str | None
+    backend_warmup: bool
+    backend_warmup_timeout: int
+    backend_type: str = "ollama"
     kubeconfig: str | None = None
     agent: str = "holmes"
 
@@ -37,18 +39,20 @@ class RunAgenticAgentRequest:
         *,
         question: str,
         model: str,
-        ollama_url: str | None,
-        ollama_warmup: bool,
-        ollama_warmup_timeout: int,
+        backend_url: str | None,
+        backend_warmup: bool,
+        backend_warmup_timeout: int,
         kubeconfig: Path | None = None,
         agent: str = "holmes",
+        backend_type: str = "ollama",
     ) -> "RunAgenticAgentRequest":
         return cls(
             question=question,
             model=model,
-            ollama_url=ollama_url,
-            ollama_warmup=ollama_warmup,
-            ollama_warmup_timeout=ollama_warmup_timeout,
+            backend_url=backend_url,
+            backend_warmup=backend_warmup,
+            backend_warmup_timeout=backend_warmup_timeout,
+            backend_type=backend_type,
             kubeconfig=str(kubeconfig) if kubeconfig is not None else None,
             agent=agent,
         )
@@ -64,14 +68,15 @@ class RunBenchmarkRequest:
     min_dph: float
     max_dph: float
     reliability: float
-    ollama_url: str | None
+    backend_url: str | None
     question: str
     model: str
-    ollama_warmup: bool
-    ollama_warmup_timeout: int
+    backend_warmup: bool
+    backend_warmup_timeout: int
     kubeconfig: str
     vastai_stop_instance: bool
     attestation_required: bool = False
+    backend_type: str = "ollama"
 
     @classmethod
     def from_cli(
@@ -82,14 +87,15 @@ class RunBenchmarkRequest:
         min_dph: float,
         max_dph: float,
         reliability: float,
-        ollama_url: str | None,
+        backend_url: str | None,
         question: str,
         model: str,
-        ollama_warmup: bool,
-        ollama_warmup_timeout: int,
+        backend_warmup: bool,
+        backend_warmup_timeout: int,
         kubeconfig: Path,
         vastai_stop_instance: bool,
         attestation_required: bool = False,
+        backend_type: str = "ollama",
     ) -> "RunBenchmarkRequest":
         return cls(
             vastai=vastai,
@@ -97,14 +103,15 @@ class RunBenchmarkRequest:
             min_dph=min_dph,
             max_dph=max_dph,
             reliability=reliability,
-            ollama_url=ollama_url,
+            backend_url=backend_url,
             question=question,
             model=model,
-            ollama_warmup=ollama_warmup,
-            ollama_warmup_timeout=ollama_warmup_timeout,
+            backend_warmup=backend_warmup,
+            backend_warmup_timeout=backend_warmup_timeout,
             kubeconfig=str(kubeconfig),
             vastai_stop_instance=vastai_stop_instance,
             attestation_required=attestation_required,
+            backend_type=backend_type,
         )
 
     def to_dict(self) -> dict:

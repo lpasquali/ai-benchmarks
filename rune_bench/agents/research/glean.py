@@ -15,7 +15,7 @@ Implementation notes:
     POST /chat            # agentic chat with internal knowledge
             body: { messages: [{role, content}], stream: false }
 - The `question` maps to the chat message content.
-- `model` and `ollama_url` are not used (Glean uses its own hosted model).
+- `model` and `backend_url` are not used (Glean uses its own hosted model).
 """
 
 from rune_bench.drivers.glean import GleanDriverClient

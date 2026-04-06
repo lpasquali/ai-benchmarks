@@ -25,7 +25,7 @@ def rune_api_server(tmp_path):
         backend_functions={
             "agentic-agent": run_agentic,
             "benchmark": lambda request: {"answer": "bench"},
-            "ollama-instance": lambda request: {"mode": "existing", "ollama_url": request.ollama_url},
+            "ollama-instance": lambda request: {"mode": "existing", "backend_url": request.backend_url},
         },
     )
 
@@ -68,9 +68,9 @@ def test_api_server_enforces_tenant_scoping_and_idempotency(rune_api_server):
     request_payload = {
         "question": "What is unhealthy?",
         "model": "llama3.1:8b",
-        "ollama_url": None,
-        "ollama_warmup": False,
-        "ollama_warmup_timeout": 1,
+        "backend_url": None,
+        "backend_warmup": False,
+        "backend_warmup_timeout": 1,
         "kubeconfig": "/tmp/config",  # nosec  # test artifact paths
     }
 

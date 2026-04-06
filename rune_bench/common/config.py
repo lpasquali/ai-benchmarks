@@ -44,10 +44,11 @@ _FIELD_ENV_MAP: dict[str, str] = {
     "min_dph": "RUNE_VASTAI_MIN_DPH",
     "reliability": "RUNE_VASTAI_RELIABILITY",
     "vastai_stop_instance": "RUNE_VASTAI_STOP_INSTANCE",
-    # Ollama
-    "ollama_url": "RUNE_OLLAMA_URL",
-    "ollama_warmup": "RUNE_OLLAMA_WARMUP",
-    "ollama_warmup_timeout": "RUNE_OLLAMA_WARMUP_TIMEOUT",
+    # LLM Backend
+    "backend_type": "RUNE_BACKEND_TYPE",
+    "backend_url": "RUNE_BACKEND_URL",
+    "backend_warmup": "RUNE_BACKEND_WARMUP",
+    "backend_warmup_timeout": "RUNE_BACKEND_WARMUP_TIMEOUT",
     # Benchmark
     "question": "RUNE_QUESTION",
     "model": "RUNE_MODEL",
@@ -93,9 +94,10 @@ defaults:
   # Execution backend (local | http)
   backend: local
 
-  # Ollama settings
-  ollama_warmup: true
-  ollama_warmup_timeout: 300
+  # LLM Backend settings
+  backend_type: ollama
+  backend_warmup: true
+  backend_warmup_timeout: 300
 
   # Vast.ai settings
   vastai: false
@@ -108,30 +110,30 @@ profiles:
     min_dph: 2.3
     max_dph: 3.0
     reliability: 0.99
-    ollama_warmup: true
+    backend_warmup: true
 
   staging:
     vastai: true
     min_dph: 1.0
     max_dph: 2.0
     reliability: 0.95
-    ollama_warmup: true
+    backend_warmup: true
 
   local:
     vastai: false
-    ollama_url: http://localhost:11434
-    ollama_warmup: false
+    backend_url: http://localhost:11434
+    backend_warmup: false
 
   ci:
     backend: http
     api_base_url: http://rune-api:8080
     vastai: false
-    ollama_warmup: false
+    backend_warmup: false
 
   test:
     vastai: false
-    ollama_url: http://localhost:11434
-    ollama_warmup: false
+    backend_url: http://localhost:11434
+    backend_warmup: false
     model: llama3.1:8b
 
 # Attestation settings (TPM 2.0 hardware PCR verification).

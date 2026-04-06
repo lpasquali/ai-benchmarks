@@ -16,7 +16,7 @@ Implementation notes:
     GET  /reviews/{id}        poll until status == "complete"
     Returns: { summary, risk_flags: list, suggested_redlines: list }
 - `question` maps to the contract text or review instruction.
-- `model` and `ollama_url` are not used (Spellbook uses GPT-4 backend).
+- `model` and `backend_url` are not used (Spellbook uses GPT-4 backend).
 """
 
 
@@ -26,7 +26,7 @@ class SpellbookRunner:
     def __init__(self) -> None:
         pass
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Submit a contract to Spellbook for review and return the risk analysis."""
         raise NotImplementedError(
             "SpellbookRunner is not yet implemented. "

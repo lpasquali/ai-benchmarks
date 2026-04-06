@@ -12,7 +12,7 @@ Implementation notes:
 - Approach: Submit a research question; Elicit searches academic databases,
             extracts structured data from papers, and returns a synthesis.
 - The `question` maps to the research search query.
-- `model` and `ollama_url` are passed through but not used by Elicit.
+- `model` and `backend_url` are passed through but not used by Elicit.
 """
 
 from rune_bench.drivers.elicit import ElicitDriverClient

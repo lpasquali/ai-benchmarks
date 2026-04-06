@@ -11,7 +11,7 @@ Wire protocol (v1):
 Supported actions
 -----------------
 ask
-    params: question (str), model (str), ollama_url (str, optional)
+    params: question (str), model (str), backend_url (str, optional)
     result: {"answer": str, "risk_score": float, "vulnerabilities": list}
 
 info
@@ -20,7 +20,7 @@ info
 
 .. note::
 
-    ``ollama_url`` in this driver refers to the model endpoint being **attacked**
+    ``backend_url`` in this driver refers to the model endpoint being **attacked**
     (the target under test), NOT a backend LLM.  Mindgard tests YOUR models for
     vulnerabilities such as jailbreaks, prompt injection, and data extraction.
 """
@@ -43,12 +43,12 @@ def _handle_ask(params: dict) -> dict:
 
     .. note::
 
-        ``ollama_url`` here is the model endpoint being **attacked**, not
+        ``backend_url`` here is the model endpoint being **attacked**, not
         a backend LLM.  Mindgard tests the target model for vulnerabilities.
     """
     model: str = params["model"]
     question: str = params.get("question", "")
-    ollama_url: str | None = params.get("ollama_url")
+    backend_url: str | None = params.get("backend_url")
 
     api_key = os.environ.get("RUNE_MINDGARD_API_KEY", "")
     if not api_key:
@@ -65,7 +65,7 @@ def _handle_ask(params: dict) -> dict:
 
     from rune_bench.common.http_client import normalize_url  # local import avoids circular dep
 
-    base = normalize_url(ollama_url, "Mindgard target") if ollama_url else "http://localhost:11434"
+    base = normalize_url(backend_url, "Mindgard target") if backend_url else "http://localhost:11434"
     target_url = f"{base.rstrip('/')}/v1"
 
     cmd: list[str] = [

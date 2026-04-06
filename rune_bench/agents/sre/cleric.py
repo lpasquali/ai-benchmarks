@@ -16,7 +16,7 @@ Implementation notes:
     from cleric import Cleric
     agent = Cleric(kubeconfig=str(kubeconfig))
     result = agent.investigate(question)
-- The `model` and `ollama_url` may need to be injected via env vars:
+- The `model` and `backend_url` may need to be injected via env vars:
     CLERIC_MODEL, CLERIC_OLLAMA_BASE_URL
 """
 
@@ -31,7 +31,7 @@ class ClericRunner:
             raise FileNotFoundError(f"kubeconfig not found: {kubeconfig}")
         self._kubeconfig = kubeconfig
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Run a Cleric parallel investigation and return the findings."""
         raise NotImplementedError(
             "ClericRunner is not yet implemented. "

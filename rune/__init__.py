@@ -26,7 +26,7 @@ from rune_bench.api_client import RuneApiClient
 from rune_bench.api_contracts import (
     RunAgenticAgentRequest,
     RunBenchmarkRequest,
-    RunOllamaInstanceRequest,
+    RunLLMInstanceRequest,
 )
 from rune_bench.common import (
     INIT_TEMPLATE,
@@ -177,6 +177,32 @@ def _enable_debug_if_requested(debug: bool) -> None:
         set_debug(True)
 
 
+_SUPPORTED_BACKEND_TYPES = {"ollama"}
+
+
+def _resolve_backend_type(backend_type: str | None = None) -> str:
+    """Return the effective LLM backend type.
+
+    Resolution order:
+      1. Explicit *backend_type* argument (from CLI flag).
+      2. ``RUNE_BACKEND_TYPE`` environment variable.
+      3. Default: ``"ollama"``.
+
+    Raises ``RuntimeError`` if the resolved value is not a recognised backend.
+    """
+    resolved = (
+        backend_type
+        or os.environ.get("RUNE_BACKEND_TYPE", "").strip()
+        or "ollama"
+    )
+    if resolved not in _SUPPORTED_BACKEND_TYPES:
+        raise RuntimeError(
+            f"Unsupported backend_type '{resolved}'. "
+            f"Supported: {sorted(_SUPPORTED_BACKEND_TYPES)}"
+        )
+    return resolved
+
+
 def _confirm_instance_creation() -> bool:
     console.print()
     ack = console.input(
@@ -185,11 +211,11 @@ def _confirm_instance_creation() -> bool:
     return ack == "yes"
 
 
-def _fetch_model_capabilities(ollama_url: str, model: str) -> OllamaModelCapabilities | None:
+def _fetch_model_capabilities(backend_url: str, model: str) -> OllamaModelCapabilities | None:
     """Try to fetch model capabilities from Ollama; return None on any failure."""
     try:
-        normalized = OllamaModelManager.create(ollama_url).normalize_model_name(model)
-        return OllamaClient(ollama_url).get_model_capabilities(normalized)
+        normalized = OllamaModelManager.create(backend_url).normalize_model_name(model)
+        return OllamaClient(backend_url).get_model_capabilities(normalized)
     except RuntimeError:
         return None
 
@@ -264,8 +290,8 @@ def _print_vastai_result(result: VastAIProvisioningResult, capabilities: OllamaM
     console.print(table)
     console.print("\n[dim]Monitor with: python -m vastai show instances[/dim]")
 
-    if result.ollama_url:
-        console.print(f"[dim]Detected Ollama endpoint:[/dim] {result.ollama_url}")
+    if result.backend_url:
+        console.print(f"[dim]Detected Ollama endpoint:[/dim] {result.backend_url}")
 
     if result.pull_warning:
         console.print(f"[orange1]Warning:[/orange1] {result.pull_warning}")
@@ -283,17 +309,17 @@ def _print_vastai_models() -> None:
     console.print(table)
 
 
-def _print_ollama_models(ollama_url: str, models: list[str], running_models: set[str]) -> None:
+def _print_ollama_models(backend_url: str, models: list[str], running_models: set[str]) -> None:
     table = Table(title="Existing Ollama Models", show_header=True, header_style="bold magenta")
     table.add_column("Ollama URL")
     table.add_column("Model")
     table.add_column("Running")
 
     if not models:
-        table.add_row(ollama_url, "<no models found>", "n/a")
+        table.add_row(backend_url, "<no models found>", "n/a")
     else:
         for index, model in enumerate(models):
-            table.add_row(ollama_url if index == 0 else "", model, "yes" if model in running_models else "no")
+            table.add_row(backend_url if index == 0 else "", model, "yes" if model in running_models else "no")
 
     console.print(table)
 
@@ -435,12 +461,12 @@ def _print_metrics_summary(collector: InMemoryCollector) -> None:
     console.print(table)
 
 
-def _warmup_ollama_model(*, ollama_url: str, model_name: str, timeout_seconds: int) -> None:
+def _warmup_ollama_model(*, backend_url: str, model_name: str, timeout_seconds: int) -> None:
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
         progress.add_task(f"Loading Ollama model {model_name} and waiting until it is ready...", total=None)
         try:
             warmed_model = warmup_existing_ollama_model(
-                ollama_url,
+                backend_url,
                 model_name,
                 timeout_seconds=timeout_seconds,
             )
@@ -525,8 +551,8 @@ def serve_api(
         _print_error_and_exit(f"Server error: {exc}")
 
 
-@app.command("run-ollama-instance")
-def run_ollama_instance(
+@app.command("run-llm-instance")
+def run_llm_instance(
     debug: bool = typer.Option(
         False,
         "--debug",
@@ -548,10 +574,10 @@ def run_ollama_instance(
     max_dph: float = typer.Option(3.0, "--vastai-max-dph", envvar="RUNE_VASTAI_MAX_DPH", help="Maximum dollars per hour"),
     min_dph: float = typer.Option(2.3, "--vastai-min-dph", envvar="RUNE_VASTAI_MIN_DPH", help="Minimum dollars per hour"),
     reliability: float = typer.Option(0.99, "--vastai-reliability", envvar="RUNE_VASTAI_RELIABILITY", help="Minimum reliability score"),
-    ollama_url: str | None = typer.Option(
+    backend_url: str | None = typer.Option(
         None,
-        "--ollama-url",
-        envvar="RUNE_OLLAMA_URL",
+        "--backend-url",
+        envvar="RUNE_BACKEND_URL",
         help="Use an already running Ollama server URL when --vastai is not enabled",
     ),
     idempotency_key: str | None = typer.Option(
@@ -570,13 +596,13 @@ def run_ollama_instance(
 ) -> None:
     """Provision an Ollama instance on Vast.ai, or use an existing server."""
     _enable_debug_if_requested(debug)
-    _request = RunOllamaInstanceRequest(
+    _request = RunLLMInstanceRequest(
         vastai=vastai,
         template_hash=template_hash,
         min_dph=min_dph,
         max_dph=max_dph,
         reliability=reliability,
-        ollama_url=ollama_url,
+        backend_url=backend_url,
     )
     console.print(Panel.fit("[bold blue]RUNE — Reliability Use-case Numeric Evaluator[/bold blue]"))
 
@@ -607,15 +633,15 @@ def run_ollama_instance(
         mode = http_result.get("mode")
         if mode == "existing":
             server = ExistingOllamaServer(
-                url=str(http_result.get("ollama_url", ollama_url or "")),
+                url=str(http_result.get("backend_url", backend_url or "")),
                 model_name="<user-selected>",
             )
             _print_existing_ollama(server)
             return
         if mode == "vastai":
             console.print(f"[green]Provisioned contract:[/green] {http_result.get('contract_id')}")
-            if http_result.get("ollama_url"):
-                console.print(f"[dim]Detected Ollama endpoint:[/dim] {http_result.get('ollama_url')}")
+            if http_result.get("backend_url"):
+                console.print(f"[dim]Detected Ollama endpoint:[/dim] {http_result.get('backend_url')}")
             if http_result.get("model_name"):
                 console.print(f"[green]Selected model:[/green] {http_result.get('model_name')}")
             return
@@ -623,7 +649,7 @@ def run_ollama_instance(
 
     if not vastai:
         try:
-            server = use_existing_ollama_server(ollama_url, model_name="<user-selected>")
+            server = use_existing_ollama_server(backend_url, model_name="<user-selected>")
         except RuntimeError as exc:
             _print_error_and_exit(str(exc))
         _print_existing_ollama(server)
@@ -679,10 +705,10 @@ def ollama_list_models(
         envvar="RUNE_DEBUG",
         help="Show outbound client requests and API calls",
     ),
-    ollama_url: str = typer.Option(
+    backend_url: str = typer.Option(
         ...,
-        "--ollama-url",
-        envvar="RUNE_OLLAMA_URL",
+        "--backend-url",
+        envvar="RUNE_BACKEND_URL",
         help="Ollama server URL to query for available models",
     ),
 ) -> None:
@@ -692,8 +718,8 @@ def ollama_list_models(
 
     if BACKEND_MODE == "http":
         try:
-            payload = _http_client().get_ollama_models(ollama_url)
-            normalized_url = str(payload.get("ollama_url", ollama_url))
+            payload = _http_client().get_ollama_models(backend_url)
+            normalized_url = str(payload.get("backend_url", backend_url))
             models = [str(m) for m in payload.get("models", [])]
             running_models = {str(m) for m in payload.get("running_models", [])}
         except RuntimeError as exc:
@@ -703,7 +729,7 @@ def ollama_list_models(
         return
 
     try:
-        normalized_url = use_existing_ollama_server(ollama_url, model_name="<n/a>").url
+        normalized_url = use_existing_ollama_server(backend_url, model_name="<n/a>").url
         models = list_existing_ollama_models(normalized_url)
         running_models = set(list_running_ollama_models(normalized_url))
     except RuntimeError as exc:
@@ -734,22 +760,22 @@ def run_agentic_agent(
         envvar="RUNE_MODEL",
         help="Model to use for the agent",
     ),
-    ollama_url: str | None = typer.Option(
+    backend_url: str | None = typer.Option(
         None,
-        "--ollama-url",
-        envvar="RUNE_OLLAMA_URL",
+        "--backend-url",
+        envvar="RUNE_BACKEND_URL",
         help="Ollama server URL (used for Ollama-backed models)",
     ),
-    ollama_warmup: bool = typer.Option(
+    backend_warmup: bool = typer.Option(
         True,
-        "--ollama-warmup/--no-ollama-warmup",
-        envvar="RUNE_OLLAMA_WARMUP",
+        "--backend-warmup/--no-backend-warmup",
+        envvar="RUNE_BACKEND_WARMUP",
         help="Load the selected model into the Ollama server before starting the agent",
     ),
-    ollama_warmup_timeout: int = typer.Option(
+    backend_warmup_timeout: int = typer.Option(
         90,
-        "--ollama-warmup-timeout",
-        envvar="RUNE_OLLAMA_WARMUP_TIMEOUT",
+        "--backend-warmup-timeout",
+        envvar="RUNE_BACKEND_WARMUP_TIMEOUT",
         min=1,
         help="Seconds to wait for the Ollama model to become ready",
     ),
@@ -771,9 +797,9 @@ def run_agentic_agent(
     _request = RunAgenticAgentRequest.from_cli(
         question=question,
         model=model,
-        ollama_url=ollama_url,
-        ollama_warmup=ollama_warmup,
-        ollama_warmup_timeout=ollama_warmup_timeout,
+        backend_url=backend_url,
+        backend_warmup=backend_warmup,
+        backend_warmup_timeout=backend_warmup_timeout,
         kubeconfig=kubeconfig,
     )
     console.print(Panel.fit("[bold blue]RUNE — Agentic Agent Runner[/bold blue]"))
@@ -806,11 +832,11 @@ def run_agentic_agent(
     _cli_metrics = InMemoryCollector()
     set_collector(_cli_metrics)
 
-    if ollama_url and ollama_warmup:
+    if backend_url and backend_warmup:
         _warmup_ollama_model(
-            ollama_url=ollama_url,
+            backend_url=backend_url,
             model_name=model,
-            timeout_seconds=ollama_warmup_timeout,
+            timeout_seconds=backend_warmup_timeout,
         )
 
     # Block 10 — Run agentic agent
@@ -818,7 +844,7 @@ def run_agentic_agent(
         from rune_bench.metrics import span as _span
         runner = get_agent("holmes", kubeconfig=kubeconfig)
         with _span("agent.ask", model=model, backend="existing"):
-            answer = runner.ask(question=question, model=model, ollama_url=ollama_url)
+            answer = runner.ask(question=question, model=model, backend_url=backend_url)
     except (FileNotFoundError, RuntimeError) as exc:
         console.print(f"[red]Agent error:[/red] {exc}")
         raise typer.Exit(1)
@@ -852,10 +878,10 @@ def run_benchmark(
     max_dph: float = typer.Option(3.0, "--vastai-max-dph", envvar="RUNE_VASTAI_MAX_DPH", help="Maximum dollars per hour"),
     min_dph: float = typer.Option(2.3, "--vastai-min-dph", envvar="RUNE_VASTAI_MIN_DPH", help="Minimum dollars per hour"),
     reliability: float = typer.Option(0.99, "--vastai-reliability", envvar="RUNE_VASTAI_RELIABILITY", help="Minimum reliability score"),
-    ollama_url: str | None = typer.Option(
+    backend_url: str | None = typer.Option(
         None,
-        "--ollama-url",
-        envvar="RUNE_OLLAMA_URL",
+        "--backend-url",
+        envvar="RUNE_BACKEND_URL",
         help="Existing Ollama server URL when --vastai is not enabled",
     ),
     question: str = typer.Option(
@@ -872,16 +898,16 @@ def run_benchmark(
         envvar="RUNE_MODEL",
         help="Model to use for the agent when --vastai is not enabled",
     ),
-    ollama_warmup: bool = typer.Option(
+    backend_warmup: bool = typer.Option(
         True,
-        "--ollama-warmup/--no-ollama-warmup",
-        envvar="RUNE_OLLAMA_WARMUP",
-        help="Load the selected model into the Ollama server before the agent starts when using --ollama-url",
+        "--backend-warmup/--no-backend-warmup",
+        envvar="RUNE_BACKEND_WARMUP",
+        help="Load the selected model into the Ollama server before the agent starts when using --backend-url",
     ),
-    ollama_warmup_timeout: int = typer.Option(
+    backend_warmup_timeout: int = typer.Option(
         90,
-        "--ollama-warmup-timeout",
-        envvar="RUNE_OLLAMA_WARMUP_TIMEOUT",
+        "--backend-warmup-timeout",
+        envvar="RUNE_BACKEND_WARMUP_TIMEOUT",
         min=1,
         help="Seconds to wait for the Ollama model to become ready",
     ),
@@ -919,11 +945,11 @@ def run_benchmark(
         min_dph=min_dph,
         max_dph=max_dph,
         reliability=reliability,
-        ollama_url=ollama_url,
+        backend_url=backend_url,
         question=question,
         model=model,
-        ollama_warmup=ollama_warmup,
-        ollama_warmup_timeout=ollama_warmup_timeout,
+        backend_warmup=backend_warmup,
+        backend_warmup_timeout=backend_warmup_timeout,
         kubeconfig=kubeconfig,
         vastai_stop_instance=vastai_stop_instance,
     )
@@ -964,7 +990,7 @@ def run_benchmark(
     _cli_metrics = InMemoryCollector()
     set_collector(_cli_metrics)
     selected_model_name = model
-    selected_ollama_url = ollama_url
+    selected_backend_url = backend_url
     vastai_contract_to_stop: int | str | None = None
 
     if vastai:
@@ -976,13 +1002,13 @@ def run_benchmark(
             reliability=reliability,
         )
         selected_model_name = result.model_name
-        selected_ollama_url = result.ollama_url
+        selected_backend_url = result.backend_url
         vastai_contract_to_stop = result.contract_id
-        vastai_capabilities = _fetch_model_capabilities(result.ollama_url, selected_model_name) if result.ollama_url else None
+        vastai_capabilities = _fetch_model_capabilities(result.backend_url, selected_model_name) if result.backend_url else None
         if vastai_capabilities:
             _apply_model_limits(vastai_capabilities)
         _print_vastai_result(result, capabilities=vastai_capabilities)
-        if not selected_ollama_url:
+        if not selected_backend_url:
             if vastai_stop_instance and vastai_contract_to_stop is not None:
                 try:
                     teardown = stop_vastai_instance(_vastai_sdk(), vastai_contract_to_stop)
@@ -1005,7 +1031,7 @@ def run_benchmark(
             )
     else:
         try:
-            server = use_existing_ollama_server(ollama_url, model_name=selected_model_name)
+            server = use_existing_ollama_server(backend_url, model_name=selected_model_name)
         except RuntimeError as exc:
             _print_error_and_exit(str(exc))
         console.print("\n[bold cyan]PHASE 1: Using Existing Ollama Server[/bold cyan]")
@@ -1013,16 +1039,16 @@ def run_benchmark(
         if capabilities:
             _apply_model_limits(capabilities)
         _print_existing_ollama(server, capabilities=capabilities)
-        selected_ollama_url = server.url
+        selected_backend_url = server.url
 
     # ========== PHASE 2: Agentic Agent Execution ==========
     console.print("\n[bold cyan]PHASE 2: Running Agentic Agent[/bold cyan]")
 
-    if selected_ollama_url and ollama_warmup:
+    if selected_backend_url and backend_warmup:
         _warmup_ollama_model(
-            ollama_url=selected_ollama_url,
+            backend_url=selected_backend_url,
             model_name=selected_model_name,
-            timeout_seconds=ollama_warmup_timeout,
+            timeout_seconds=backend_warmup_timeout,
         )
 
     # Block 10 — Run agentic agent
@@ -1031,7 +1057,7 @@ def run_benchmark(
         answer = runner.ask(
             question=question,
             model=selected_model_name,
-            ollama_url=selected_ollama_url,
+            backend_url=selected_backend_url,
         )
     except (FileNotFoundError, RuntimeError) as exc:
         console.print(f"[red]Agent error:[/red] {exc}")

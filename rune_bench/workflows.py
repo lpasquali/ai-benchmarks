@@ -77,37 +77,37 @@ class VastAIProvisioningResult:
     template_env: str
     contract_id: int | str
     details: ConnectionDetails
-    ollama_url: str | None = None
+    backend_url: str | None = None
     reused_existing_instance: bool = False
     pull_warning: str | None = None
 
 
-def normalize_ollama_url(ollama_url: str | None) -> str:
+def normalize_backend_url(backend_url: str | None) -> str:
     """Validate and normalize an Ollama base URL.
 
     Adds ``http://`` when missing. This is a convenience wrapper that delegates
     to OllamaClient's normalization logic.
     """
-    if ollama_url is None:
+    if backend_url is None:
         raise RuntimeError("Missing Ollama URL")
-    client = OllamaClient(ollama_url)
+    client = OllamaClient(backend_url)
     return client.base_url
 
 
-def use_existing_ollama_server(ollama_url: str | None, model_name: str) -> ExistingOllamaServer:
+def use_existing_ollama_server(backend_url: str | None, model_name: str) -> ExistingOllamaServer:
     """Resolve an existing Ollama server target."""
-    return ExistingOllamaServer(url=normalize_ollama_url(ollama_url), model_name=model_name)
+    return ExistingOllamaServer(url=normalize_backend_url(backend_url), model_name=model_name)
 
 
-def list_existing_ollama_models(ollama_url: str | None) -> list[str]:
+def list_existing_ollama_models(backend_url: str | None) -> list[str]:
     """Return available model names from an existing Ollama server."""
-    manager = OllamaModelManager.create(normalize_ollama_url(ollama_url))
+    manager = OllamaModelManager.create(normalize_backend_url(backend_url))
     return manager.list_available_models()
 
 
-def list_running_ollama_models(ollama_url: str | None) -> list[str]:
+def list_running_ollama_models(backend_url: str | None) -> list[str]:
     """Return model names currently loaded in memory on an existing Ollama server."""
-    manager = OllamaModelManager.create(normalize_ollama_url(ollama_url))
+    manager = OllamaModelManager.create(normalize_backend_url(backend_url))
     return manager.list_running_models()
 
 
@@ -118,7 +118,7 @@ def normalize_ollama_model_for_api(model_name: str) -> str:
 
 
 def warmup_existing_ollama_model(
-    ollama_url: str | None,
+    backend_url: str | None,
     model_name: str,
     *,
     timeout_seconds: int = 120,
@@ -126,11 +126,11 @@ def warmup_existing_ollama_model(
     keep_alive: str = "30m",
 ) -> str:
     """Load a model into an existing Ollama server and wait until it is running."""
-    normalized_url = normalize_ollama_url(ollama_url)
+    normalized_url = normalize_backend_url(backend_url)
     manager = OllamaModelManager.create(normalized_url)
     api_model_name = manager.normalize_model_name(model_name)
     debug_log(
-        f"Workflow warmup: ollama_url={normalized_url} requested_model={model_name} api_model={api_model_name}"
+        f"Workflow warmup: backend_url={normalized_url} requested_model={model_name} api_model={api_model_name}"
     )
 
     with span("ollama.model.warmup", model=api_model_name):
@@ -211,18 +211,18 @@ def provision_vastai_ollama(
         offer_id = offer.offer_id
 
     details = InstanceManager.build_connection_details(contract_id, instance_info)
-    ollama_url = _extract_ollama_service_url(details)
-    debug_log(f"Workflow detected Ollama URL: {ollama_url or '<missing>'}")
+    backend_url = _extract_ollama_service_url(details)
+    debug_log(f"Workflow detected Ollama URL: {backend_url or '<missing>'}")
 
     pull_warning = None
     try:
-        if not ollama_url:
+        if not backend_url:
             raise RuntimeError(
                 "Could not determine Ollama URL from instance service mappings (port 11434 missing)."
             )
 
-        available = set(list_existing_ollama_models(ollama_url))
-        running = set(list_running_ollama_models(ollama_url))
+        available = set(list_existing_ollama_models(backend_url))
+        running = set(list_running_ollama_models(backend_url))
         api_model = normalize_ollama_model_for_api(selected_model.name)
         debug_log(
             f"Workflow Ollama state: available={sorted(available)} running={sorted(running)} selected={api_model}"
@@ -231,10 +231,10 @@ def provision_vastai_ollama(
         if api_model not in running:
             if api_model not in available:
                 with span("vastai.model.pull", model=selected_model.name):
-                    manager.pull_model(contract_id, selected_model.name, ollama_url=ollama_url)
+                    manager.pull_model(contract_id, selected_model.name, backend_url=backend_url)
 
             warmup_existing_ollama_model(
-                ollama_url,
+                backend_url,
                 selected_model.name,
                 timeout_seconds=120,
             )
@@ -250,7 +250,7 @@ def provision_vastai_ollama(
         template_env=(template.env if template is not None else "<reused-running-instance>"),
         contract_id=contract_id,
         details=details,
-        ollama_url=ollama_url,
+        backend_url=backend_url,
         reused_existing_instance=reused_existing_instance,
         pull_warning=pull_warning,
     )

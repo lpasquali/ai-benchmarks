@@ -64,7 +64,7 @@ def test_handle_ask_calls_k8sgpt_cli(monkeypatch: pytest.MonkeyPatch) -> None:
         "question": "What is wrong?",
         "model": "llama3.1:8b",
         "kubeconfig_path": "/tmp/kubeconfig",  # nosec  # test artifact paths
-        "ollama_url": "http://ollama:11434",
+        "backend_url": "http://ollama:11434",
     })
 
     assert "answer" in result
@@ -77,7 +77,7 @@ def test_handle_ask_calls_k8sgpt_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "http://ollama:11434" in captured["cmd"]
 
 
-def test_handle_ask_without_ollama_url(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_handle_ask_without_backend_url(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict = {}
 
     def fake_run(cmd: list, **kw) -> subprocess.CompletedProcess:
@@ -264,7 +264,7 @@ def test_client_ask_calls_transport(tmp_path: Path) -> None:
     mock_transport.call.return_value = {"answer": "the answer", "findings": []}
 
     client = K8sGPTDriverClient(kubeconfig, transport=mock_transport)
-    answer = client.ask("What is wrong?", "llama3.1:8b", ollama_url="http://ollama:11434")
+    answer = client.ask("What is wrong?", "llama3.1:8b", backend_url="http://ollama:11434")
 
     assert answer == "the answer"
     mock_transport.call.assert_called_once()
@@ -273,7 +273,7 @@ def test_client_ask_calls_transport(tmp_path: Path) -> None:
     assert params["question"] == "What is wrong?"
     assert params["model"] == "llama3.1:8b"
     assert params["kubeconfig_path"] == str(kubeconfig)
-    assert params["ollama_url"] == "http://ollama:11434"
+    assert params["backend_url"] == "http://ollama:11434"
 
 
 def test_client_ask_strips_model_whitespace(tmp_path: Path) -> None:

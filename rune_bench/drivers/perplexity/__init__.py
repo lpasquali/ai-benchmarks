@@ -27,14 +27,14 @@ class PerplexityDriverClient:
     ) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("perplexity")
 
-    def ask(self, question: str, model: str = "sonar-pro", ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str = "sonar-pro", backend_url: str | None = None) -> str:
         """Dispatch a research question to the Perplexity driver and return the answer.
 
         Args:
             question: Natural-language research question.
             model: Perplexity model name (e.g. ``"sonar"``, ``"sonar-pro"``,
                 ``"sonar-deep-research"``).  Default: ``"sonar-pro"``.
-            ollama_url: Ignored — Perplexity is cloud-only.
+            backend_url: Ignored — Perplexity is cloud-only.
 
         Returns:
             The textual answer from Perplexity.

@@ -11,7 +11,7 @@ from rune_bench.api_contracts import (
     CostEstimationRequest,
     RunAgenticAgentRequest,
     RunBenchmarkRequest,
-    RunOllamaInstanceRequest,
+    RunLLMInstanceRequest,
 )
 from rune_bench.common import ModelSelector
 from rune_bench.metrics import span  # noqa: F401 (used by workflows layer)
@@ -54,14 +54,14 @@ def _make_resource_provider_for_benchmark(request: RunBenchmarkRequest) -> LLMRe
             stop_on_teardown=request.vastai_stop_instance,
         )
     return ExistingOllamaProvider(
-        request.ollama_url,
+        request.backend_url,
         model=request.model,
-        warmup=request.ollama_warmup,
-        warmup_timeout=request.ollama_warmup_timeout,
+        warmup=request.backend_warmup,
+        warmup_timeout=request.backend_warmup_timeout,
     )
 
 
-def _make_resource_provider_for_ollama_instance(request: RunOllamaInstanceRequest) -> LLMResourceProvider:
+def _make_resource_provider_for_ollama_instance(request: RunLLMInstanceRequest) -> LLMResourceProvider:
     """Factory: return the LLM resource provider for an Ollama instance run."""
     if request.vastai:
         from rune_bench.resources.vastai import VastAIProvider
@@ -73,7 +73,7 @@ def _make_resource_provider_for_ollama_instance(request: RunOllamaInstanceReques
             reliability=request.reliability,
             stop_on_teardown=False,
         )
-    return ExistingOllamaProvider(request.ollama_url)
+    return ExistingOllamaProvider(request.backend_url)
 
 
 def _make_agent_runner(agent_name: str | Path = "holmes", *, kubeconfig: Path | None = None) -> Any:
@@ -106,19 +106,19 @@ def list_vastai_models() -> list[dict]:
     ]
 
 
-def list_ollama_models(ollama_url: str) -> dict:
-    server = use_existing_ollama_server(ollama_url, model_name="<n/a>")
+def list_backend_models(backend_url: str) -> dict:
+    server = use_existing_ollama_server(backend_url, model_name="<n/a>")
     return {
-        "ollama_url": server.url,
+        "backend_url": server.url,
         "models": list_existing_ollama_models(server.url),
         "running_models": list_running_ollama_models(server.url),
     }
 
 
-def run_ollama_instance(request: RunOllamaInstanceRequest) -> dict:
+def run_llm_instance(request: RunLLMInstanceRequest) -> dict:
     provider = _make_resource_provider_for_ollama_instance(request)
     result = provider.provision()
-    out: dict = {"mode": "vastai" if request.vastai else "existing", "ollama_url": result.ollama_url}
+    out: dict = {"mode": "vastai" if request.vastai else "existing", "backend_url": result.backend_url}
     if request.vastai:
         out["model_name"] = result.model
         out["contract_id"] = result.provider_handle
@@ -126,11 +126,11 @@ def run_ollama_instance(request: RunOllamaInstanceRequest) -> dict:
 
 
 def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
-    if request.ollama_url and request.ollama_warmup:
+    if request.backend_url and request.backend_warmup:
         warmup_existing_ollama_model(
-            request.ollama_url,
+            request.backend_url,
             request.model,
-            timeout_seconds=request.ollama_warmup_timeout,
+            timeout_seconds=request.backend_warmup_timeout,
         )
     agent_name = getattr(request, "agent", "holmes")
 
@@ -156,7 +156,7 @@ def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
     answer = runner.ask(
         question=request.question,
         model=request.model,
-        ollama_url=request.ollama_url,
+        backend_url=request.backend_url,
     )
     return {"answer": answer}
 
@@ -180,7 +180,7 @@ def run_benchmark(request: RunBenchmarkRequest) -> dict:
     provider = _make_resource_provider_for_benchmark(request)
     result = provider.provision()
 
-    if not result.ollama_url:
+    if not result.backend_url:
         raise RuntimeError(
             "Could not determine Ollama URL from the Vast.ai instance service mappings. "
             "Ensure port 11434 is exposed in the template."
@@ -192,7 +192,7 @@ def run_benchmark(request: RunBenchmarkRequest) -> dict:
         answer = runner.ask(
             question=request.question,
             model=effective_model,
-            ollama_url=result.ollama_url,
+            backend_url=result.backend_url,
         )
     finally:
         provider.teardown(result)
@@ -200,7 +200,7 @@ def run_benchmark(request: RunBenchmarkRequest) -> dict:
     return {
         "answer": answer,
         "model_name": effective_model,
-        "ollama_url": result.ollama_url,
+        "backend_url": result.backend_url,
         "contract_id": result.provider_handle,
     }
 

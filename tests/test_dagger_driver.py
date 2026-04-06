@@ -106,7 +106,7 @@ class TestHandleAskEnvVars:
 
         assert result["answer"] == "ok"
 
-    def test_ollama_url_env_var_injected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_backend_url_env_var_injected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Ollama URL param is accepted without error."""
         monkeypatch.setenv("RUNE_DAGGER_ALLOW_RAW_COMMANDS", "true")
         fake_dagger = _make_fake_dagger()
@@ -119,13 +119,13 @@ class TestHandleAskEnvVars:
             result = dagger_main._handle_ask({
                 "question": "echo test",
                 "model": "llama3.1:8b",
-                "ollama_url": "http://ollama:11434",
+                "backend_url": "http://ollama:11434",
             })
 
         assert result["answer"] == "ok"
 
     def test_no_env_vars_when_not_provided(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A minimal question without model/ollama_url still works."""
+        """A minimal question without model/backend_url still works."""
         monkeypatch.setenv("RUNE_DAGGER_ALLOW_RAW_COMMANDS", "true")
         fake_dagger = _make_fake_dagger()
         monkeypatch.setitem(sys.modules, "dagger", fake_dagger)
@@ -158,7 +158,7 @@ class TestHandleAskResult:
             result = dagger_main._handle_ask({
                 "question": "echo hi",
                 "model": "m",
-                "ollama_url": "http://localhost:11434",
+                "backend_url": "http://localhost:11434",
             })
 
         assert result["answer"] == "result text"
@@ -196,17 +196,17 @@ class TestDaggerDriverClient:
             "model": "m",
         })
 
-    def test_ask_passes_ollama_url(self) -> None:
+    def test_ask_passes_backend_url(self) -> None:
         mock_transport = MagicMock()
         mock_transport.call.return_value = {"answer": "ok"}
 
         client = DaggerDriverClient(transport=mock_transport)
-        client.ask("echo hi", model="m", ollama_url="http://ollama:11434")
+        client.ask("echo hi", model="m", backend_url="http://ollama:11434")
 
         mock_transport.call.assert_called_once_with("ask", {
             "question": "echo hi",
             "model": "m",
-            "ollama_url": "http://ollama:11434",
+            "backend_url": "http://ollama:11434",
         })
 
     def test_ask_raises_on_missing_answer(self) -> None:

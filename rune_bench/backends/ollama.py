@@ -34,7 +34,7 @@ class OllamaClient:
             self.base_url = normalize_url(self.base_url, service_name="Ollama")
         except RuntimeError:
             raise RuntimeError(
-                "Missing or invalid Ollama URL. Provide --ollama-url when --vastai is not enabled. "
+                "Missing or invalid Ollama URL. Provide --backend-url when --vastai is not enabled. "
                 "Expected format like http://host:11434"
             )
 

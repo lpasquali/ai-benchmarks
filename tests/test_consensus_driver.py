@@ -112,7 +112,7 @@ def test_handle_ask_parses_paper_fields(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_handle_ask_ollama_synthesis(monkeypatch: pytest.MonkeyPatch) -> None:
-    """When model + ollama_url are provided, the driver synthesizes via Ollama."""
+    """When model + backend_url are provided, the driver synthesizes via Ollama."""
     call_count = {"n": 0}
 
     def mock_urlopen(req, timeout=None):
@@ -132,7 +132,7 @@ def test_handle_ask_ollama_synthesis(monkeypatch: pytest.MonkeyPatch) -> None:
     result = consensus_main._handle_ask({
         "question": "deep learning NLP",
         "model": "llama3:8b",
-        "ollama_url": "http://localhost:11434",
+        "backend_url": "http://localhost:11434",
     })
 
     assert result["answer"] == "Synthesized answer from papers."
@@ -140,7 +140,7 @@ def test_handle_ask_ollama_synthesis(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_handle_ask_fallback_no_llm(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Without model/ollama_url, return a formatted paper list."""
+    """Without model/backend_url, return a formatted paper list."""
     monkeypatch.setattr(
         consensus_main.urllib.request,
         "urlopen",
@@ -192,13 +192,13 @@ def test_client_ask_delegates_to_transport() -> None:
     mock_transport.call.return_value = {"answer": "The answer", "papers": []}
 
     client = ConsensusDriverClient(transport=mock_transport)
-    answer = client.ask("What is X?", model="llama3:8b", ollama_url="http://ollama:11434")
+    answer = client.ask("What is X?", model="llama3:8b", backend_url="http://ollama:11434")
 
     assert answer == "The answer"
     mock_transport.call.assert_called_once_with("ask", {
         "question": "What is X?",
         "model": "llama3:8b",
-        "ollama_url": "http://ollama:11434",
+        "backend_url": "http://ollama:11434",
     })
 
 

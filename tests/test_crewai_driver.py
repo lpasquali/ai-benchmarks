@@ -67,7 +67,7 @@ def test_handle_ask_runs_crew(monkeypatch: pytest.MonkeyPatch) -> None:
     result = crewai_main._handle_ask({
         "question": "Analyze the system",
         "model": "llama3.1:8b",
-        "ollama_url": "http://ollama:11434",
+        "backend_url": "http://ollama:11434",
     })
 
     assert result["answer"] == "crew analysis result"
@@ -107,7 +107,7 @@ def test_handle_ask_ollama_model_format(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_handle_ask_sets_openai_api_base(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify OPENAI_API_BASE is set to {ollama_url}/v1 for LiteLLM routing."""
+    """Verify OPENAI_API_BASE is set to {backend_url}/v1 for LiteLLM routing."""
     import os
 
     captured_api_base: list[str | None] = []
@@ -133,14 +133,14 @@ def test_handle_ask_sets_openai_api_base(monkeypatch: pytest.MonkeyPatch) -> Non
     crewai_main._handle_ask({
         "question": "q",
         "model": "m",
-        "ollama_url": "http://ollama:11434",
+        "backend_url": "http://ollama:11434",
     })
 
     assert captured_api_base[0] == "http://ollama:11434/v1"
 
 
-def test_handle_ask_without_ollama_url(monkeypatch: pytest.MonkeyPatch) -> None:
-    """When ollama_url is omitted, OPENAI_API_BASE should not be set."""
+def test_handle_ask_without_backend_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When backend_url is omitted, OPENAI_API_BASE should not be set."""
     mock_crewai = types.ModuleType("crewai")
     mock_crewai.Agent = MagicMock(return_value=MagicMock())
     mock_crewai.Task = MagicMock(return_value=MagicMock())

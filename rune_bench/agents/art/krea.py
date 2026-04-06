@@ -14,7 +14,7 @@ Implementation notes:
         body: { prompt, style, enhance: bool }
     GET  /generations/{id}             # poll status
 - The `question` maps to the generation prompt.
-- `model` and `ollama_url` are not used (Krea uses its own models).
+- `model` and `backend_url` are not used (Krea uses its own models).
 - Returns image URLs as the answer string.
 """
 
@@ -25,7 +25,7 @@ class KreaRunner:
     def __init__(self) -> None:
         pass
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Generate or enhance an image via Krea AI and return the result URL."""
         raise NotImplementedError(
             "KreaRunner is not yet implemented. "

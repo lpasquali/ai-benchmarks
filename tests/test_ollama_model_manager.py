@@ -151,7 +151,7 @@ class _SelectedModel:
 
 def test_workflow_normalizers_and_stop(monkeypatch):
     monkeypatch.setattr(workflows, "OllamaClient", lambda url: type("C", (), {"base_url": f"normalized:{url}"})())
-    assert workflows.normalize_ollama_url("x") == "normalized:x"
+    assert workflows.normalize_backend_url("x") == "normalized:x"
 
     fake_manager = MagicMock()
     fake_manager.normalize_model_name.return_value = "plain-model"
@@ -216,7 +216,7 @@ def test_provision_vastai_ollama_reuses_running_instance(monkeypatch):
 
     assert result.reused_existing_instance is True
     assert result.template_env == "<reused-running-instance>"
-    assert result.ollama_url == "http://x:11434"
+    assert result.backend_url == "http://x:11434"
     fake_manager.pull_model.assert_not_called()
 
 
@@ -277,7 +277,7 @@ def test_provision_vastai_ollama_creates_new_instance_and_warms(monkeypatch):
     assert result.offer_id == 5
     assert result.contract_id == 12
     assert warmed == [True]
-    fake_manager.pull_model.assert_called_once_with(12, "foo:1", ollama_url="http://x:11434")
+    fake_manager.pull_model.assert_called_once_with(12, "foo:1", backend_url="http://x:11434")
 
 
 def test_provision_vastai_ollama_abort_and_pull_warning(monkeypatch):
@@ -348,39 +348,39 @@ def test_api_backend_functions(monkeypatch, tmp_path):
     monkeypatch.setattr(api_backend, "use_existing_ollama_server", lambda url, model_name: type("Srv", (), {"url": f"norm:{url}"})())
     monkeypatch.setattr(api_backend, "list_existing_ollama_models", lambda _url: ["a"])
     monkeypatch.setattr(api_backend, "list_running_ollama_models", lambda _url: ["a"])
-    payload = api_backend.list_ollama_models("raw")
-    assert payload["ollama_url"] == "norm:raw"
+    payload = api_backend.list_backend_models("raw")
+    assert payload["backend_url"] == "norm:raw"
 
     from rune_bench.resources.base import ProvisioningResult
 
-    req = api_backend.RunOllamaInstanceRequest(vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url="u")
+    req = api_backend.RunLLMInstanceRequest(vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url="u")
     monkeypatch.setattr(
         api_backend,
         "_make_resource_provider_for_ollama_instance",
         lambda r: type("P", (), {
-            "provision": lambda self, r=r: ProvisioningResult(ollama_url=f"norm:{r.ollama_url}"),
+            "provision": lambda self, r=r: ProvisioningResult(backend_url=f"norm:{r.backend_url}"),
             "teardown": lambda self, res: None,
         })(),
     )
-    assert api_backend.run_ollama_instance(req) == {"mode": "existing", "ollama_url": "norm:u"}
+    assert api_backend.run_llm_instance(req) == {"mode": "existing", "backend_url": "norm:u"}
 
     monkeypatch.setattr(
         api_backend,
         "_make_resource_provider_for_ollama_instance",
         lambda r: type("P", (), {
-            "provision": lambda self: ProvisioningResult(ollama_url="http://x", model="m", provider_handle=3),
+            "provision": lambda self: ProvisioningResult(backend_url="http://x", model="m", provider_handle=3),
             "teardown": lambda self, res: None,
         })(),
     )
-    req_v = api_backend.RunOllamaInstanceRequest(vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url=None)
-    assert api_backend.run_ollama_instance(req_v)["mode"] == "vastai"
+    req_v = api_backend.RunLLMInstanceRequest(vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url=None)
+    assert api_backend.run_llm_instance(req_v)["mode"] == "vastai"
 
     kubeconfig = tmp_path / "config"
     kubeconfig.write_text("apiVersion: v1\n")
     warmed = []
     monkeypatch.setattr(api_backend, "warmup_existing_ollama_model", lambda *_args, **_kwargs: warmed.append(True) or "m")
     monkeypatch.setattr(api_backend, "_make_agent_runner", lambda *_args, **_kwargs: type("R", (), {"ask": lambda self, **_: "answer"})())
-    areq = api_backend.RunAgenticAgentRequest(question="q", model="m", ollama_url="http://x", ollama_warmup=True, ollama_warmup_timeout=1, kubeconfig=str(kubeconfig))
+    areq = api_backend.RunAgenticAgentRequest(question="q", model="m", backend_url="http://x", backend_warmup=True, backend_warmup_timeout=1, kubeconfig=str(kubeconfig))
     assert api_backend.run_agentic_agent(areq) == {"answer": "answer"}
     assert warmed == [True]
 
@@ -388,22 +388,22 @@ def test_api_backend_functions(monkeypatch, tmp_path):
         api_backend,
         "_make_resource_provider_for_benchmark",
         lambda r: type("P", (), {
-            "provision": lambda self, r=r: ProvisioningResult(ollama_url="http://existing", model=r.model),
+            "provision": lambda self, r=r: ProvisioningResult(backend_url="http://existing", model=r.model),
             "teardown": lambda self, res: None,
         })(),
     )
-    breq = api_backend.RunBenchmarkRequest(vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url="u", question="q", model="m", ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=str(kubeconfig), vastai_stop_instance=True)
+    breq = api_backend.RunBenchmarkRequest(vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url="u", question="q", model="m", backend_warmup=False, backend_warmup_timeout=1, kubeconfig=str(kubeconfig), vastai_stop_instance=True)
     result = api_backend.run_benchmark(breq)
     assert result["answer"] == "answer"
-    assert result["ollama_url"] == "http://existing"
+    assert result["backend_url"] == "http://existing"
 
     monkeypatch.setattr(
         api_backend,
         "_make_resource_provider_for_benchmark",
         lambda r: type("P", (), {
-            "provision": lambda self: ProvisioningResult(ollama_url=None, model="m", provider_handle=7),
+            "provision": lambda self: ProvisioningResult(backend_url=None, model="m", provider_handle=7),
             "teardown": lambda self, res: None,
         })(),
     )
     with pytest.raises(RuntimeError, match="Could not determine Ollama URL"):
-        api_backend.run_benchmark(api_backend.RunBenchmarkRequest(vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url=None, question="q", model="m", ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=str(kubeconfig), vastai_stop_instance=False))
+        api_backend.run_benchmark(api_backend.RunBenchmarkRequest(vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url=None, question="q", model="m", backend_warmup=False, backend_warmup_timeout=1, kubeconfig=str(kubeconfig), vastai_stop_instance=False))

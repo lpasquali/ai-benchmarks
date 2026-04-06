@@ -267,7 +267,7 @@ def test_client_ask_with_api_key(
     transport.call.return_value = {"answer": "stub answer"}
     client = cls(transport=transport)
 
-    result = client.ask("q", "m", ollama_url="http://localhost:11434")
+    result = client.ask("q", "m", backend_url="http://localhost:11434")
 
     assert result == "stub answer"
     transport.call.assert_called_once()

@@ -32,13 +32,13 @@ class MetoroDriverClient:
         self._kubeconfig = kubeconfig
         self._transport: DriverTransport = transport or make_driver_transport("metoro")
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Dispatch a question to the Metoro driver and return the answer.
 
         Args:
             question: Natural-language question about the Kubernetes cluster.
             model: Model identifier (not forwarded to Metoro API; kept for interface compatibility).
-            ollama_url: Ollama server URL (not forwarded; kept for interface compatibility).
+            backend_url: Ollama server URL (not forwarded; kept for interface compatibility).
 
         Returns:
             Metoro's textual explanation.
