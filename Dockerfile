@@ -58,7 +58,7 @@ COPY --from=builder /usr/local/bin/kubectl /usr/local/bin/kubectl
 # Application source — preserve subdirectory names so python -m rune resolves correctly
 COPY rune ./rune
 COPY rune_bench ./rune_bench
-RUN mkdir -p /app/.kube && chown -R rune:rune /app
+RUN mkdir -p /app/.kube /app/.rune-api && chown -R rune:rune /app
 
 ENV PATH="/opt/venv/bin:$PATH" \
     RUNE_BACKEND=local \

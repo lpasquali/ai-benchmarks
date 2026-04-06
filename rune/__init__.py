@@ -18,7 +18,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
 try:
-    from vastai import VastAI  # type: ignore[import-untyped, import-not-found]  # Reason: vastai SDK does not provide type hints
+    from rune_bench.resources.vastai.sdk import VastAI
 except ImportError:
     VastAI = None  # type: ignore[assignment,misc]
 
