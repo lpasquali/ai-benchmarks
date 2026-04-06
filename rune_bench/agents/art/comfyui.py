@@ -1,3 +1,5 @@
+# WARNING: ComfyUI is GPL-3.0. This driver MUST integrate via REST API only (DriverTransport).
+# Do NOT import any ComfyUI Python modules directly -- doing so triggers GPL-3.0 copyleft obligations.
 """ComfyUI agentic runner stub.
 
 Scope:      Art/Creative  |  Rank 2  |  Rating 4.5
