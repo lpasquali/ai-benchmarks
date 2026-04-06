@@ -1,3 +1,4 @@
+import hashlib
 import json
 import threading
 from http.server import ThreadingHTTPServer
@@ -21,7 +22,13 @@ def rune_api_server(tmp_path):
 
     app = RuneApiApplication(
         store=JobStore(tmp_path / "jobs.db"),
-        security=ApiSecurityConfig(auth_disabled=False, tenant_tokens={"tenant-a": "token-a", "tenant-b": "token-b"}),
+        security=ApiSecurityConfig(
+            auth_disabled=False, 
+            tenant_tokens={
+                "tenant-a": hashlib.sha256(b"token-a").hexdigest(), 
+                "tenant-b": hashlib.sha256(b"token-b").hexdigest()
+            }
+        ),
         backend_functions={
             "agentic-agent": run_agentic,
             "benchmark": lambda request: {"answer": "bench"},
@@ -85,3 +92,24 @@ def test_api_server_enforces_tenant_scoping_and_idempotency(rune_api_server):
 
     with pytest.raises(RuntimeError, match="job not found"):
         client_b.get_job_status(job_id_1)
+
+
+def test_api_server_rate_limiting(rune_api_server):
+    base_url, _state = rune_api_server
+    
+    # Attempt 10 failed logins
+    for i in range(10):
+        request = Request(f"{base_url}/v1/catalog/vastai-models")
+        request.add_header("Authorization", "Bearer invalid-token")
+        with pytest.raises(HTTPError) as exc:
+            urlopen(request)
+        assert exc.value.code == 401
+    
+    # 11th attempt should trigger rate limit
+    request = Request(f"{base_url}/v1/catalog/vastai-models")
+    request.add_header("Authorization", "Bearer invalid-token")
+    with pytest.raises(HTTPError) as exc:
+        urlopen(request)
+    assert exc.value.code == 401
+    payload = json.loads(exc.value.read().decode("utf-8"))
+    assert payload["error"] == "rate limit exceeded"

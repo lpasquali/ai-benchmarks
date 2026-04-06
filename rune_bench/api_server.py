@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
+import logging
 import os
 import threading
+import time
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -74,7 +78,7 @@ class ApiSecurityConfig:
                 tenant = tenant.strip()
                 token = token.strip()
                 if tenant and token:
-                    tenant_tokens[tenant] = token
+                    tenant_tokens[tenant] = hashlib.sha256(token.encode("utf-8")).hexdigest()
         if not auth_disabled and not tenant_tokens:
             raise RuntimeError(
                 "RUNE API auth is enabled but no tenants are configured. "
@@ -100,6 +104,8 @@ class RuneApiApplication:
             "cost-estimate": _get_cost_estimate_backend,
         }
         self.store.mark_incomplete_jobs_failed()
+        self.auth_failures: dict[str, list[float]] = {}
+        self.auth_lock = threading.Lock()
 
     @classmethod
     def from_env(cls) -> "RuneApiApplication":
@@ -133,6 +139,17 @@ class RuneApiApplication:
                 return payload
 
             def _authenticate(self) -> str:
+                client_ip = self.client_address[0]
+                now = time.time()
+                
+                with app.auth_lock:
+                    failures = app.auth_failures.get(client_ip, [])
+                    failures = [t for t in failures if now - t < 60]
+                    app.auth_failures[client_ip] = failures
+                    if len(failures) >= 10:
+                        logging.warning(f"Auth blocked: Rate limit exceeded for IP {client_ip}")
+                        raise PermissionError("rate limit exceeded")
+
                 tenant_id = self.headers.get("X-Tenant-ID", "").strip() or "default"
                 if app.security.auth_disabled:
                     return tenant_id
@@ -143,10 +160,17 @@ class RuneApiApplication:
                 if auth_header.lower().startswith("bearer "):
                     token = auth_header[7:].strip()
 
-                expected = app.security.tenant_tokens.get(tenant_id)
-                if not expected or token != expected:
-                    raise PermissionError("invalid tenant/token combination")
-                return tenant_id
+                expected_hash = app.security.tenant_tokens.get(tenant_id)
+                if expected_hash:
+                    actual_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+                    if hmac.compare_digest(actual_hash, expected_hash):
+                        logging.info(f"Auth success: IP {client_ip} authenticated as tenant '{tenant_id}'")
+                        return tenant_id
+                
+                with app.auth_lock:
+                    app.auth_failures[client_ip].append(now)
+                logging.warning(f"Auth failure: IP {client_ip} failed to authenticate as tenant '{tenant_id}'")
+                raise PermissionError("invalid tenant/token combination")
 
             def do_GET(self) -> None:
                 parsed = urlparse(self.path)
