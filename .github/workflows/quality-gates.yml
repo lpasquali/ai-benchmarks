@@ -607,6 +607,10 @@ jobs:
             'gpl v3',
             'gnu general public license v3',
             'gnu affero general public license',
+            'gplv2',
+            'gpl v2',
+            'gpl-2.0',
+            'gnu general public license v2',
           )
           allowed_package_exceptions = {
             # Temporary exceptions for transitive deps pulled by the Holmes stack.
