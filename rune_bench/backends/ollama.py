@@ -197,8 +197,8 @@ class OllamaModelManager:
 class OllamaBackend:
     """Facade over OllamaClient + OllamaModelManager implementing LLMBackend.
 
-    Provides every Ollama-specific operation that the workflow layer needs,
-    keeping ``workflows.py`` free of Ollama implementation details.
+    Wraps :class:`OllamaModelManager` to satisfy the :class:`LLMBackend`
+    protocol, providing a uniform interface for the backend factory.
     """
 
     def __init__(self, base_url: str) -> None:
@@ -208,37 +208,6 @@ class OllamaBackend:
     def base_url(self) -> str:
         """Return the normalized Ollama server URL."""
         return self._manager.client.base_url
-
-    # -- URL helpers --------------------------------------------------------
-
-    @staticmethod
-    def normalize_url(url: str | None) -> str:
-        """Validate and normalize an Ollama base URL.
-
-        Adds ``http://`` when missing.  Raises ``RuntimeError`` when *url* is
-        ``None``.
-        """
-        if url is None:
-            raise RuntimeError("Missing Ollama URL")
-        client = OllamaClient(url)
-        return client.base_url
-
-    @staticmethod
-    def extract_service_url(details: Any) -> str | None:
-        """Return the Ollama endpoint from Vast.ai connection details.
-
-        Scans *details.service_urls* for port 11434 (Ollama default).
-        """
-        for svc in details.service_urls:
-            direct = str(svc.get("direct", ""))
-            proxy = str(svc.get("proxy", "")) if svc.get("proxy") else ""
-            if ":11434" in direct:
-                return direct
-            if ":11434" in proxy:
-                return proxy
-        return None
-
-    # -- Server / model operations -----------------------------------------
 
     def get_model_capabilities(self, model: str) -> ModelCapabilities:
         """Return best-effort capability metadata for the given model."""
@@ -265,16 +234,10 @@ class OllamaBackend:
         keep_alive: str = "30m",
     ) -> str:
         """Load a model and wait until it is ready. Return the resolved model name."""
-        api_model_name = self._manager.normalize_model_name(model_name)
-        debug_log(
-            f"OllamaBackend warmup: base_url={self.base_url} "
-            f"requested_model={model_name} api_model={api_model_name}"
+        return self._manager.warmup_model(
+            model_name,
+            timeout_seconds=timeout_seconds,
+            poll_interval_seconds=poll_interval_seconds,
+            keep_alive=keep_alive,
+            unload_others=True,
         )
-        with span("ollama.model.warmup", model=api_model_name):
-            return self._manager.warmup_model(
-                api_model_name,
-                timeout_seconds=timeout_seconds,
-                poll_interval_seconds=poll_interval_seconds,
-                keep_alive=keep_alive,
-                unload_others=True,
-            )
