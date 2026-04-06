@@ -7,6 +7,7 @@ and a ReAct/Reflection loop to serve as the prototype for Tier 3 autonomous agen
 import logging
 from typing import Any, Dict, List, Optional
 
+from rune_bench.agents.base import AgentResult
 from rune_bench.drivers.mcp_poc import MCPClientDriver
 from rune_bench.agents.experimental.memory_provider import MemoryProvider
 from rune_bench.agents.experimental.safety_interceptor import SafetyInterceptor, SafetyViolation
