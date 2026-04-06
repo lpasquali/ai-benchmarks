@@ -6,7 +6,7 @@ extracting the env flags and Docker image for instance creation.
 
 from dataclasses import dataclass
 
-from vastai import VastAI  # type: ignore[import-untyped, import-not-found]  # Reason: vastai SDK does not provide type hints
+from rune_bench.resources.vastai.sdk import VastAI
 
 from rune_bench.debug import debug_log
 
