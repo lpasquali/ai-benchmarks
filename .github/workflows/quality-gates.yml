@@ -285,7 +285,7 @@ jobs:
           python -m venv .venv-vastai
           .venv-vastai/bin/pip install --upgrade pip --quiet
           .venv-vastai/bin/pip install "${WHEEL}[vastai]" --quiet
-          .venv-vastai/bin/python -c "from vastai import VastAI; print('vastai extra import: OK')"
+          .venv-vastai/bin/python -c "from rune_bench.resources.vastai.sdk import VastAI; print('vastai extra import: OK')"
           .venv-vastai/bin/python -m rune --help
 
   # ─── Docker / container gates ────────────────────────────────────────────────
