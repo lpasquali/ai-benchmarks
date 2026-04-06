@@ -171,7 +171,7 @@ def load_from_csv(csv_path: Path | None = None) -> Catalog:
 def _require_yaml() -> object:
     """Import and return the yaml module, raising a clear error if missing."""
     try:
-        import yaml  # type: ignore[import-untyped]
+        import yaml  # type: ignore[import-untyped, import-not-found]
         return yaml
     except ImportError as exc:
         raise ImportError(

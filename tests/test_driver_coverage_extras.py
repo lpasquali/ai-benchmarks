@@ -48,7 +48,7 @@ def test_pentestgpt_authorization_skips_when_empty(monkeypatch: pytest.MonkeyPat
 # BurpGPT driver uncovered lines
 # ---------------------------------------------------------------------------
 
-import rune_bench.drivers.burpgpt.__main__ as burp_main
+import rune_bench.drivers.burpgpt.__main__ as burp_main  # noqa: E402
 
 
 def test_burpgpt_handle_info() -> None:
@@ -61,7 +61,7 @@ def test_burpgpt_handle_info() -> None:
 # Dagger driver — cover _load_pipeline_command and more of _handle_ask
 # ---------------------------------------------------------------------------
 
-import rune_bench.drivers.dagger.__main__ as dagger_main
+import rune_bench.drivers.dagger.__main__ as dagger_main  # noqa: E402
 
 
 def test_dagger_handle_info() -> None:

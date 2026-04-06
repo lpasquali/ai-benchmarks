@@ -225,10 +225,10 @@ def test_main_skips_empty_lines(monkeypatch: pytest.MonkeyPatch, capsys: pytest.
 # MetoroDriverClient / MetoroRunner alias tests
 # ---------------------------------------------------------------------------
 
-from pathlib import Path
-from unittest.mock import MagicMock
+from pathlib import Path  # noqa: E402
+from unittest.mock import MagicMock  # noqa: E402
 
-from rune_bench.drivers.metoro import MetoroDriverClient, MetoroRunner
+from rune_bench.drivers.metoro import MetoroDriverClient, MetoroRunner  # noqa: E402
 
 
 def test_metoro_runner_is_alias() -> None:
