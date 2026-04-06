@@ -49,12 +49,12 @@ def _result(**kwargs):
 
 def test_main_and_basic_helpers(monkeypatch):
     with pytest.raises(typer.BadParameter):
-        rune.main(backend="bad", api_base_url="http://x", api_token="", api_tenant="default", debug=False)
+        rune.main(backend="bad", api_base_url="http://x", api_token="", api_tenant="default", debug=False)  # nosec  # test credentials
 
-    rune.main(backend="http", api_base_url="http://api", api_token="tok", api_tenant="tenant-a", debug=False)
+    rune.main(backend="http", api_base_url="http://api", api_token="tok", api_tenant="tenant-a", debug=False)  # nosec  # test credentials
     client = rune._http_client()
     assert client.base_url == "http://api"
-    assert client.api_token == "tok"
+    assert client.api_token == "tok"  # nosec  # test credentials
     assert client.tenant_id == "tenant-a"
 
     called = []

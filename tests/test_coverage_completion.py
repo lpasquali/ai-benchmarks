@@ -142,7 +142,7 @@ def test_api_server_backend_type_guards():
         ollama_url="http://localhost:11434",
         ollama_warmup=False,
         ollama_warmup_timeout=1,
-        kubeconfig="/tmp/k",
+        kubeconfig="/tmp/k",  # nosec  # test artifact paths
     )
     benchmark = RunBenchmarkRequest(
         vastai=False,
@@ -155,7 +155,7 @@ def test_api_server_backend_type_guards():
         model="m",
         ollama_warmup=False,
         ollama_warmup_timeout=1,
-        kubeconfig="/tmp/k",
+        kubeconfig="/tmp/k",  # nosec  # test artifact paths
         vastai_stop_instance=False,
     )
     ollama = RunOllamaInstanceRequest(
@@ -182,7 +182,7 @@ def test_api_server_backend_success_paths(monkeypatch):
         ollama_url="http://localhost:11434",
         ollama_warmup=False,
         ollama_warmup_timeout=1,
-        kubeconfig="/tmp/k",
+        kubeconfig="/tmp/k",  # nosec  # test artifact paths
     )
     benchmark = RunBenchmarkRequest(
         vastai=False,
@@ -195,7 +195,7 @@ def test_api_server_backend_success_paths(monkeypatch):
         model="m",
         ollama_warmup=False,
         ollama_warmup_timeout=1,
-        kubeconfig="/tmp/k",
+        kubeconfig="/tmp/k",  # nosec  # test artifact paths
         vastai_stop_instance=False,
     )
     ollama = RunOllamaInstanceRequest(

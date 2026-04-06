@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -109,11 +108,11 @@ def test_agent_result_structured():
     r = AgentResult(
         answer="report",
         result_type="report",
-        artifacts=[{"path": "/tmp/out.pdf"}],
+        artifacts=[{"path": "/tmp/out.pdf"}],  # nosec  # test artifact paths
         metadata={"pages": 3},
     )
     assert r.result_type == "report"
-    assert r.artifacts == [{"path": "/tmp/out.pdf"}]
+    assert r.artifacts == [{"path": "/tmp/out.pdf"}]  # nosec  # test artifact paths
 
 
 # ---------------------------------------------------------------------------
