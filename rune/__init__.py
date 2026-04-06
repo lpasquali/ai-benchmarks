@@ -39,6 +39,7 @@ from rune_bench.common import (
 from rune_bench.debug import set_debug
 from rune_bench.metrics import InMemoryCollector, set_collector, clear_collector
 from rune_bench.backends.ollama import OllamaClient, OllamaModelCapabilities, OllamaModelManager
+from rune_bench.agents.registry import get_agent
 from rune_bench.workflows import (
     ExistingOllamaServer,
     SpendGateAction,
@@ -54,17 +55,6 @@ from rune_bench.workflows import (
     warmup_existing_ollama_model,
     use_existing_ollama_server,
 )
-
-# Lazy import HolmesRunner to avoid requiring holmes/holmesgpt for API server mode
-HolmesRunner: type | None = None  # type: ignore[type-arg]
-
-def _get_holmes_runner():
-    """Lazy loader for HolmesRunner to allow API-only deployments."""
-    global HolmesRunner
-    if HolmesRunner is None:
-        from rune_bench.agents.sre.holmes import HolmesRunner as _HolmesRunner
-        HolmesRunner = _HolmesRunner
-    return HolmesRunner
 
 app = typer.Typer(help="RUNE — Reliability Use-case Numeric Evaluator", add_completion=False)
 console = Console()
@@ -216,7 +206,7 @@ def _vastai_sdk() -> "VastAI":
 
 
 def _apply_model_limits(capabilities: OllamaModelCapabilities) -> None:
-    """Pre-set Holmes/LiteLLM override env vars so Holmes skips the redundant re-fetch."""
+    """Pre-set LiteLLM override env vars so the agent skips the redundant re-fetch."""
     import os
 
     for env_name, value in (
@@ -754,7 +744,7 @@ def run_agentic_agent(
         True,
         "--ollama-warmup/--no-ollama-warmup",
         envvar="RUNE_OLLAMA_WARMUP",
-        help="Load the selected model into the Ollama server before starting Holmes",
+        help="Load the selected model into the Ollama server before starting the agent",
     ),
     ollama_warmup_timeout: int = typer.Option(
         90,
@@ -776,7 +766,7 @@ def run_agentic_agent(
         help="Optional idempotency key when using the HTTP backend",
     ),
 ) -> None:
-    """Run an agentic system (HolmesGPT) against a Kubernetes cluster."""
+    """Run an agentic agent against a Kubernetes cluster."""
     _enable_debug_if_requested(debug)
     _request = RunAgenticAgentRequest.from_cli(
         question=question,
@@ -823,10 +813,10 @@ def run_agentic_agent(
             timeout_seconds=ollama_warmup_timeout,
         )
 
-    # Block 10 — Run HolmesGPT agent
+    # Block 10 — Run agentic agent
     try:
         from rune_bench.metrics import span as _span
-        runner = (HolmesRunner or _get_holmes_runner())(kubeconfig)
+        runner = get_agent("holmes", kubeconfig=kubeconfig)
         with _span("agent.ask", model=model, backend="existing"):
             answer = runner.ask(question=question, model=model, ollama_url=ollama_url)
     except (FileNotFoundError, RuntimeError) as exc:
@@ -886,7 +876,7 @@ def run_benchmark(
         True,
         "--ollama-warmup/--no-ollama-warmup",
         envvar="RUNE_OLLAMA_WARMUP",
-        help="Load the selected model into the Ollama server before Holmes starts when using --ollama-url",
+        help="Load the selected model into the Ollama server before the agent starts when using --ollama-url",
     ),
     ollama_warmup_timeout: int = typer.Option(
         90,
@@ -1037,7 +1027,7 @@ def run_benchmark(
 
     # Block 10 — Run agentic agent
     try:
-        runner = (HolmesRunner or _get_holmes_runner())(kubeconfig)
+        runner = get_agent("holmes", kubeconfig=kubeconfig)
         answer = runner.ask(
             question=question,
             model=selected_model_name,
@@ -1108,7 +1098,7 @@ def show_info() -> None:
         holmes_cmd = 'pip install "rune-bench[holmes]"'
 
     table.add_row("[bold]vastai[/bold]  (Vast.ai GPU provisioning)", vastai_status, vastai_cmd)
-    table.add_row("[bold]holmes[/bold]  (HolmesGPT SRE agent)", holmes_status, holmes_cmd)
+    table.add_row("[bold]holmes[/bold]  (SRE agent driver)", holmes_status, holmes_cmd)
 
     console.print(Panel.fit(f"[bold blue]rune-bench[/bold blue] v{version}"))
     console.print(table)

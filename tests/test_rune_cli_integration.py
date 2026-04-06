@@ -210,12 +210,12 @@ def test_run_agentic_agent_paths(monkeypatch, tmp_path):
     monkeypatch.setattr(rune, "BACKEND_MODE", "local")
     warmups = []
     monkeypatch.setattr(rune, "_warmup_ollama_model", lambda **_kwargs: warmups.append(True))
-    monkeypatch.setattr(rune, "HolmesRunner", lambda _path: type("R", (), {"ask": lambda self, **_: "local-answer"})())
+    monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: type("R", (), {"ask": lambda self, **_: "local-answer"})())
     rune.run_agentic_agent(debug=False, question="q", model="m", ollama_url="http://x", ollama_warmup=True, ollama_warmup_timeout=1, kubeconfig=kubeconfig, idempotency_key=None)
     assert warmups == [True]
     assert "local-answer" in test_console.export_text()
 
-    monkeypatch.setattr(rune, "HolmesRunner", lambda _path: (_ for _ in ()).throw(RuntimeError("bad")))
+    monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("bad")))
     with pytest.raises(typer.Exit):
         rune.run_agentic_agent(debug=False, question="q", model="m", ollama_url=None, ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=kubeconfig, idempotency_key=None)
 
@@ -247,13 +247,13 @@ def test_run_benchmark_paths(monkeypatch, tmp_path):
     monkeypatch.setattr(rune, "use_existing_ollama_server", lambda *_args, **_kwargs: ExistingOllamaServer(url="http://x", model_name="m"))
     monkeypatch.setattr(rune, "_fetch_model_capabilities", lambda *_args, **_kwargs: OllamaModelCapabilities("m", 100, 20))
     monkeypatch.setattr(rune, "_warmup_ollama_model", lambda **_kwargs: None)
-    monkeypatch.setattr(rune, "HolmesRunner", lambda _path: type("R", (), {"ask": lambda self, **_: "bench-local"})())
+    monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: type("R", (), {"ask": lambda self, **_: "bench-local"})())
     rune.run_benchmark(debug=False, vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url="http://x", question="q", model="m", ollama_warmup=True, ollama_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
     assert "bench-local" in test_console.export_text()
 
     monkeypatch.setattr(rune, "_run_vastai_provisioning", lambda **_kwargs: _result())
     monkeypatch.setattr(rune, "_vastai_sdk", lambda: MagicMock())
-    monkeypatch.setattr(rune, "HolmesRunner", lambda _path: type("R", (), {"ask": lambda self, **_: "bench-vastai"})())
+    monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: type("R", (), {"ask": lambda self, **_: "bench-vastai"})())
     monkeypatch.setattr(rune, "stop_vastai_instance", lambda *_args, **_kwargs: TeardownResult(contract_id=7, destroyed_instance=True, destroyed_volume_ids=[], verification_ok=False, verification_message="warn"))
     rune.run_benchmark(debug=False, vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url=None, question="q", model="m", ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
     assert "bench-vastai" in test_console.export_text()
@@ -264,7 +264,7 @@ def test_run_benchmark_paths(monkeypatch, tmp_path):
         rune.run_benchmark(debug=False, vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url=None, question="q", model="m", ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
 
     monkeypatch.setattr(rune, "_run_vastai_provisioning", lambda **_kwargs: _result())
-    monkeypatch.setattr(rune, "HolmesRunner", lambda _path: (_ for _ in ()).throw(RuntimeError("agent failed")))
+    monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("agent failed")))
     monkeypatch.setattr(rune, "stop_vastai_instance", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("stop failed")))
     with pytest.raises(typer.Exit):
         rune.run_benchmark(debug=False, vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url=None, question="q", model="m", ollama_warmup=False, ollama_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
