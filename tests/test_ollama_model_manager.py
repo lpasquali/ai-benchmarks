@@ -150,13 +150,13 @@ class _SelectedModel:
 
 
 def test_workflow_normalizers_and_stop(monkeypatch):
-    monkeypatch.setattr(workflows, "OllamaClient", lambda url: type("C", (), {"base_url": f"normalized:{url}"})())
+    monkeypatch.setattr("rune_bench.backends.ollama.OllamaClient", lambda url: type("C", (), {"base_url": f"normalized:{url}"})())
     assert workflows.normalize_backend_url("x") == "normalized:x"
 
-    fake_manager = MagicMock()
-    fake_manager.normalize_model_name.return_value = "plain-model"
-    monkeypatch.setattr(workflows.OllamaModelManager, "create", lambda *_: fake_manager)
-    assert workflows.normalize_ollama_model_for_api("ollama/model") == "plain-model"
+    fake_backend = MagicMock()
+    fake_backend.normalize_model_name.return_value = "plain-model"
+    monkeypatch.setattr(workflows, "OllamaBackend", lambda _url: fake_backend)
+    assert workflows.normalize_backend_model_for_api("ollama/model") == "plain-model"
 
     fake_instance_manager = MagicMock()
     fake_instance_manager.destroy_instance_and_related_storage.return_value = "done"
@@ -164,7 +164,7 @@ def test_workflow_normalizers_and_stop(monkeypatch):
     assert workflows.stop_vastai_instance(MagicMock(), 7) == "done"
 
 
-def test_provision_vastai_ollama_reuses_running_instance(monkeypatch):
+def test_provision_vastai_backend_reuses_running_instance(monkeypatch):
     sdk = MagicMock()
     fake_manager = MagicMock()
     reusable = {"id": 9, "gpu_total_ram": 32000, "ask_contract_id": 44}
@@ -200,12 +200,12 @@ def test_provision_vastai_ollama_reuses_running_instance(monkeypatch):
 
     monkeypatch.setattr(workflows, "InstanceManager", FakeInstanceManager)
     monkeypatch.setattr(workflows.ModelSelector, "select", lambda self, _vram: _SelectedModel("foo:1", 32000, 50))
-    monkeypatch.setattr(workflows, "list_existing_ollama_models", lambda _url: ["foo:1"])
-    monkeypatch.setattr(workflows, "list_running_ollama_models", lambda _url: ["foo:1"])
-    monkeypatch.setattr(workflows, "warmup_existing_ollama_model", lambda *_args, **_kwargs: "foo:1")
-    monkeypatch.setattr(workflows, "normalize_ollama_model_for_api", lambda model: model)
+    monkeypatch.setattr(workflows, "list_backend_models", lambda _url: ["foo:1"])
+    monkeypatch.setattr(workflows, "list_running_backend_models", lambda _url: ["foo:1"])
+    monkeypatch.setattr(workflows, "warmup_backend_model", lambda *_args, **_kwargs: "foo:1")
+    monkeypatch.setattr(workflows, "normalize_backend_model_for_api", lambda model: model)
 
-    result = workflows.provision_vastai_ollama(
+    result = workflows.provision_vastai_backend(
         sdk,
         template_hash="tpl",
         min_dph=1,
@@ -220,7 +220,7 @@ def test_provision_vastai_ollama_reuses_running_instance(monkeypatch):
     fake_manager.pull_model.assert_not_called()
 
 
-def test_provision_vastai_ollama_creates_new_instance_and_warms(monkeypatch):
+def test_provision_vastai_backend_creates_new_instance_and_warms(monkeypatch):
     sdk = MagicMock()
     fake_manager = MagicMock()
     fake_manager.find_reusable_running_instance.return_value = None
@@ -259,13 +259,13 @@ def test_provision_vastai_ollama_creates_new_instance_and_warms(monkeypatch):
     monkeypatch.setattr(workflows.OfferFinder, "find_best", lambda self, **_: type("Offer", (), {"offer_id": 5, "total_vram_mb": 24000})())
     monkeypatch.setattr(workflows.ModelSelector, "select", lambda self, _vram: _SelectedModel("foo:1", 20000, 60))
     monkeypatch.setattr(workflows.TemplateLoader, "load", lambda self, _hash: type("Tpl", (), {"env": "ENV=1", "image": "img"})())
-    monkeypatch.setattr(workflows, "list_existing_ollama_models", lambda _url: [])
-    monkeypatch.setattr(workflows, "list_running_ollama_models", lambda _url: [])
+    monkeypatch.setattr(workflows, "list_backend_models", lambda _url: [])
+    monkeypatch.setattr(workflows, "list_running_backend_models", lambda _url: [])
     warmed = []
-    monkeypatch.setattr(workflows, "warmup_existing_ollama_model", lambda *_args, **_kwargs: warmed.append(True) or "foo:1")
-    monkeypatch.setattr(workflows, "normalize_ollama_model_for_api", lambda model: model)
+    monkeypatch.setattr(workflows, "warmup_backend_model", lambda *_args, **_kwargs: warmed.append(True) or "foo:1")
+    monkeypatch.setattr(workflows, "normalize_backend_model_for_api", lambda model: model)
 
-    result = workflows.provision_vastai_ollama(
+    result = workflows.provision_vastai_backend(
         sdk,
         template_hash="tpl",
         min_dph=1,
@@ -280,7 +280,7 @@ def test_provision_vastai_ollama_creates_new_instance_and_warms(monkeypatch):
     fake_manager.pull_model.assert_called_once_with(12, "foo:1", backend_url="http://x:11434")
 
 
-def test_provision_vastai_ollama_abort_and_pull_warning(monkeypatch):
+def test_provision_vastai_backend_abort_and_pull_warning(monkeypatch):
     sdk = MagicMock()
     fake_manager = MagicMock()
     fake_manager.find_reusable_running_instance.return_value = None
@@ -318,7 +318,7 @@ def test_provision_vastai_ollama_abort_and_pull_warning(monkeypatch):
     monkeypatch.setattr(workflows.TemplateLoader, "load", lambda self, _hash: type("Tpl", (), {"env": "ENV=1", "image": "img"})())
 
     with pytest.raises(workflows.UserAbortedError):
-        workflows.provision_vastai_ollama(
+        workflows.provision_vastai_backend(
             sdk,
             template_hash="tpl",
             min_dph=1,
@@ -330,7 +330,7 @@ def test_provision_vastai_ollama_abort_and_pull_warning(monkeypatch):
     fake_manager.create.return_value = 12
     fake_manager.wait_until_running.return_value = {"id": 12}
 
-    result = workflows.provision_vastai_ollama(
+    result = workflows.provision_vastai_backend(
         sdk,
         template_hash="tpl",
         min_dph=1,
@@ -345,9 +345,9 @@ def test_api_backend_functions(monkeypatch, tmp_path):
     monkeypatch.setattr(api_backend, "ModelSelector", lambda: type("S", (), {"list_models": lambda self: [_SelectedModel("m1", 1, 2)]})())
     assert api_backend.list_vastai_models() == [{"name": "m1", "vram_mb": 1, "required_disk_gb": 2}]
 
-    monkeypatch.setattr(api_backend, "use_existing_ollama_server", lambda url, model_name: type("Srv", (), {"url": f"norm:{url}"})())
-    monkeypatch.setattr(api_backend, "list_existing_ollama_models", lambda _url: ["a"])
-    monkeypatch.setattr(api_backend, "list_running_ollama_models", lambda _url: ["a"])
+    monkeypatch.setattr(api_backend, "use_existing_backend_server", lambda url, model_name: type("Srv", (), {"url": f"norm:{url}"})())
+    monkeypatch.setattr(api_backend, "list_backend_models_wf", lambda _url: ["a"])
+    monkeypatch.setattr(api_backend, "list_running_backend_models", lambda _url: ["a"])
     payload = api_backend.list_backend_models("raw")
     assert payload["backend_url"] == "norm:raw"
 
@@ -378,7 +378,7 @@ def test_api_backend_functions(monkeypatch, tmp_path):
     kubeconfig = tmp_path / "config"
     kubeconfig.write_text("apiVersion: v1\n")
     warmed = []
-    monkeypatch.setattr(api_backend, "warmup_existing_ollama_model", lambda *_args, **_kwargs: warmed.append(True) or "m")
+    monkeypatch.setattr(api_backend, "warmup_backend_model", lambda *_args, **_kwargs: warmed.append(True) or "m")
     monkeypatch.setattr(api_backend, "_make_agent_runner", lambda *_args, **_kwargs: type("R", (), {"ask": lambda self, **_: "answer"})())
     areq = api_backend.RunAgenticAgentRequest(question="q", model="m", backend_url="http://x", backend_warmup=True, backend_warmup_timeout=1, kubeconfig=str(kubeconfig))
     assert api_backend.run_agentic_agent(areq) == {"answer": "answer"}

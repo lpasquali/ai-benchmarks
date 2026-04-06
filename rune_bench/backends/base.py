@@ -1,7 +1,7 @@
 """Protocol and credential types for LLM backend implementations."""
 
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 
 @dataclass(frozen=True)
@@ -27,6 +27,7 @@ class BackendCredentials:
     extra: dict[str, str] = field(default_factory=dict, hash=False, compare=False)
 
 
+@runtime_checkable
 class LLMBackend(Protocol):
     """Protocol for LLM backend clients.
 
@@ -34,6 +35,34 @@ class LLMBackend(Protocol):
     alongside the existing Ollama backend.
     """
 
+    @property
+    def base_url(self) -> str:
+        """Return the normalized backend endpoint URL."""
+        ...
+
     def get_model_capabilities(self, model: str) -> ModelCapabilities:
         """Return best-effort capability metadata for the given model."""
+        ...
+
+    def list_models(self) -> list[str]:
+        """Return model names available on this backend."""
+        ...
+
+    def list_running_models(self) -> list[str]:
+        """Return model names currently loaded/active on this backend."""
+        ...
+
+    def normalize_model_name(self, model_name: str) -> str:
+        """Normalize a provider-prefixed model name to the backend's native form."""
+        ...
+
+    def warmup(
+        self,
+        model_name: str,
+        *,
+        timeout_seconds: int = 120,
+        poll_interval_seconds: float = 2.0,
+        keep_alive: str = "30m",
+    ) -> str:
+        """Load a model and wait until it is ready. Return the resolved model name."""
         ...

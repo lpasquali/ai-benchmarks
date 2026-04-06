@@ -245,12 +245,9 @@ def test_api_server_backend_success_paths(monkeypatch):
 
 def test_workflow_normalize_backend_url_success(monkeypatch):
     from rune_bench import workflows
+    from rune_bench.backends.ollama import OllamaBackend
 
-    class DummyClient:
-        def __init__(self, _url: str):
-            self.base_url = "http://normalized:11434"
-
-    monkeypatch.setattr(workflows, "OllamaClient", DummyClient)
+    monkeypatch.setattr(OllamaBackend, "normalize_url", staticmethod(lambda _url: "http://normalized:11434"))
     assert workflows.normalize_backend_url("localhost:11434") == "http://normalized:11434"
 
 
@@ -295,7 +292,7 @@ def test_vastai_provider_provision_and_teardown(monkeypatch):
     fake_provision_result.contract_id = 42
 
     import rune_bench.workflows as workflows_mod
-    monkeypatch.setattr(workflows_mod, "provision_vastai_ollama", lambda *_a, **_k: fake_provision_result)
+    monkeypatch.setattr(workflows_mod, "provision_vastai_backend", lambda *_a, **_k: fake_provision_result)
 
     stop_calls = []
     monkeypatch.setattr(workflows_mod, "stop_vastai_instance", lambda sdk, cid: stop_calls.append(cid))

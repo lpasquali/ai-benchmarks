@@ -8,7 +8,7 @@ from rune_bench.resources.base import ProvisioningResult
 class VastAIProvider:
     """LLMResourceProvider backed by Vast.ai GPU instances.
 
-    Wraps :func:`rune_bench.workflows.provision_vastai_ollama` and
+    Wraps :func:`rune_bench.workflows.provision_vastai_backend` and
     :func:`rune_bench.workflows.stop_vastai_instance`.
     """
 
@@ -30,8 +30,8 @@ class VastAIProvider:
         self._stop_on_teardown = stop_on_teardown
 
     def provision(self) -> ProvisioningResult:
-        from rune_bench.workflows import provision_vastai_ollama
-        result = provision_vastai_ollama(
+        from rune_bench.workflows import provision_vastai_backend
+        result = provision_vastai_backend(
             self._sdk,
             template_hash=self._template_hash,
             min_dph=self._min_dph,
