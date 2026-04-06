@@ -59,8 +59,8 @@ class RuneApiClient:
             raise RuntimeError("API payload missing 'models' list for Vast.ai model catalog")
         return [m for m in models if isinstance(m, dict)]
 
-    def get_ollama_models(self, ollama_url: str) -> dict:
-        payload = self._request("GET", "/v1/ollama/models", query={"ollama_url": ollama_url})
+    def get_ollama_models(self, backend_url: str) -> dict:
+        payload = self._request("GET", "/v1/ollama/models", query={"backend_url": backend_url})
         if not isinstance(payload.get("models"), list):
             raise RuntimeError("API payload missing 'models' list for Ollama models endpoint")
         if not isinstance(payload.get("running_models"), list):

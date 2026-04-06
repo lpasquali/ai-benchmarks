@@ -33,14 +33,14 @@ class K8sGPTDriverClient:
         self._kubeconfig = kubeconfig
         self._transport: DriverTransport = transport or make_driver_transport("k8sgpt")
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Dispatch an analysis request to the k8sgpt driver and return the answer.
 
         Args:
             question: Natural-language question or resource-kind hint
                       (e.g. ``"Pod"``, ``"Service"``, ``"Why is my pod failing?"``).
             model: Ollama model identifier (e.g. ``"llama3.1:8b"``).
-            ollama_url: Base URL of the Ollama server (optional).
+            backend_url: Base URL of the Ollama server (optional).
 
         Returns:
             K8sGPT's textual analysis or ``"No issues detected"`` when the
@@ -52,12 +52,12 @@ class K8sGPTDriverClient:
             "model": resolved_model,
             "kubeconfig_path": str(self._kubeconfig),
         }
-        if ollama_url:
-            params["ollama_url"] = ollama_url
+        if backend_url:
+            params["backend_url"] = backend_url
 
         debug_log(
             f"K8sGPTDriverClient.ask: question={question!r} model={resolved_model!r} "
-            f"ollama_url={ollama_url or '<none>'}"
+            f"backend_url={backend_url or '<none>'}"
         )
         result = self._transport.call("ask", params)
 

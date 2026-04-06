@@ -17,7 +17,7 @@ Implementation notes:
     client.create_session(url=start_url)         # stateful browser session
     client.step_session(session_id, cmd=step)    # step-by-step execution
 - `question` maps to the browser task command (e.g. "find the price of X on amazon.com")
-- `model` and `ollama_url` are not used (MultiOn uses its own cloud agent).
+- `model` and `backend_url` are not used (MultiOn uses its own cloud agent).
 """
 
 
@@ -27,7 +27,7 @@ class MultiOnRunner:
     def __init__(self) -> None:
         pass
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Execute a browser-based web task and return the result."""
         raise NotImplementedError(
             "MultiOnRunner is not yet implemented. "

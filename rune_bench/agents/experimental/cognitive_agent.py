@@ -52,7 +52,7 @@ class CognitiveAgentRunner:
             return f"Reflection: Failed to achieve goal '{goal}'. Needs replanning."
         return f"Reflection: Successfully achieved goal '{goal}'."
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Run the full cognitive ReAct loop."""
         self.memory.append_episodic(action="Receive Objective", result=question)
         

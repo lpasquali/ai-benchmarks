@@ -12,7 +12,7 @@ Supported actions
 -----------------
 ask
     params: question (str), model (str, optional),
-            ollama_url (str, optional)
+            backend_url (str, optional)
     result: {"answer": str, "incidents": list}
 
     .. note:: The ``triage_actions`` field is not yet included in the result.
@@ -105,9 +105,9 @@ def _format_incident_data(incidents: list[dict], alerts_by_incident: dict[str, l
     return "\n".join(lines)
 
 
-def _call_ollama(prompt: str, model: str, ollama_url: str) -> str:
+def _call_ollama(prompt: str, model: str, backend_url: str) -> str:
     """Call the Ollama /api/generate endpoint for triage synthesis."""
-    base = normalize_url(ollama_url, "Ollama")
+    base = normalize_url(backend_url, "Ollama")
     url = f"{base.rstrip('/')}/api/generate"
     result = make_http_request(
         url,
@@ -121,7 +121,7 @@ def _call_ollama(prompt: str, model: str, ollama_url: str) -> str:
 def _handle_ask(params: dict) -> dict:
     question: str = params["question"]
     model: str = params.get("model", "")
-    ollama_url: str | None = params.get("ollama_url")
+    backend_url: str | None = params.get("backend_url")
 
     api_key = os.environ.get("RUNE_PAGERDUTY_API_KEY", "")
     if not api_key:
@@ -144,7 +144,7 @@ def _handle_ask(params: dict) -> dict:
 
     formatted_data = _format_incident_data(incidents, alerts_by_incident)
 
-    if model and ollama_url:
+    if model and backend_url:
         prompt = (
             "You are an SRE triage agent. Given these PagerDuty incidents, provide: "
             "1) Prioritized triage summary, 2) Correlation between related incidents, "
@@ -152,7 +152,7 @@ def _handle_ask(params: dict) -> dict:
             f"Question: {question}\n\n"
             f"Incidents:\n{formatted_data}"
         )
-        answer = _call_ollama(prompt, model, ollama_url)
+        answer = _call_ollama(prompt, model, backend_url)
     else:
         answer = formatted_data
 

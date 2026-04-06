@@ -111,7 +111,7 @@ def test_rune_remaining_branches(monkeypatch, tmp_path):
         template_env="ENV=1",
         contract_id=1,
         details=details,
-        ollama_url=None,
+        backend_url=None,
         pull_warning="warn",
     )
     rune._print_vastai_result(result)
@@ -128,11 +128,11 @@ def test_rune_remaining_branches(monkeypatch, tmp_path):
     monkeypatch.setattr(rune, "_vastai_sdk", lambda: MagicMock())
     rune._run_vastai_provisioning(template_hash="t", min_dph=1, max_dph=2, reliability=0.9)
 
-    # http run-ollama-instance RuntimeError branch
+    # http run-llm-instance RuntimeError branch
     monkeypatch.setattr(rune, "BACKEND_MODE", "http")
     monkeypatch.setattr(rune, "_run_http_job_with_progress", lambda **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
     with pytest.raises(rune.typer.Exit):
-        rune.run_ollama_instance(debug=False, vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, ollama_url="http://x", idempotency_key=None)
+        rune.run_llm_instance(debug=False, vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url="http://x", idempotency_key=None)
 
     # run-benchmark local existing server failure branch
     monkeypatch.setattr(rune, "BACKEND_MODE", "local")
@@ -147,11 +147,11 @@ def test_rune_remaining_branches(monkeypatch, tmp_path):
             min_dph=1,
             max_dph=2,
             reliability=0.9,
-            ollama_url="http://x",
+            backend_url="http://x",
             question="q",
             model="m",
-            ollama_warmup=False,
-            ollama_warmup_timeout=1,
+            backend_warmup=False,
+            backend_warmup_timeout=1,
             kubeconfig=kubeconfig,
             vastai_stop_instance=True,
             idempotency_key=None,
@@ -167,7 +167,7 @@ def test_rune_remaining_branches(monkeypatch, tmp_path):
         template_env="ENV=1",
         contract_id=77,
         details=details,
-        ollama_url="http://x",
+        backend_url="http://x",
         pull_warning=None,
     ))
     monkeypatch.setattr(rune, "_warmup_ollama_model", lambda **_k: None)
@@ -190,11 +190,11 @@ def test_rune_remaining_branches(monkeypatch, tmp_path):
         min_dph=1,
         max_dph=2,
         reliability=0.9,
-        ollama_url=None,
+        backend_url=None,
         question="q",
         model="m",
-        ollama_warmup=False,
-        ollama_warmup_timeout=1,
+        backend_warmup=False,
+        backend_warmup_timeout=1,
         kubeconfig=kubeconfig,
         vastai_stop_instance=True,
         idempotency_key=None,
@@ -210,7 +210,7 @@ def test_rune_remaining_branches(monkeypatch, tmp_path):
         template_env="ENV=1",
         contract_id=88,
         details=details,
-        ollama_url=None,
+        backend_url=None,
         pull_warning=None,
     ))
     monkeypatch.setattr(rune, "stop_vastai_instance", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("stop-failed")))
@@ -222,11 +222,11 @@ def test_rune_remaining_branches(monkeypatch, tmp_path):
             min_dph=1,
             max_dph=2,
             reliability=0.9,
-            ollama_url=None,
+            backend_url=None,
             question="q",
             model="m",
-            ollama_warmup=False,
-            ollama_warmup_timeout=1,
+            backend_warmup=False,
+            backend_warmup_timeout=1,
             kubeconfig=kubeconfig,
             vastai_stop_instance=True,
             idempotency_key=None,
@@ -247,7 +247,7 @@ def test_rune_init_main_guard_executes(monkeypatch):
         runpy.run_path(str(init_path), run_name="__main__")
 
 
-def test_run_ollama_instance_http_vastai_result_branch(monkeypatch):
+def test_run_llm_instance_http_vastai_result_branch(monkeypatch):
     test_console = rune.Console(record=True, width=220)
     monkeypatch.setattr(rune, "console", test_console)
     monkeypatch.setattr(rune, "BACKEND_MODE", "http")
@@ -264,25 +264,25 @@ def test_run_ollama_instance_http_vastai_result_branch(monkeypatch):
             "result": {
                 "mode": "vastai",
                 "contract_id": 123,
-                "ollama_url": "http://x:11434",
+                "backend_url": "http://x:11434",
                 "model_name": "llama3.1:8b",
             }
         },
     )
 
-    rune.run_ollama_instance(
+    rune.run_llm_instance(
         debug=False,
         vastai=True,
         template_hash="t",
         min_dph=1,
         max_dph=2,
         reliability=0.9,
-        ollama_url=None,
+        backend_url=None,
         idempotency_key=None,
     )
 
 
-def test_run_ollama_instance_http_existing_result_branch(monkeypatch):
+def test_run_llm_instance_http_existing_result_branch(monkeypatch):
     test_console = rune.Console(record=True, width=220)
     monkeypatch.setattr(rune, "console", test_console)
     monkeypatch.setattr(rune, "BACKEND_MODE", "http")
@@ -295,7 +295,7 @@ def test_run_ollama_instance_http_existing_result_branch(monkeypatch):
         lambda **_k: {
             "result": {
                 "mode": "existing",
-                "ollama_url": "http://x:11434",
+                "backend_url": "http://x:11434",
             }
         },
     )
@@ -303,14 +303,14 @@ def test_run_ollama_instance_http_existing_result_branch(monkeypatch):
     captured = {}
     monkeypatch.setattr(rune, "_print_existing_ollama", lambda server: captured.setdefault("url", server.url))
 
-    rune.run_ollama_instance(
+    rune.run_llm_instance(
         debug=False,
         vastai=False,
         template_hash="t",
         min_dph=1,
         max_dph=2,
         reliability=0.9,
-        ollama_url="http://fallback:11434",
+        backend_url="http://fallback:11434",
         idempotency_key=None,
     )
 
@@ -353,12 +353,12 @@ def test_holmes_and_ollama_remaining_branches(monkeypatch, tmp_path):
     # _fetch_model_limits success path via driver module monkeypatches
     monkeypatch.setattr(holmes_driver_module.OllamaModelManager, "create", lambda *_: type("M", (), {"normalize_model_name": lambda self, m: "norm"})())
     monkeypatch.setattr(holmes_driver_module, "OllamaClient", lambda *_: type("C", (), {"get_model_capabilities": lambda self, _m: OllamaModelCapabilities("norm", 10, 2)})())
-    limits = runner._fetch_model_limits(model="m", ollama_url="http://x")
+    limits = runner._fetch_model_limits(model="m", backend_url="http://x")
     assert limits.get("context_window") == 10
 
     # _fetch_model_limits failure path
     monkeypatch.setattr(holmes_driver_module, "OllamaClient", lambda *_: type("C", (), {"get_model_capabilities": lambda self, _m: (_ for _ in ()).throw(RuntimeError("bad"))})())
-    limits2 = runner._fetch_model_limits(model="m", ollama_url="http://x")
+    limits2 = runner._fetch_model_limits(model="m", backend_url="http://x")
     assert limits2 == {}
 
     # Ollama invalid URL branch
@@ -421,7 +421,7 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
         api_backend,
         "_make_resource_provider_for_benchmark",
         lambda req: type("P", (), {
-            "provision": lambda self: ProvisioningResult(ollama_url="http://x", model="m", provider_handle=99),
+            "provision": lambda self: ProvisioningResult(backend_url="http://x", model="m", provider_handle=99),
             "teardown": lambda self, r: stopped.append(True),
         })(),
     )
@@ -433,11 +433,11 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
             min_dph=1,
             max_dph=2,
             reliability=0.9,
-            ollama_url=None,
+            backend_url=None,
             question="q",
             model="m",
-            ollama_warmup=False,
-            ollama_warmup_timeout=1,
+            backend_warmup=False,
+            backend_warmup_timeout=1,
             kubeconfig=str(kubeconfig),
             vastai_stop_instance=True,
         )
@@ -456,7 +456,7 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
     monkeypatch.setattr(
         api_backend,
         "_make_resource_provider_for_benchmark",
-        lambda req: ExistingOllamaProvider(req.ollama_url, model=req.model, warmup=req.ollama_warmup, warmup_timeout=req.ollama_warmup_timeout),
+        lambda req: ExistingOllamaProvider(req.backend_url, model=req.model, warmup=req.backend_warmup, warmup_timeout=req.backend_warmup_timeout),
     )
     api_backend.run_benchmark(
         api_backend.RunBenchmarkRequest(
@@ -465,11 +465,11 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
             min_dph=1,
             max_dph=2,
             reliability=0.9,
-            ollama_url="http://x",
+            backend_url="http://x",
             question="q",
             model="m",
-            ollama_warmup=True,
-            ollama_warmup_timeout=1,
+            backend_warmup=True,
+            backend_warmup_timeout=1,
             kubeconfig=str(kubeconfig),
             vastai_stop_instance=False,
         )
@@ -481,13 +481,13 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
         store=api_server.JobStore(tmp_path / "jobs.db"),
         security=api_server.ApiSecurityConfig(auth_disabled=True, tenant_tokens={}),
     )
-    monkeypatch.setattr(api_server, "list_ollama_models", lambda _url: (_ for _ in ()).throw(RuntimeError("bad-ollama")))
+    monkeypatch.setattr(api_server, "list_backend_models", lambda _url: (_ for _ in ()).throw(RuntimeError("bad-ollama")))
     server = api_server.ThreadingHTTPServer(("127.0.0.1", 0), app.create_handler())
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     host, port = server.server_address
     try:
-        req = Request(f"http://{host}:{port}/v1/ollama/models?ollama_url=http://x")
+        req = Request(f"http://{host}:{port}/v1/ollama/models?backend_url=http://x")
         with pytest.raises(HTTPError) as exc:
             urlopen(req)  # nosec  # test request mock/local execution
         assert exc.value.code == 400

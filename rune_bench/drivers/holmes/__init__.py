@@ -34,17 +34,17 @@ class HolmesDriverClient:
         self._kubeconfig = kubeconfig
         self._transport: DriverTransport = transport or make_driver_transport("holmes")
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Dispatch a question to the holmes driver and return the answer.
 
         Fetches Ollama model capability limits (context window, max output tokens)
-        when *ollama_url* is provided and passes them to the driver so it can set
+        when *backend_url* is provided and passes them to the driver so it can set
         the appropriate environment overrides before calling HolmesGPT.
 
         Args:
             question: Natural-language question about the Kubernetes cluster.
             model: Ollama model identifier (e.g. ``"llama3.1:8b"``).
-            ollama_url: Base URL of the Ollama server (optional).
+            backend_url: Base URL of the Ollama server (optional).
 
         Returns:
             HolmesGPT's textual answer.
@@ -55,13 +55,13 @@ class HolmesDriverClient:
             "model": resolved_model,
             "kubeconfig_path": str(self._kubeconfig),
         }
-        if ollama_url:
-            params["ollama_url"] = ollama_url
-            params.update(self._fetch_model_limits(model=resolved_model, ollama_url=ollama_url))
+        if backend_url:
+            params["backend_url"] = backend_url
+            params.update(self._fetch_model_limits(model=resolved_model, backend_url=backend_url))
 
         debug_log(
             f"HolmesDriverClient.ask: question={question!r} model={resolved_model!r} "
-            f"ollama_url={ollama_url or '<none>'}"
+            f"backend_url={backend_url or '<none>'}"
         )
         result = self._transport.call("ask", params)
 
@@ -78,11 +78,11 @@ class HolmesDriverClient:
 
         return answer_text
 
-    def _fetch_model_limits(self, *, model: str, ollama_url: str) -> dict:
+    def _fetch_model_limits(self, *, model: str, backend_url: str) -> dict:
         """Return context_window / max_output_tokens for *model*, or ``{}`` on error."""
         try:
-            normalized = OllamaModelManager.create(ollama_url).normalize_model_name(model)
-            caps = OllamaClient(ollama_url).get_model_capabilities(normalized)
+            normalized = OllamaModelManager.create(backend_url).normalize_model_name(model)
+            caps = OllamaClient(backend_url).get_model_capabilities(normalized)
         except Exception as exc:  # noqa: BLE001
             debug_log(f"Could not fetch model limits for {model!r}: {exc}")
             return {}

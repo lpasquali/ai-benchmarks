@@ -16,7 +16,7 @@ Implementation notes:
     GET  /jobs/{id}   poll until status == "complete"
     Returns: image URLs
 - The `question` maps to the image generation prompt.
-- `model` and `ollama_url` are not used.
+- `model` and `backend_url` are not used.
 - Returns URLs or base64-encoded image data as the answer string.
 """
 
@@ -27,7 +27,7 @@ class MidjourneyRunner:
     def __init__(self) -> None:
         pass
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Generate an image from the prompt and return the result URL(s)."""
         raise NotImplementedError(
             "MidjourneyRunner is not yet implemented. "

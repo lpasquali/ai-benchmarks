@@ -27,13 +27,13 @@ class DaggerDriverClient:
     ) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("dagger")
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Dispatch a pipeline objective to the dagger driver and return the result.
 
         Args:
             question: Pipeline command or objective to execute.
             model: Model identifier (injected as env var in container steps).
-            ollama_url: Base URL of the Ollama server (optional).
+            backend_url: Base URL of the Ollama server (optional).
 
         Returns:
             Pipeline stdout/result as a string.
@@ -42,12 +42,12 @@ class DaggerDriverClient:
             "question": question,
             "model": model,
         }
-        if ollama_url:
-            params["ollama_url"] = ollama_url
+        if backend_url:
+            params["backend_url"] = backend_url
 
         debug_log(
             f"DaggerDriverClient.ask: question={question!r} model={model!r} "
-            f"ollama_url={ollama_url or '<none>'}"
+            f"backend_url={backend_url or '<none>'}"
         )
         result = self._transport.call("ask", params)
 

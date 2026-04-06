@@ -32,14 +32,14 @@ class BurpGPTDriverClient:
     ) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("burpgpt")
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Dispatch a scan request to the burpgpt driver and return findings.
 
         Args:
             question: Target URL or scan objective.
             model: Ollama model identifier (currently unused by BurpGPT but
                    kept for interface consistency).
-            ollama_url: Base URL of the Ollama server (currently unused).
+            backend_url: Base URL of the Ollama server (currently unused).
 
         Returns:
             Formatted vulnerability findings from the Burp scan.
@@ -48,12 +48,12 @@ class BurpGPTDriverClient:
             "question": question,
             "model": model.strip(),
         }
-        if ollama_url:
-            params["ollama_url"] = ollama_url
+        if backend_url:
+            params["backend_url"] = backend_url
 
         debug_log(
             f"BurpGPTDriverClient.ask: question={question!r} model={model!r} "
-            f"ollama_url={ollama_url or '<none>'}"
+            f"backend_url={backend_url or '<none>'}"
         )
         result = self._transport.call("ask", params)
 

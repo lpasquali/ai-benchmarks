@@ -17,7 +17,7 @@ Implementation notes:
     GET  /scans/{id}      poll until status == "complete"
     Returns: { risk_score, findings: list, remediation: list }
 - `question` maps to the skill/plugin definition or description to scan.
-- `model` and `ollama_url` are not used.
+- `model` and `backend_url` are not used.
 """
 
 
@@ -27,7 +27,7 @@ class SkillFortifyRunner:
     def __init__(self) -> None:
         pass
 
-    def ask(self, question: str, model: str, ollama_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Scan an AI skill definition and return the security findings."""
         raise NotImplementedError(
             "SkillFortifyRunner is not yet implemented. "

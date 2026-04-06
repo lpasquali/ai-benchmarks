@@ -13,7 +13,7 @@ class ProvisioningResult:
     It is excluded from equality and hash comparisons deliberately.
     """
 
-    ollama_url: str | None
+    backend_url: str | None
     model: str | None = None
     provider_handle: Any = field(default=None, hash=False, compare=False)
 

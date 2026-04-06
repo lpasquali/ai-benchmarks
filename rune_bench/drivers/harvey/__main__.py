@@ -6,7 +6,7 @@ Wire protocol (v1):
     stdout error:   {"status": "error", "error": "MESSAGE", "id": "UUID"}
 
 Supported actions:
-    ask — params: question (str), model (str, optional), ollama_url (str, optional)
+    ask — params: question (str), model (str, optional), backend_url (str, optional)
     info — no params
 """
 

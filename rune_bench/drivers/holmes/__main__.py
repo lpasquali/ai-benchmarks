@@ -15,7 +15,7 @@ Supported actions
 -----------------
 ask
     params: question (str), model (str), kubeconfig_path (str),
-            ollama_url (str, optional), context_window (int, optional),
+            backend_url (str, optional), context_window (int, optional),
             max_output_tokens (int, optional)
     result: {"answer": str}
 
@@ -36,7 +36,7 @@ def _handle_ask(params: dict) -> dict:
     question: str = params["question"]
     model: str = params["model"]
     kubeconfig_path: str = params["kubeconfig_path"]
-    ollama_url: str | None = params.get("ollama_url")
+    backend_url: str | None = params.get("backend_url")
     context_window: int | None = params.get("context_window")
     max_output_tokens: int | None = params.get("max_output_tokens")
 
@@ -53,9 +53,9 @@ def _handle_ask(params: dict) -> dict:
     env = os.environ.copy()
     env["KUBECONFIG"] = kubeconfig_path
     env.setdefault("DISABLE_PROMETHEUS_TOOLSET", "true")
-    if ollama_url:
-        env["OLLAMA_API_BASE"] = ollama_url
-        env["OPENAI_API_BASE"] = ollama_url
+    if backend_url:
+        env["OLLAMA_API_BASE"] = backend_url
+        env["OPENAI_API_BASE"] = backend_url
     if context_window is not None:
         env.setdefault("OVERRIDE_MAX_CONTENT_SIZE", str(context_window))
     if max_output_tokens is not None:

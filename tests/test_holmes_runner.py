@@ -59,7 +59,7 @@ def test_ask_strips_model_name_whitespace(tmp_path: Path) -> None:
     assert params["model"] == "llama3.1:8b"
 
 
-def test_ask_includes_ollama_url_and_limits(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_ask_includes_backend_url_and_limits(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     kubeconfig = tmp_path / "kubeconfig"
     kubeconfig.write_text("apiVersion: v1\n")
 
@@ -80,15 +80,15 @@ def test_ask_includes_ollama_url_and_limits(monkeypatch: pytest.MonkeyPatch, tmp
     monkeypatch.setattr(holmes_driver_module, "OllamaClient", lambda *_: fake_client)
 
     runner = HolmesRunner(kubeconfig, transport=mock_transport)
-    runner.ask("q", "llama3.1:8b", ollama_url="http://ollama:11434")
+    runner.ask("q", "llama3.1:8b", backend_url="http://ollama:11434")
 
     _, params = mock_transport.call.call_args[0]
-    assert params["ollama_url"] == "http://ollama:11434"
+    assert params["backend_url"] == "http://ollama:11434"
     assert params["context_window"] == 131072
     assert params["max_output_tokens"] == 26214
 
 
-def test_ask_omits_limits_when_no_ollama_url(tmp_path: Path) -> None:
+def test_ask_omits_limits_when_no_backend_url(tmp_path: Path) -> None:
     kubeconfig = tmp_path / "kubeconfig"
     kubeconfig.write_text("apiVersion: v1\n")
 
@@ -99,7 +99,7 @@ def test_ask_omits_limits_when_no_ollama_url(tmp_path: Path) -> None:
     runner.ask("q", "m")
 
     _, params = mock_transport.call.call_args[0]
-    assert "ollama_url" not in params
+    assert "backend_url" not in params
     assert "context_window" not in params
 
 
@@ -115,7 +115,7 @@ def test_fetch_model_limits_handles_ollama_error(
     monkeypatch.setattr(holmes_driver_module.OllamaModelManager, "create", broken_create)
 
     runner = HolmesRunner(kubeconfig, transport=MagicMock())
-    limits = runner._fetch_model_limits(model="m", ollama_url="http://ollama")
+    limits = runner._fetch_model_limits(model="m", backend_url="http://ollama")
     assert limits == {}
 
 
@@ -136,7 +136,7 @@ def test_fetch_model_limits_omits_none_values(
     monkeypatch.setattr(holmes_driver_module, "OllamaClient", lambda *_: fake_client)
 
     runner = HolmesRunner(kubeconfig, transport=MagicMock())
-    limits = runner._fetch_model_limits(model="m", ollama_url="http://ollama")
+    limits = runner._fetch_model_limits(model="m", backend_url="http://ollama")
     assert "context_window" not in limits
     assert "max_output_tokens" not in limits
 
