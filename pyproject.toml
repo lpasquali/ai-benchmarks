@@ -59,6 +59,7 @@ dev = [
     "ruff",
     "mypy",
     "bandit",
+    "types-PyYAML",
 ]
 
 [project.scripts]
@@ -79,16 +80,6 @@ include = ["rune*", "rune_bench*"]
 
 [tool.mypy]
 python_version = "3.11"
-
-# Reason: vastai SDK does not provide type hints
-[[tool.mypy.overrides]]
-module = "vastai"
-ignore_missing_imports = true
-
-# Reason: holmesgpt package does not provide type hints
-[[tool.mypy.overrides]]
-module = ["holmes", "holmes.*"]
-ignore_missing_imports = true
 
 [tool.bandit]
 # IEC 62443 4-1 ML4 SI-1: static application security testing

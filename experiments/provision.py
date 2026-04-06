@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
-from vastai import VastAI
+from vastai import VastAI  # type: ignore[import-untyped]  # Reason: vastai SDK does not provide type hints
 
 app = typer.Typer(help="AI Benchmarks Vast.ai Provisioning CLI", add_completion=False)
 console = Console()
