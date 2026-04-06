@@ -26,3 +26,7 @@ venv/
 # Build artifacts
 *.egg-info/
 pyvenv.cfg
+
+# OS
+.DS_Store
+Thumbs.db
