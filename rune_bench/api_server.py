@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Callable, TypeAlias
 from urllib.parse import parse_qs, urlparse
 
+from argon2 import PasswordHasher
 from rune_bench.api_backend import (
     get_cost_estimate,
     list_backend_models,
@@ -73,12 +74,13 @@ class ApiSecurityConfig:
         tokens_raw = os.environ.get("RUNE_API_TOKENS", "").strip()
         tenant_tokens: dict[str, str] = {}
         if tokens_raw:
+            ph = PasswordHasher()
             for item in tokens_raw.split(","):
                 tenant, _, token = item.partition(":")
                 tenant = tenant.strip()
                 token = token.strip()
                 if tenant and token:
-                    tenant_tokens[tenant] = hashlib.sha256(token.encode("utf-8")).hexdigest()
+                    tenant_tokens[tenant] = ph.hash(token)
         if not auth_disabled and not tenant_tokens:
             raise RuntimeError(
                 "RUNE API auth is enabled but no tenants are configured. "
@@ -161,11 +163,15 @@ class RuneApiApplication:
                     token = auth_header[7:].strip()
 
                 expected_hash = app.security.tenant_tokens.get(tenant_id)
-                if expected_hash:
-                    actual_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
-                    if hmac.compare_digest(actual_hash, expected_hash):
-                        logging.info(f"Auth success: IP {client_ip} authenticated as tenant '{tenant_id}'")
-                        return tenant_id
+                if expected_hash and token:
+                    ph = PasswordHasher()
+                    try:
+                        if ph.verify(expected_hash, token):
+                            logging.info(f"Auth success: IP {client_ip} authenticated as tenant '{tenant_id}'")
+                            return tenant_id
+                    except Exception:
+                        # Any verification failure falls through to auth failure handling below.
+                        pass
                 
                 with app.auth_lock:
                     app.auth_failures[client_ip].append(now)
