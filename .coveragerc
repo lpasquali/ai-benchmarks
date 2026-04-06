@@ -4,35 +4,39 @@ source =
     rune_bench
 omit =
     # Tier 2: vendor API required
-    rune_bench/agents/*/perplexity.py
-    rune_bench/drivers/perplexity/*
+    rune_bench/agents/*/consensus.py
+    rune_bench/drivers/consensus/*
     rune_bench/agents/*/elicit.py
     rune_bench/drivers/elicit/*
-    rune_bench/agents/*/pagerduty.py
-    rune_bench/drivers/pagerduty/*
     rune_bench/agents/*/metoro.py
     rune_bench/drivers/metoro/*
-    rune_bench/agents/*/mindgard.py
-    rune_bench/drivers/mindgard/*
-    rune_bench/agents/*/glean.py
-    rune_bench/drivers/glean/*
+    rune_bench/agents/*/cleric.py
+    rune_bench/drivers/cleric/*
     rune_bench/agents/*/burpgpt.py
     rune_bench/drivers/burpgpt/*
-    rune_bench/agents/*/midjourney.py
-    rune_bench/drivers/midjourney/*
-    rune_bench/agents/*/krea.py
-    rune_bench/drivers/krea/*
     rune_bench/agents/*/multion.py
     rune_bench/drivers/multion/*
-    # Tier 3: enterprise-only, no testable API
-    rune_bench/agents/*/harvey.py
-    rune_bench/drivers/harvey/*
-    rune_bench/agents/*/spellbook.py
-    rune_bench/drivers/spellbook/*
+    # Tier 3: enterprise contract required
+    rune_bench/agents/*/pagerduty.py
+    rune_bench/drivers/pagerduty/*
+    rune_bench/agents/*/perplexity.py
+    rune_bench/drivers/perplexity/*
+    rune_bench/agents/*/glean.py
+    rune_bench/drivers/glean/*
     rune_bench/agents/*/radiant.py
     rune_bench/drivers/radiant/*
     rune_bench/agents/*/xbow.py
     rune_bench/drivers/xbow/*
+    rune_bench/agents/*/harvey.py
+    rune_bench/drivers/harvey/*
+    rune_bench/agents/*/spellbook.py
+    rune_bench/drivers/spellbook/*
+    rune_bench/agents/*/midjourney.py
+    rune_bench/drivers/midjourney/*
+    rune_bench/agents/*/krea.py
+    rune_bench/drivers/krea/*
+    rune_bench/agents/*/mindgard.py
+    rune_bench/drivers/mindgard/*
     rune_bench/agents/*/sierra.py
     rune_bench/drivers/sierra/*
     rune_bench/agents/*/skillfortify.py
@@ -43,3 +47,23 @@ omit =
     # Backend stubs — intentionally unimplemented (raise NotImplementedError)
     rune_bench/backends/openai.py
     rune_bench/backends/bedrock.py
+    # Tier 2: vendor API required
+    rune_bench/agents/*/consensus.py
+    rune_bench/agents/*/elicit.py
+    rune_bench/agents/*/metoro.py
+    rune_bench/agents/*/cleric.py
+    rune_bench/agents/*/burpgpt.py
+    rune_bench/agents/*/multion.py
+    # Tier 3: enterprise contract required
+    rune_bench/agents/*/pagerduty.py
+    rune_bench/agents/*/perplexity.py
+    rune_bench/agents/*/glean.py
+    rune_bench/agents/*/radiant.py
+    rune_bench/agents/*/xbow.py
+    rune_bench/agents/*/harvey.py
+    rune_bench/agents/*/spellbook.py
+    rune_bench/agents/*/midjourney.py
+    rune_bench/agents/*/krea.py
+    rune_bench/agents/*/mindgard.py
+    rune_bench/agents/*/sierra.py
+    rune_bench/agents/*/skillfortify.py
