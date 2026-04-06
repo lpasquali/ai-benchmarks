@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import io
 import json
-import subprocess
+import subprocess  # nosec  # tests require subprocess
 
 import pytest
 
@@ -34,7 +34,7 @@ def test_handle_ask_calls_holmes_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     result = holmes_main._handle_ask({
         "question": "What is wrong?",
         "model": "llama3.1:8b",
-        "kubeconfig_path": "/tmp/kubeconfig",
+        "kubeconfig_path": "/tmp/kubeconfig",  # nosec  # test artifact paths
         "ollama_url": "http://ollama:11434",
         "context_window": 131072,
         "max_output_tokens": 26214,
@@ -42,7 +42,7 @@ def test_handle_ask_calls_holmes_cli(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result["answer"] == "the answer"
     assert "holmes.main" in captured["cmd"]
-    assert captured["env"]["KUBECONFIG"] == "/tmp/kubeconfig"
+    assert captured["env"]["KUBECONFIG"] == "/tmp/kubeconfig"  # nosec  # test artifact paths
     assert captured["env"]["OLLAMA_API_BASE"] == "http://ollama:11434"
     assert captured["env"]["OPENAI_API_BASE"] == "http://ollama:11434"
     assert captured["env"]["OVERRIDE_MAX_CONTENT_SIZE"] == "131072"
@@ -58,7 +58,7 @@ def test_handle_ask_works_without_optional_params(monkeypatch: pytest.MonkeyPatc
     result = holmes_main._handle_ask({
         "question": "q",
         "model": "m",
-        "kubeconfig_path": "/tmp/kc",
+        "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
     })
     assert result["answer"] == "answer"
 
@@ -70,7 +70,7 @@ def test_handle_ask_raises_on_nonzero_exit(monkeypatch: pytest.MonkeyPatch) -> N
         lambda *a, **kw: subprocess.CompletedProcess([], 1, stdout="", stderr="holmes error"),
     )
     with pytest.raises(RuntimeError, match="holmes error"):
-        holmes_main._handle_ask({"question": "q", "model": "m", "kubeconfig_path": "/tmp/kc"})
+        holmes_main._handle_ask({"question": "q", "model": "m", "kubeconfig_path": "/tmp/kc"})  # nosec  # test artifact paths
 
 
 def test_handle_ask_uses_stdout_detail_on_stderr_empty(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -80,7 +80,7 @@ def test_handle_ask_uses_stdout_detail_on_stderr_empty(monkeypatch: pytest.Monke
         lambda *a, **kw: subprocess.CompletedProcess([], 1, stdout="stdout error", stderr=""),
     )
     with pytest.raises(RuntimeError, match="stdout error"):
-        holmes_main._handle_ask({"question": "q", "model": "m", "kubeconfig_path": "/tmp/kc"})
+        holmes_main._handle_ask({"question": "q", "model": "m", "kubeconfig_path": "/tmp/kc"})  # nosec  # test artifact paths
 
 
 def test_handle_ask_does_not_override_existing_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -96,7 +96,7 @@ def test_handle_ask_does_not_override_existing_env_vars(monkeypatch: pytest.Monk
     holmes_main._handle_ask({
         "question": "q",
         "model": "m",
-        "kubeconfig_path": "/tmp/kc",
+        "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
         "context_window": 1234,
     })
     # setdefault should preserve the pre-existing env var
@@ -127,7 +127,7 @@ def test_main_processes_ask_request(monkeypatch: pytest.MonkeyPatch, capsys: pyt
         "stdin",
         io.StringIO(json.dumps({
             "action": "ask",
-            "params": {"question": "q", "model": "m", "kubeconfig_path": "/tmp/kc"},
+            "params": {"question": "q", "model": "m", "kubeconfig_path": "/tmp/kc"},  # nosec  # test artifact paths
             "id": "test-id",
         }) + "\n"),
     )

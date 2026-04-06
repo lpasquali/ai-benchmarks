@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import io
 import json
-import subprocess
+import subprocess  # nosec  # tests require subprocess
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -63,7 +63,7 @@ def test_handle_ask_calls_k8sgpt_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     result = k8sgpt_main._handle_ask({
         "question": "What is wrong?",
         "model": "llama3.1:8b",
-        "kubeconfig_path": "/tmp/kubeconfig",
+        "kubeconfig_path": "/tmp/kubeconfig",  # nosec  # test artifact paths
         "ollama_url": "http://ollama:11434",
     })
 
@@ -72,7 +72,7 @@ def test_handle_ask_calls_k8sgpt_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(result["findings"]) == 2
     assert "nginx-broken" in result["answer"]
     assert "k8sgpt" in captured["cmd"]
-    assert captured["env"]["KUBECONFIG"] == "/tmp/kubeconfig"
+    assert captured["env"]["KUBECONFIG"] == "/tmp/kubeconfig"  # nosec  # test artifact paths
     assert "--base-url" in captured["cmd"]
     assert "http://ollama:11434" in captured["cmd"]
 
@@ -90,7 +90,7 @@ def test_handle_ask_without_ollama_url(monkeypatch: pytest.MonkeyPatch) -> None:
     result = k8sgpt_main._handle_ask({
         "question": "q",
         "model": "m",
-        "kubeconfig_path": "/tmp/kc",
+        "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
     })
     assert result["answer"]
     assert "--base-url" not in captured["cmd"]
@@ -103,7 +103,7 @@ def test_handle_ask_missing_binary(monkeypatch: pytest.MonkeyPatch) -> None:
         k8sgpt_main._handle_ask({
             "question": "q",
             "model": "m",
-            "kubeconfig_path": "/tmp/kc",
+            "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
         })
 
 
@@ -118,7 +118,7 @@ def test_handle_ask_empty_results(monkeypatch: pytest.MonkeyPatch) -> None:
     result = k8sgpt_main._handle_ask({
         "question": "q",
         "model": "m",
-        "kubeconfig_path": "/tmp/kc",
+        "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
     })
     assert result["answer"] == "No issues detected"
     assert result["findings"] == []
@@ -135,7 +135,7 @@ def test_handle_ask_empty_stdout(monkeypatch: pytest.MonkeyPatch) -> None:
     result = k8sgpt_main._handle_ask({
         "question": "q",
         "model": "m",
-        "kubeconfig_path": "/tmp/kc",
+        "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
     })
     assert result["answer"] == "No issues detected"
 
@@ -149,7 +149,7 @@ def test_handle_ask_raises_on_nonzero_exit(monkeypatch: pytest.MonkeyPatch) -> N
     )
 
     with pytest.raises(RuntimeError, match="k8sgpt error"):
-        k8sgpt_main._handle_ask({"question": "q", "model": "m", "kubeconfig_path": "/tmp/kc"})
+        k8sgpt_main._handle_ask({"question": "q", "model": "m", "kubeconfig_path": "/tmp/kc"})  # nosec  # test artifact paths
 
 
 def test_handle_ask_resource_kind_filter(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -165,7 +165,7 @@ def test_handle_ask_resource_kind_filter(monkeypatch: pytest.MonkeyPatch) -> Non
     k8sgpt_main._handle_ask({
         "question": "Pod",
         "model": "m",
-        "kubeconfig_path": "/tmp/kc",
+        "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
     })
     assert "--filter" in captured["cmd"]
     assert "Pod" in captured["cmd"]
@@ -216,7 +216,7 @@ def test_main_processes_ask_request(monkeypatch: pytest.MonkeyPatch, capsys: pyt
         "stdin",
         io.StringIO(json.dumps({
             "action": "ask",
-            "params": {"question": "q", "model": "m", "kubeconfig_path": "/tmp/kc"},
+            "params": {"question": "q", "model": "m", "kubeconfig_path": "/tmp/kc"},  # nosec  # test artifact paths
             "id": "test-id",
         }) + "\n"),
     )
