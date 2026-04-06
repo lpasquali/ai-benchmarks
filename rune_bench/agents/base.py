@@ -1,7 +1,18 @@
 """Protocol definition for agentic runner implementations."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
+
+
+@dataclass
+class AgentConfig:
+    """Per-agent configuration resolution block."""
+    api_key: str | None = None
+    base_url: str | None = None
+    kubeconfig: str | None = None
+    model: str | None = None
+    ollama_url: str | None = None
+    extra: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
