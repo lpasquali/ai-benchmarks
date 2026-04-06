@@ -74,7 +74,6 @@ class ApiSecurityConfig:
         tokens_raw = os.environ.get("RUNE_API_TOKENS", "").strip()
         tenant_tokens: dict[str, str] = {}
         if tokens_raw:
-            ph = PasswordHasher()
             for item in tokens_raw.split(","):
                 tenant, _, token = item.partition(":")
                 tenant = tenant.strip()
