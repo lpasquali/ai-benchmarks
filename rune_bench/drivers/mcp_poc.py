@@ -77,7 +77,7 @@ def route_dynamic_plan(plan: List[Dict[str, Any]], client: MCPClientDriver) -> L
     
     # 2. Execute plan
     for step in plan:
-        tool = step.get("tool")
+        tool = step.get("tool", "")
         args = step.get("args", {})
         try:
             output = client.run_tool(tool, **args)
