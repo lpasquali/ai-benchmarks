@@ -6,7 +6,6 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import pytest
-from argon2 import PasswordHasher
 
 import rune_bench.api_server as api_server
 from rune_bench.job_store import JobStore

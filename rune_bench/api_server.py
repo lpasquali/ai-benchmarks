@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Callable, TypeAlias
 from urllib.parse import parse_qs, urlparse
 
-from argon2 import PasswordHasher
 from rune_bench.api_backend import (
     get_cost_estimate,
     list_backend_models,
