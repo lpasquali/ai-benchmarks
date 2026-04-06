@@ -1,8 +1,8 @@
-import hashlib
 from unittest.mock import MagicMock
 from urllib.request import Request, urlopen
 
 import pytest
+from argon2 import PasswordHasher
 
 import rune_bench.api_backend as api_backend
 import rune_bench.api_client as api_client_module
@@ -13,6 +13,8 @@ from rune_bench.api_client import RuneApiClient
 from rune_bench.resources.vastai import InstanceManager
 from rune_bench.resources.vastai import OfferFinder
 from rune_bench.resources.vastai import TemplateLoader
+
+_ph = PasswordHasher()
 
 
 def test_holmes_runner_remaining_paths(monkeypatch, tmp_path):
@@ -137,7 +139,7 @@ def test_api_server_remaining_paths(monkeypatch, tmp_path):
 
     app = api_server.RuneApiApplication(
         store=store,
-        security=api_server.ApiSecurityConfig(auth_disabled=False, tenant_tokens={"tenant": hashlib.sha256(b"token").hexdigest()}),
+        security=api_server.ApiSecurityConfig(auth_disabled=False, tenant_tokens={"tenant": _ph.hash("token")}),
         backend_functions={"ollama-instance": backend_ollama, "benchmark": backend_bench, "agentic-agent": lambda request: (_ for _ in ()).throw(RuntimeError("bad-run"))},
     )
     monkeypatch.setattr(
@@ -199,7 +201,7 @@ def test_api_server_error_paths(monkeypatch, tmp_path):
     store = ExplodingStore(tmp_path / "jobs.db")
     app = api_server.RuneApiApplication(
         store=store,
-        security=api_server.ApiSecurityConfig(auth_disabled=False, tenant_tokens={"tenant": hashlib.sha256(b"token").hexdigest()}),
+        security=api_server.ApiSecurityConfig(auth_disabled=False, tenant_tokens={"tenant": _ph.hash("token")}),
         backend_functions={"agentic-agent": lambda request: {"answer": "ok"}},
     )
     server = api_server.ThreadingHTTPServer(("127.0.0.1", 0), app.create_handler())
@@ -422,7 +424,7 @@ def test_cost_estimate_backend_and_server_endpoints(monkeypatch, tmp_path):
     store = api_server.JobStore(tmp_path / "jobs.db")
     app = api_server.RuneApiApplication(
         store=store,
-        security=api_server.ApiSecurityConfig(auth_disabled=False, tenant_tokens={"t": hashlib.sha256(b"tok").hexdigest()}),
+        security=api_server.ApiSecurityConfig(auth_disabled=False, tenant_tokens={"t": _ph.hash("tok")}),
         backend_functions={
             "cost-estimate": lambda req: {"projected_cost_usd": 1.5, "cost_driver": "vastai", "resource_impact": "low", "local_energy_kwh": 0.0, "confidence_score": 1.0, "warning": None},
         },
