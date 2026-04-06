@@ -68,7 +68,7 @@ dev = [
 rune = "rune.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/lpasquali/rune"
+Homepage = "https://lpasquali.github.io/rune-docs/"
 Documentation = "https://lpasquali.github.io/rune-docs/"
 Repository = "https://github.com/lpasquali/rune"
 Issues = "https://github.com/lpasquali/rune/issues"
