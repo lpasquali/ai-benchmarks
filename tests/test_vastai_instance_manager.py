@@ -1,3 +1,4 @@
+import hashlib
 import json
 import threading
 from unittest.mock import MagicMock
@@ -161,8 +162,7 @@ def test_api_security_from_env(monkeypatch):
     monkeypatch.setenv("RUNE_API_AUTH_DISABLED", "0")
     monkeypatch.setenv("RUNE_API_TOKENS", "tenant-a:token-a,tenant-b:token-b")
     cfg = api_server.ApiSecurityConfig.from_env()
-    ph = PasswordHasher()
-    assert ph.verify(cfg.tenant_tokens["tenant-b"], "token-b")
+    assert cfg.tenant_tokens["tenant-b"] == hashlib.sha256("token-b".encode("utf-8")).hexdigest()
 
 
 def test_api_server_misc_paths(misc_server):
