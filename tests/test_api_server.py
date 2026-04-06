@@ -45,7 +45,7 @@ def rune_api_server(tmp_path):
 
 def test_healthz_is_public(rune_api_server):
     base_url, _state = rune_api_server
-    with urlopen(f"{base_url}/healthz") as response:
+    with urlopen(f"{base_url}/healthz") as response:  # nosec  # test request mock/local execution
         payload = json.loads(response.read().decode("utf-8"))
 
     assert payload == {"status": "ok"}
@@ -56,22 +56,22 @@ def test_api_server_requires_auth(rune_api_server):
     request = Request(f"{base_url}/v1/catalog/vastai-models")
 
     with pytest.raises(HTTPError) as exc:
-        urlopen(request)
+        urlopen(request)  # nosec  # test request mock/local execution
 
     assert exc.value.code == 401
 
 
 def test_api_server_enforces_tenant_scoping_and_idempotency(rune_api_server):
     base_url, state = rune_api_server
-    client_a = RuneApiClient(base_url, api_token="token-a", tenant_id="tenant-a")
-    client_b = RuneApiClient(base_url, api_token="token-b", tenant_id="tenant-b")
+    client_a = RuneApiClient(base_url, api_token="token-a", tenant_id="tenant-a")  # nosec  # test credentials
+    client_b = RuneApiClient(base_url, api_token="token-b", tenant_id="tenant-b")  # nosec  # test credentials
     request_payload = {
         "question": "What is unhealthy?",
         "model": "llama3.1:8b",
         "ollama_url": None,
         "ollama_warmup": False,
         "ollama_warmup_timeout": 1,
-        "kubeconfig": "/tmp/config",
+        "kubeconfig": "/tmp/config",  # nosec  # test artifact paths
     }
 
     job_id_1 = client_a.submit_agentic_agent_job(request_payload, idempotency_key="idem-1")

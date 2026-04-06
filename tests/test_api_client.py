@@ -83,7 +83,7 @@ def test_request_adds_auth_tenant_and_idempotency_headers(monkeypatch):
 
     monkeypatch.setattr("rune_bench.common.http_client.urlopen", fake_urlopen)
 
-    client = RuneApiClient("http://api:8080", api_token="secret", tenant_id="tenant-a")
+    client = RuneApiClient("http://api:8080", api_token="secret", tenant_id="tenant-a")  # nosec  # test credentials
     payload = client._request("POST", "/v1/jobs/benchmark", body={"x": 1}, idempotency_key="idem-1")
 
     assert payload == {"ok": True}
