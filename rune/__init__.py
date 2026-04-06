@@ -519,10 +519,10 @@ def _run_vastai_provisioning(
 @app.command("serve")
 def serve_api(
     api_host: str = typer.Option(
-        "0.0.0.0",
+        "127.0.0.1",
         "--host",
         envvar="RUNE_API_HOST",
-        help="Host to bind API server to",
+        help="Host to bind API server to (set RUNE_API_HOST=0.0.0.0 for container deployments)",
     ),
     api_port: int | None = typer.Option(
         None,
