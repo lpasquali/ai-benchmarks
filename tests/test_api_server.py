@@ -1,3 +1,4 @@
+import hashlib
 import json
 import threading
 from http.server import ThreadingHTTPServer
@@ -25,10 +26,10 @@ def rune_api_server(tmp_path):
     app = RuneApiApplication(
         store=JobStore(tmp_path / "jobs.db"),
         security=ApiSecurityConfig(
-            auth_disabled=False,
+            auth_disabled=False, 
             tenant_tokens={
-                "tenant-a": _ph.hash("token-a"),
-                "tenant-b": _ph.hash("token-b"),
+                "tenant-a": hashlib.sha256(b"token-a").hexdigest(), 
+                "tenant-b": hashlib.sha256(b"token-b").hexdigest()
             }
         ),
         backend_functions={
