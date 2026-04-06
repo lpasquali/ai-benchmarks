@@ -1,0 +1,20 @@
+RUNE
+Copyright 2025-2026 The Rune Authors
+
+This product is licensed under the Apache License, Version 2.0.
+
+This product includes software developed by third parties.
+
+---
+
+Typer (https://github.com/tiangolo/typer)
+  License: MIT
+  Copyright (c) Sebastián Ramírez
+
+Rich (https://github.com/Textualize/rich)
+  License: MIT
+  Copyright (c) Will McGugan
+
+PyYAML (https://github.com/yaml/pyyaml)
+  License: MIT
+  Copyright (c) Kirill Simonov
