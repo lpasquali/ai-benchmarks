@@ -171,7 +171,7 @@ def test_rune_remaining_branches(monkeypatch, tmp_path):
         pull_warning=None,
     ))
     monkeypatch.setattr(rune, "_warmup_ollama_model", lambda **_k: None)
-    monkeypatch.setattr(rune, "HolmesRunner", lambda _k: type("R", (), {"ask": lambda self, **_kk: "ok"})())
+    monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: type("R", (), {"ask": lambda self, **_kk: "ok"})())
     monkeypatch.setattr(
         rune,
         "stop_vastai_instance",
