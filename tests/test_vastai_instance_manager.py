@@ -5,6 +5,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import pytest
+from argon2 import PasswordHasher
 
 import rune_bench.api_server as api_server
 from rune_bench.job_store import JobStore
@@ -160,7 +161,8 @@ def test_api_security_from_env(monkeypatch):
     monkeypatch.setenv("RUNE_API_AUTH_DISABLED", "0")
     monkeypatch.setenv("RUNE_API_TOKENS", "tenant-a:token-a,tenant-b:token-b")
     cfg = api_server.ApiSecurityConfig.from_env()
-    assert cfg.tenant_tokens["tenant-b"] == "token-b"
+    ph = PasswordHasher()
+    assert ph.verify(cfg.tenant_tokens["tenant-b"], "token-b")
 
 
 def test_api_server_misc_paths(misc_server):

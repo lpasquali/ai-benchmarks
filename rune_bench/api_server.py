@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
+import time
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable, TypeAlias
 from urllib.parse import parse_qs, urlparse
 
+from argon2 import PasswordHasher
 from rune_bench.api_backend import (
     get_cost_estimate,
     list_backend_models,
@@ -69,12 +72,13 @@ class ApiSecurityConfig:
         tokens_raw = os.environ.get("RUNE_API_TOKENS", "").strip()
         tenant_tokens: dict[str, str] = {}
         if tokens_raw:
+            ph = PasswordHasher()
             for item in tokens_raw.split(","):
                 tenant, _, token = item.partition(":")
                 tenant = tenant.strip()
                 token = token.strip()
                 if tenant and token:
-                    tenant_tokens[tenant] = token
+                    tenant_tokens[tenant] = ph.hash(token)
         if not auth_disabled and not tenant_tokens:
             raise RuntimeError(
                 "RUNE API auth is enabled but no tenants are configured. "
@@ -100,6 +104,8 @@ class RuneApiApplication:
             "cost-estimate": _get_cost_estimate_backend,
         }
         self.store.mark_incomplete_jobs_failed()
+        self.auth_failures: dict[str, list[float]] = {}
+        self.auth_lock = threading.Lock()
 
     @classmethod
     def from_env(cls) -> "RuneApiApplication":
@@ -133,6 +139,17 @@ class RuneApiApplication:
                 return payload
 
             def _authenticate(self) -> str:
+                client_ip = self.client_address[0]
+                now = time.time()
+                
+                with app.auth_lock:
+                    failures = app.auth_failures.get(client_ip, [])
+                    failures = [t for t in failures if now - t < 60]
+                    app.auth_failures[client_ip] = failures
+                    if len(failures) >= 10:
+                        logging.warning(f"Auth blocked: Rate limit exceeded for IP {client_ip}")
+                        raise PermissionError("rate limit exceeded")
+
                 tenant_id = self.headers.get("X-Tenant-ID", "").strip() or "default"
                 if app.security.auth_disabled:
                     return tenant_id
@@ -143,10 +160,21 @@ class RuneApiApplication:
                 if auth_header.lower().startswith("bearer "):
                     token = auth_header[7:].strip()
 
-                expected = app.security.tenant_tokens.get(tenant_id)
-                if not expected or token != expected:
-                    raise PermissionError("invalid tenant/token combination")
-                return tenant_id
+                expected_hash = app.security.tenant_tokens.get(tenant_id)
+                if expected_hash and token:
+                    ph = PasswordHasher()
+                    try:
+                        if ph.verify(expected_hash, token):
+                            logging.info(f"Auth success: IP {client_ip} authenticated as tenant '{tenant_id}'")
+                            return tenant_id
+                    except Exception:
+                        # Any verification failure falls through to auth failure handling below.
+                        pass
+                
+                with app.auth_lock:
+                    app.auth_failures[client_ip].append(now)
+                logging.warning(f"Auth failure: IP {client_ip} failed to authenticate as tenant '{tenant_id}'")
+                raise PermissionError("invalid tenant/token combination")
 
             def do_GET(self) -> None:
                 parsed = urlparse(self.path)
