@@ -33,6 +33,7 @@ class ConsensusDriverClient:
         question: str,
         model: str = "",
         backend_url: str | None = None,
+        backend_type: str = "ollama",
         limit: int | None = None,
     ) -> str:
         """Dispatch a research question to the consensus driver and return the answer.

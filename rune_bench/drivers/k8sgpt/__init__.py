@@ -33,7 +33,7 @@ class K8sGPTDriverClient:
         self._kubeconfig = kubeconfig
         self._transport: DriverTransport = transport or make_driver_transport("k8sgpt")
 
-    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
         """Dispatch an analysis request to the k8sgpt driver and return the answer.
 
         Args:
