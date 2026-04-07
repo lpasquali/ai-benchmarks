@@ -79,9 +79,9 @@ def test_resolve_glean_extra(monkeypatch):
     assert cfg.extra["instance"] == "glean-inst"
 
 def test_resolve_with_kwargs():
-    cfg = resolve_agent_config("test", {"kubeconfig": "kwarg-kube", "api_key": "kwarg-api", "base_url": "kwarg-url", "model": "kwarg-model", "ollama_url": "kwarg-ollama"})
+    cfg = resolve_agent_config("test", {"kubeconfig": "kwarg-kube", "api_key": "kwarg-api", "base_url": "kwarg-url", "model": "kwarg-model", "backend_url": "kwarg-backend"})
     assert cfg.kubeconfig == "kwarg-kube"
     assert cfg.api_key == "kwarg-api"
     assert cfg.base_url == "kwarg-url"
     assert cfg.model == "kwarg-model"
-    assert cfg.ollama_url == "kwarg-ollama"
+    assert cfg.backend_url == "kwarg-backend"

@@ -27,7 +27,7 @@ class DaggerDriverClient:
     ) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("dagger")
 
-    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
         """Dispatch a pipeline objective to the dagger driver and return the result.
 
         Args:
