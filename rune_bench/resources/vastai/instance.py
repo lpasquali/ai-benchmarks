@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Block 6+7+8+9 — Instance lifecycle.
 
 Handles instance creation, polling until running, model pull via

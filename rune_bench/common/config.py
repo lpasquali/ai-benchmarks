@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """YAML configuration loader with profile support.
 
 Precedence (highest to lowest):

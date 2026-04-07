@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for rune_bench.drivers.mindgard.__main__ — the driver entry point.
 
 The driver calls the ``mindgard`` CLI as a subprocess.  subprocess.run and

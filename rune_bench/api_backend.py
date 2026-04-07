@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Local execution backend behind the RUNE HTTP API."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Glean agentic runner -- delegates to the Glean driver.
 
 Scope:      Research  |  Rank 2  |  Rating 4.8

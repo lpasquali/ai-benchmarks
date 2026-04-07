@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Radiant Security agentic runner stub.
 
 Scope:      Cybersec  |  Rank 2  |  Rating 4.5

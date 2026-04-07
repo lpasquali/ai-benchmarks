@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Krea AI agentic runner stub.
 
 Scope:      Art/Creative  |  Rank 3  |  Rating 4.0

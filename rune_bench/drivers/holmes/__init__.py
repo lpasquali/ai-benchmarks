@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Holmes driver client — delegates HolmesGPT queries to the holmes driver process.
 
 The driver process is launched via :func:`~rune_bench.drivers.make_driver_transport`

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for rune_bench.drivers.metoro.__main__ -- the Metoro driver entry point.
 
 The driver calls the Metoro REST API via ``make_http_request()`` from

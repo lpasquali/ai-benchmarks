@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for rune_bench.drivers.elicit.__main__ — the driver entry point.
 
 The driver calls the Elicit REST API via urllib.request.  All HTTP calls are

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 import hashlib
 from unittest.mock import MagicMock
 from urllib.request import Request, urlopen

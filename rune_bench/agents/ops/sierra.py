@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Sierra agentic runner stub.
 
 Scope:      Ops/Misc  |  Rank 3  |  Rating 4.0

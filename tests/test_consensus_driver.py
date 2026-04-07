@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for rune_bench.drivers.consensus — driver entry point and client.
 
 All HTTP calls (Semantic Scholar + Ollama) are monkeypatched so no network

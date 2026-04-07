@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for rune_bench.drivers.pagerduty — driver client and subprocess entry point.
 
 All HTTP calls to PagerDuty and Ollama are mocked so no external services

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for rune_bench.drivers.crewai — driver client and __main__ entry point.
 
 CrewAI is an optional dependency.  All imports are mocked so the test suite

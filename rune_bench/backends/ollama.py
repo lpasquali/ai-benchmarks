@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Ollama LLM backend — HTTP client and high-level model manager.
 
 Consolidates the low-level API client (OllamaClient) and the high-level

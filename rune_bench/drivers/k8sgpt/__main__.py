@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """K8sGPT driver entry point — receives JSON actions on stdin, writes results to stdout.
 
 Run as::

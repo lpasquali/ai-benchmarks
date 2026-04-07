@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Spellbook driver client — enterprise stub pending API access."""
 
 from __future__ import annotations
