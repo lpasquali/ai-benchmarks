@@ -32,7 +32,7 @@ class MindgardDriverClient:
     ) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("mindgard")
 
-    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
         """Dispatch a red-team assessment to the mindgard driver and return findings.
 
         Args:

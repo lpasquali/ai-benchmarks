@@ -12,7 +12,7 @@ import pytest
 
 import rune_bench.drivers.holmes as holmes_driver_module
 from rune_bench.agents.sre.holmes import HolmesRunner
-from rune_bench.backends.ollama import OllamaModelCapabilities
+from rune_bench.backends.base import ModelCapabilities
 from rune_bench.drivers.holmes import HolmesDriverClient
 
 
@@ -66,18 +66,15 @@ def test_ask_includes_backend_url_and_limits(monkeypatch: pytest.MonkeyPatch, tm
     mock_transport = MagicMock()
     mock_transport.call.return_value = {"answer": "ok"}
 
-    fake_manager = MagicMock()
-    fake_manager.normalize_model_name.return_value = "llama3.1:8b"
-
-    fake_client = MagicMock()
-    fake_client.get_model_capabilities.return_value = OllamaModelCapabilities(
+    fake_backend = MagicMock()
+    fake_backend.normalize_model_name.return_value = "llama3.1:8b"
+    fake_backend.get_model_capabilities.return_value = ModelCapabilities(
         model_name="llama3.1:8b",
         context_window=131072,
         max_output_tokens=26214,
     )
 
-    monkeypatch.setattr(holmes_driver_module.OllamaModelManager, "create", lambda *_: fake_manager)
-    monkeypatch.setattr(holmes_driver_module, "OllamaClient", lambda *_: fake_client)
+    monkeypatch.setattr(holmes_driver_module, "get_backend", lambda *_args, **_kw: fake_backend)
 
     runner = HolmesRunner(kubeconfig, transport=mock_transport)
     runner.ask("q", "llama3.1:8b", backend_url="http://ollama:11434")
@@ -109,10 +106,10 @@ def test_fetch_model_limits_handles_ollama_error(
     kubeconfig = tmp_path / "kubeconfig"
     kubeconfig.write_text("apiVersion: v1\n")
 
-    def broken_create(*_args: object) -> None:
+    def broken_get_backend(*_args: object, **_kw: object) -> None:
         raise RuntimeError("unreachable")
 
-    monkeypatch.setattr(holmes_driver_module.OllamaModelManager, "create", broken_create)
+    monkeypatch.setattr(holmes_driver_module, "get_backend", broken_get_backend)
 
     runner = HolmesRunner(kubeconfig, transport=MagicMock())
     limits = runner._fetch_model_limits(model="m", backend_url="http://ollama")
@@ -125,15 +122,13 @@ def test_fetch_model_limits_omits_none_values(
     kubeconfig = tmp_path / "kubeconfig"
     kubeconfig.write_text("apiVersion: v1\n")
 
-    fake_manager = MagicMock()
-    fake_manager.normalize_model_name.return_value = "m"
-    fake_client = MagicMock()
-    fake_client.get_model_capabilities.return_value = OllamaModelCapabilities(
+    fake_backend = MagicMock()
+    fake_backend.normalize_model_name.return_value = "m"
+    fake_backend.get_model_capabilities.return_value = ModelCapabilities(
         model_name="m", context_window=None, max_output_tokens=None
     )
 
-    monkeypatch.setattr(holmes_driver_module.OllamaModelManager, "create", lambda *_: fake_manager)
-    monkeypatch.setattr(holmes_driver_module, "OllamaClient", lambda *_: fake_client)
+    monkeypatch.setattr(holmes_driver_module, "get_backend", lambda *_args, **_kw: fake_backend)
 
     runner = HolmesRunner(kubeconfig, transport=MagicMock())
     limits = runner._fetch_model_limits(model="m", backend_url="http://ollama")

@@ -17,7 +17,8 @@ import rune_bench.workflows as workflows
 from rune_bench.agents.sre.holmes import HolmesRunner
 from rune_bench.api_client import RuneApiClient
 from rune_bench.common import normalize_url
-from rune_bench.backends.ollama import OllamaClient, OllamaModelCapabilities, OllamaModelManager
+from rune_bench.backends.base import ModelCapabilities
+from rune_bench.backends.ollama import OllamaClient, OllamaModelManager
 from rune_bench.resources.vastai import ConnectionDetails, InstanceManager, TeardownResult
 
 
@@ -350,14 +351,17 @@ def test_holmes_and_ollama_remaining_branches(monkeypatch, tmp_path):
     kubeconfig.write_text("apiVersion: v1\n")
     runner = HolmesRunner(kubeconfig)
 
-    # _fetch_model_limits success path via driver module monkeypatches
-    monkeypatch.setattr(holmes_driver_module.OllamaModelManager, "create", lambda *_: type("M", (), {"normalize_model_name": lambda self, m: "norm"})())
-    monkeypatch.setattr(holmes_driver_module, "OllamaClient", lambda *_: type("C", (), {"get_model_capabilities": lambda self, _m: OllamaModelCapabilities("norm", 10, 2)})())
+    # _fetch_model_limits success path via get_backend monkeypatch
+    fake_backend = type("B", (), {
+        "normalize_model_name": lambda self, m: "norm",
+        "get_model_capabilities": lambda self, _m: ModelCapabilities("norm", 10, 2),
+    })()
+    monkeypatch.setattr(holmes_driver_module, "get_backend", lambda *_args, **_kw: fake_backend)
     limits = runner._fetch_model_limits(model="m", backend_url="http://x")
     assert limits.get("context_window") == 10
 
     # _fetch_model_limits failure path
-    monkeypatch.setattr(holmes_driver_module, "OllamaClient", lambda *_: type("C", (), {"get_model_capabilities": lambda self, _m: (_ for _ in ()).throw(RuntimeError("bad"))})())
+    monkeypatch.setattr(holmes_driver_module, "get_backend", lambda *_args, **_kw: (_ for _ in ()).throw(RuntimeError("bad")))
     limits2 = runner._fetch_model_limits(model="m", backend_url="http://x")
     assert limits2 == {}
 

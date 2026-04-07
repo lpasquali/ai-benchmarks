@@ -157,6 +157,7 @@ def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
         question=request.question,
         model=request.model,
         backend_url=request.backend_url,
+        backend_type=getattr(request, "backend_type", "ollama"),
     )
     return {"answer": answer}
 
@@ -193,6 +194,7 @@ def run_benchmark(request: RunBenchmarkRequest) -> dict:
             question=request.question,
             model=effective_model,
             backend_url=result.backend_url,
+            backend_type=getattr(request, "backend_type", "ollama"),
         )
     finally:
         provider.teardown(result)

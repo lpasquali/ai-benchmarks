@@ -73,16 +73,14 @@ def test_main_and_basic_helpers(monkeypatch):
 
 
 def test_fetch_and_warmup_helpers(monkeypatch):
-    fake_manager = MagicMock()
-    fake_manager.normalize_model_name.return_value = "norm"
-    fake_client = MagicMock()
-    fake_client.get_model_capabilities.return_value = OllamaModelCapabilities("norm", 100, 20)
-    monkeypatch.setattr(rune.OllamaModelManager, "create", lambda *_: fake_manager)
-    monkeypatch.setattr(rune, "OllamaClient", lambda *_: fake_client)
+    fake_backend = MagicMock()
+    fake_backend.normalize_model_name.return_value = "norm"
+    fake_backend.get_model_capabilities.return_value = OllamaModelCapabilities("norm", 100, 20)
+    monkeypatch.setattr(rune, "get_backend", lambda *_args, **_kw: fake_backend)
     caps = rune._fetch_model_capabilities("http://x", "m")
     assert caps.context_window == 100
 
-    fake_client.get_model_capabilities.side_effect = RuntimeError("nope")
+    fake_backend.get_model_capabilities.side_effect = RuntimeError("nope")
     assert rune._fetch_model_capabilities("http://x", "m") is None
 
     test_console = Console(record=True)

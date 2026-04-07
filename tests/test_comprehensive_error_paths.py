@@ -38,10 +38,10 @@ def test_holmes_runner_remaining_paths(monkeypatch, tmp_path):
     runner2 = HolmesRunner(kubeconfig, transport=ok_transport)
     assert runner2.ask("q", "m") == "great"
 
-    # _fetch_model_limits returns {} when OllamaModelManager.create raises
-    bad_manager = MagicMock()
-    bad_manager.normalize_model_name.side_effect = RuntimeError("norm failed")
-    monkeypatch.setattr(holmes_driver_module.OllamaModelManager, "create", lambda *_: bad_manager)
+    # _fetch_model_limits returns {} when get_backend raises
+    bad_backend = MagicMock()
+    bad_backend.normalize_model_name.side_effect = RuntimeError("norm failed")
+    monkeypatch.setattr(holmes_driver_module, "get_backend", lambda *_args, **_kw: bad_backend)
     limits = runner2._fetch_model_limits(model="m", backend_url="http://x")
     assert limits == {}
 
