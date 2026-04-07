@@ -17,12 +17,7 @@ from rune_bench.common import ModelSelector
 from rune_bench.metrics import span  # noqa: F401 (used by workflows layer)
 from rune_bench.resources.base import LLMResourceProvider
 from rune_bench.resources.existing_backend_provider import ExistingBackendProvider
-from rune_bench.workflows import (
-    list_backend_models as list_backend_models_wf,
-    list_running_backend_models,
-    use_existing_backend_server,
-    warmup_backend_model,
-)
+from rune_bench.workflows import warmup_backend_model
 
 try:
     from rune_bench.resources.vastai.sdk import VastAI
@@ -110,12 +105,14 @@ def list_vastai_models() -> list[dict]:
     ]
 
 
-def list_backend_models(backend_url: str) -> dict:
-    server = use_existing_backend_server(backend_url, model_name="<n/a>")
+def list_backend_models(backend_url: str, *, backend_type: str = "ollama") -> dict:
+    from rune_bench.backends import get_backend
+    backend = get_backend(backend_type, backend_url)
     return {
-        "backend_url": server.url,
-        "models": list_backend_models_wf(server.url),
-        "running_models": list_running_backend_models(server.url),
+        "backend_url": backend.base_url,
+        "backend_type": backend_type,
+        "models": backend.list_models(),
+        "running_models": backend.list_running_models(),
     }
 
 

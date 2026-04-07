@@ -345,11 +345,15 @@ def test_api_backend_functions(monkeypatch, tmp_path):
     monkeypatch.setattr(api_backend, "ModelSelector", lambda: type("S", (), {"list_models": lambda self: [_SelectedModel("m1", 1, 2)]})())
     assert api_backend.list_vastai_models() == [{"name": "m1", "vram_mb": 1, "required_disk_gb": 2}]
 
-    monkeypatch.setattr(api_backend, "use_existing_backend_server", lambda url, model_name: type("Srv", (), {"url": f"norm:{url}"})())
-    monkeypatch.setattr(api_backend, "list_backend_models_wf", lambda _url: ["a"])
-    monkeypatch.setattr(api_backend, "list_running_backend_models", lambda _url: ["a"])
+    fake_backend = type("B", (), {
+        "base_url": "norm:raw",
+        "list_models": lambda self: ["a"],
+        "list_running_models": lambda self: ["a"],
+    })()
+    monkeypatch.setattr("rune_bench.backends.get_backend", lambda *_args, **_kw: fake_backend)
     payload = api_backend.list_backend_models("raw")
     assert payload["backend_url"] == "norm:raw"
+    assert payload["backend_type"] == "ollama"
 
     from rune_bench.resources.base import ProvisioningResult
 

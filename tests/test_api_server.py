@@ -35,6 +35,7 @@ def rune_api_server(tmp_path):
         backend_functions={
             "agentic-agent": run_agentic,
             "benchmark": lambda request: {"answer": "bench"},
+            "llm-instance": lambda request: {"mode": "existing", "backend_url": request.backend_url},
             "ollama-instance": lambda request: {"mode": "existing", "backend_url": request.backend_url},
         },
     )
