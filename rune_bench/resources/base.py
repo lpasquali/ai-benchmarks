@@ -15,6 +15,7 @@ class ProvisioningResult:
 
     backend_url: str | None
     model: str | None = None
+    backend_type: str = "ollama"
     provider_handle: Any = field(default=None, hash=False, compare=False)
 
 

@@ -84,23 +84,21 @@ def test_instance_manager_reuse_selects_best_running_candidate():
 
 
 def test_instance_manager_pull_model_requires_backend_url():
-    with pytest.raises(RuntimeError, match="missing Ollama URL"):
+    with pytest.raises(RuntimeError, match="missing backend URL"):
         InstanceManager(MagicMock()).pull_model(contract_id=123, model_name="foo:1", backend_url=None)
 
 
-def test_instance_manager_pull_model_wraps_ollama_errors(monkeypatch):
+def test_instance_manager_pull_model_wraps_backend_errors(monkeypatch):
     manager = InstanceManager(MagicMock())
 
-    class _FailingClient:
-        def __init__(self, _url):
-            pass
+    def _failing_get_backend(*_args, **_kw):
+        backend = MagicMock()
+        backend.warmup.side_effect = RuntimeError("boom")
+        return backend
 
-        def load_model(self, _name):
-            raise RuntimeError("boom")
+    monkeypatch.setattr("rune_bench.resources.vastai.instance.get_backend", _failing_get_backend)
 
-    monkeypatch.setattr("rune_bench.resources.vastai.instance.OllamaClient", _FailingClient)
-
-    with pytest.raises(RuntimeError, match="Model pull via Ollama API failed"):
+    with pytest.raises(RuntimeError, match="Model pull.*failed"):
         manager.pull_model(contract_id=999, model_name="foo:1", backend_url="http://fake:11434")
 
 

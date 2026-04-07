@@ -16,7 +16,7 @@ from rune_bench.api_contracts import (
 from rune_bench.common import ModelSelector
 from rune_bench.metrics import span  # noqa: F401 (used by workflows layer)
 from rune_bench.resources.base import LLMResourceProvider
-from rune_bench.resources.existing_ollama_provider import ExistingOllamaProvider
+from rune_bench.resources.existing_backend_provider import ExistingBackendProvider
 from rune_bench.workflows import (
     list_backend_models as list_backend_models_wf,
     list_running_backend_models,
@@ -53,11 +53,12 @@ def _make_resource_provider_for_benchmark(request: RunBenchmarkRequest) -> LLMRe
             reliability=request.reliability,
             stop_on_teardown=request.vastai_stop_instance,
         )
-    return ExistingOllamaProvider(
+    return ExistingBackendProvider(
         request.backend_url,
         model=request.model,
         warmup=request.backend_warmup,
         warmup_timeout=request.backend_warmup_timeout,
+        backend_type=getattr(request, "backend_type", "ollama"),
     )
 
 
@@ -73,7 +74,10 @@ def _make_resource_provider_for_ollama_instance(request: RunLLMInstanceRequest) 
             reliability=request.reliability,
             stop_on_teardown=False,
         )
-    return ExistingOllamaProvider(request.backend_url)
+    return ExistingBackendProvider(
+        request.backend_url,
+        backend_type=getattr(request, "backend_type", "ollama"),
+    )
 
 
 def _make_agent_runner(agent_name: str | Path = "holmes", *, kubeconfig: Path | None = None) -> Any:
