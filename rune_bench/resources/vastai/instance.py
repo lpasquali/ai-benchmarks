@@ -12,7 +12,7 @@ from rune_bench.resources.vastai.sdk import VastAI
 
 from rune_bench.common import SelectedModel
 from rune_bench.debug import debug_log
-from rune_bench.backends.ollama import OllamaClient
+from rune_bench.backends import get_backend
 
 from .template import Template
 
@@ -234,31 +234,38 @@ class InstanceManager:
             raise RuntimeError(f"Failed to destroy Vast.ai instance {cid}: {exc}") from exc
 
     # ------------------------------------------------------------------ #
-    # Block 8 — Pull model via Ollama                                     #
+    # Block 8 — Pull model via backend                                     #
     # ------------------------------------------------------------------ #
 
-    def pull_model(self, contract_id: int | str, model_name: str, backend_url: str | None = None) -> None:
-        """Load a model into Ollama on the remote instance via Ollama API.
+    def pull_model(
+        self,
+        contract_id: int | str,
+        model_name: str,
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> None:
+        """Load a model into the LLM backend on the remote instance.
 
         Args:
             contract_id: The Vast.ai contract/instance id (for error context).
             model_name: The model name to load (e.g., "mistral:latest").
-            backend_url: Ollama API URL (e.g., "http://ip:11434").
+            backend_url: LLM backend API URL (e.g., "http://ip:11434").
+            backend_type: Backend type (e.g., "ollama").
 
         Raises:
-            RuntimeError: if no Ollama URL is provided or API load fails.
+            RuntimeError: if no backend URL is provided or model load fails.
         """
         if not backend_url:
             raise RuntimeError(
-                f"Cannot pull model for contract {contract_id}: missing Ollama URL"
+                f"Cannot pull model for contract {contract_id}: missing backend URL"
             )
 
         try:
             debug_log(
-                f"Vast.ai Ollama model load: contract_id={contract_id} backend_url={backend_url} model={model_name}"
+                f"Vast.ai model load: contract_id={contract_id} backend_url={backend_url} model={model_name}"
             )
-            client = OllamaClient(backend_url)
-            client.load_model(model_name)
+            backend = get_backend(backend_type, backend_url)
+            backend.warmup(model_name, timeout_seconds=300)
         except RuntimeError as exc:
             raise RuntimeError(
                 f"Model pull via Ollama API failed for contract {contract_id}: {exc}"
