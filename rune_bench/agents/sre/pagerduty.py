@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """PagerDuty AI agentic runner — delegates to the pagerduty driver.
 
 Scope:      SRE  |  Rank 3  |  Rating 4.5

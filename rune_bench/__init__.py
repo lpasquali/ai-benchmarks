@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 rune_bench — modular benchmarking toolkit for RUNE.
 

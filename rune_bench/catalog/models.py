@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Catalog data model for RUNE benchmark scopes, agents, and chain definitions.
 
 All types are plain dataclasses (no third-party dependencies) so they are

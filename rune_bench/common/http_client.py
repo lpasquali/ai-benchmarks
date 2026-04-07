@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Shared HTTP client utilities for URL normalization and request handling."""
 
 from __future__ import annotations

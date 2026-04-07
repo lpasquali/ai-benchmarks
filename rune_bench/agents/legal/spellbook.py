@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Spellbook agentic runner stub.
 
 Scope:      Legal  |  Rank 2  |  Rating 4.0

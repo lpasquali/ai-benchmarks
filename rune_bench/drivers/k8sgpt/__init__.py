@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """K8sGPT driver client — delegates k8sgpt analysis queries to the k8sgpt driver process.
 
 The driver process is launched via :func:`~rune_bench.drivers.make_driver_transport`

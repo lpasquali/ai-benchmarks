@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Mindgard agentic runner — delegates to the Mindgard driver for AI red-teaming.
 
 Scope:      Cybersec  |  Rank 3  |  Rating 4.0

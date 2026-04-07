@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Consensus agentic runner — evidence-based synthesis from academic papers.
 
 Scope:      Research  |  Rank 5  |  Rating 3.5

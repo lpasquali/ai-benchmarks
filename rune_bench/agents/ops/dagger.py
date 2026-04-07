@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Dagger agentic runner stub.
 
 Scope:      Ops/Misc  |  Rank 2  |  Rating 4.5

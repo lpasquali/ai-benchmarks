@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for the LLM backend factory, registry, and OllamaBackend wrapper."""
 
 from __future__ import annotations

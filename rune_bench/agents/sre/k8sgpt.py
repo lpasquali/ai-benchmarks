@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """K8sGPT agentic runner — delegates to the K8sGPT driver.
 
 Scope:      SRE  |  Rank 1  |  Rating 5.0

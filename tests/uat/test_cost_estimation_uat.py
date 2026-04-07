@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """UAT tests for cost estimation drivers.
 
 These tests validate the accuracy and plausibility of the cost estimation logic

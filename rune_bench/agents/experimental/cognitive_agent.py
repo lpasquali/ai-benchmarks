@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Experimental Unified Cognitive Agent Runner.
 
 Integrates MemoryProvider, SafetyInterceptor, MCP Tool Routing,

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Metoro driver client -- delegates eBPF observability queries to the metoro driver process.
 
 The driver process is launched via :func:`~rune_bench.drivers.make_driver_transport`

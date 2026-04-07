@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Glean driver client -- delegates enterprise search queries to the glean driver process.
 
 The driver process is launched via :func:`~rune_bench.drivers.make_driver_transport`

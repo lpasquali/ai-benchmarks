@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Vast.ai LLM resource provider."""
 
 from rune_bench.resources.vastai.sdk import VastAI

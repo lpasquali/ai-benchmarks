@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """CrewAI driver client — delegates ops queries to the crewai driver process.
 
 The driver process is launched via :func:`~rune_bench.drivers.make_driver_transport`

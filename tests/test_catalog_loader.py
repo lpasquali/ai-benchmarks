@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for rune_bench.catalog — CSV loading, YAML overlay, and auto-detection."""
 
 from __future__ import annotations

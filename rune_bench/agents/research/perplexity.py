@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Perplexity Pro agentic runner — delegates to the Perplexity driver.
 
 Scope:      Research  |  Rank 1  |  Rating 5.0

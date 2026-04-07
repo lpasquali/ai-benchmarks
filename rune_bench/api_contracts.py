@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Stable contracts for CLI/API compatibility.
 
 These dataclasses are transport-agnostic and define the operation payloads

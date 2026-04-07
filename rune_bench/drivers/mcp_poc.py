@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Experimental Model Context Protocol (MCP) Integration PoC.
 
 This module demonstrates how RUNE can act as an MCP Server exposing tools

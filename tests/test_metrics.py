@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for the rune_bench.metrics module."""
 
 from __future__ import annotations

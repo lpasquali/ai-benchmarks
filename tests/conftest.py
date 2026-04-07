@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Pytest configuration: shared fixtures and test helpers."""
 
 import sys

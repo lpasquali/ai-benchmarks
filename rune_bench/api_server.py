@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """HTTP server for RUNE API mode."""
 
 from __future__ import annotations

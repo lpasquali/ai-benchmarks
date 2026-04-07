@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """SkillFortify agentic runner stub.
 
 Scope:      Ops/Misc  |  Rank 4  |  Rating 3.0
