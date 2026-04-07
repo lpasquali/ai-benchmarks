@@ -38,6 +38,8 @@ from rune_bench.common import (
 )
 from rune_bench.debug import set_debug
 from rune_bench.metrics import InMemoryCollector, set_collector, clear_collector
+from rune_bench.backends import get_backend
+from rune_bench.backends.base import ModelCapabilities
 from rune_bench.backends.ollama import OllamaClient, OllamaModelCapabilities, OllamaModelManager
 from rune_bench.agents.registry import get_agent
 from rune_bench.workflows import (
@@ -218,11 +220,14 @@ def _confirm_instance_creation() -> bool:
     return ack == "yes"
 
 
-def _fetch_model_capabilities(backend_url: str, model: str) -> OllamaModelCapabilities | None:
-    """Try to fetch model capabilities from Ollama; return None on any failure."""
+def _fetch_model_capabilities(
+    backend_url: str, model: str, backend_type: str = "ollama",
+) -> ModelCapabilities | None:
+    """Try to fetch model capabilities from the backend; return None on any failure."""
     try:
-        normalized = OllamaModelManager.create(backend_url).normalize_model_name(model)
-        return OllamaClient(backend_url).get_model_capabilities(normalized)
+        backend = get_backend(backend_type, backend_url)
+        normalized = backend.normalize_model_name(model)
+        return backend.get_model_capabilities(normalized)
     except RuntimeError:
         return None
 

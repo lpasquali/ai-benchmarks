@@ -27,7 +27,7 @@ class PerplexityDriverClient:
     ) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("perplexity")
 
-    def ask(self, question: str, model: str = "sonar-pro", backend_url: str | None = None) -> str:
+    def ask(self, question: str, model: str = "sonar-pro", backend_url: str | None = None, backend_type: str = "ollama") -> str:
         """Dispatch a research question to the Perplexity driver and return the answer.
 
         Args:
