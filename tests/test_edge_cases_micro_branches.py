@@ -485,7 +485,7 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
         store=api_server.JobStore(tmp_path / "jobs.db"),
         security=api_server.ApiSecurityConfig(auth_disabled=True, tenant_tokens={}),
     )
-    monkeypatch.setattr(api_server, "list_backend_models", lambda _url: (_ for _ in ()).throw(RuntimeError("bad-ollama")))
+    monkeypatch.setattr(api_server, "list_backend_models", lambda _url, **kw: (_ for _ in ()).throw(RuntimeError("bad-ollama")))
     server = api_server.ThreadingHTTPServer(("127.0.0.1", 0), app.create_handler())
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

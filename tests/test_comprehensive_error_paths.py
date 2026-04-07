@@ -141,12 +141,12 @@ def test_api_server_remaining_paths(monkeypatch, tmp_path):
     app = api_server.RuneApiApplication(
         store=store,
         security=api_server.ApiSecurityConfig(auth_disabled=False, tenant_tokens={"tenant": hashlib.sha256(b"token").hexdigest()}),
-        backend_functions={"ollama-instance": backend_ollama, "benchmark": backend_bench, "agentic-agent": lambda request: (_ for _ in ()).throw(RuntimeError("bad-run"))},
+        backend_functions={"llm-instance": backend_ollama, "ollama-instance": backend_ollama, "benchmark": backend_bench, "agentic-agent": lambda request: (_ for _ in ()).throw(RuntimeError("bad-run"))},
     )
     monkeypatch.setattr(
         api_server,
         "list_backend_models",
-        lambda backend_url: {"backend_url": backend_url, "models": [], "running_models": []},
+        lambda backend_url, **kw: {"backend_url": backend_url, "backend_type": kw.get("backend_type", "ollama"), "models": [], "running_models": []},
     )
     server = api_server.ThreadingHTTPServer(("127.0.0.1", 0), app.create_handler())
     import threading
@@ -187,7 +187,7 @@ def test_api_server_remaining_paths(monkeypatch, tmp_path):
     app._execute_job(job_id, "agentic-agent", {"question": "q", "model": "m", "backend_url": None, "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"})  # nosec  # test artifact paths
     assert store.get_job(job_id).status == "failed"
 
-    assert app._dispatch("ollama-instance", {"vastai": False, "template_hash": "t", "min_dph": 1, "max_dph": 2, "reliability": 0.9, "backend_url": "http://x"}) == {"mode": "existing"}
+    assert app._dispatch("llm-instance", {"vastai": False, "template_hash": "t", "min_dph": 1, "max_dph": 2, "reliability": 0.9, "backend_url": "http://x"}) == {"mode": "existing"}
     assert app._dispatch("benchmark", {"vastai": False, "template_hash": "t", "min_dph": 1, "max_dph": 2, "reliability": 0.9, "backend_url": None, "question": "qq", "model": "m", "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k", "vastai_stop_instance": False}) == {"answer": "qq"}  # nosec  # test artifact paths
 
     monkeypatch.setattr(api_server, "ThreadingHTTPServer", lambda *args, **kwargs: type("S", (), {"serve_forever": lambda self: None, "server_close": lambda self: None})())
@@ -400,8 +400,8 @@ def test_api_backend_and_workflow_last_edges(monkeypatch, tmp_path):
 
     fake_client = MagicMock()
     fake_client.get_available_models.return_value = ["x"]
-    manager = api_backend.use_existing_backend_server
-    assert callable(manager)
+    from rune_bench.workflows import use_existing_backend_server
+    assert callable(use_existing_backend_server)
 
 
 def test_cost_estimate_backend_and_server_endpoints(monkeypatch, tmp_path):
@@ -430,7 +430,7 @@ def test_cost_estimate_backend_and_server_endpoints(monkeypatch, tmp_path):
             "cost-estimate": lambda req: {"projected_cost_usd": 1.5, "cost_driver": "vastai", "resource_impact": "low", "local_energy_kwh": 0.0, "confidence_score": 1.0, "warning": None},
         },
     )
-    monkeypatch.setattr(api_server, "list_backend_models", lambda backend_url: {"backend_url": backend_url, "models": [], "running_models": []})
+    monkeypatch.setattr(api_server, "list_backend_models", lambda backend_url, **kw: {"backend_url": backend_url, "backend_type": kw.get("backend_type", "ollama"), "models": [], "running_models": []})
     server = api_server.ThreadingHTTPServer(("127.0.0.1", 0), app.create_handler())
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
