@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Factory for attestation drivers.
 
 Resolves the driver name from the supplied *config* dict, falling back to

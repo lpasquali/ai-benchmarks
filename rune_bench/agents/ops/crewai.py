@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """CrewAI agentic runner — delegates to the CrewAI driver.
 
 Scope:      Ops/Misc  |  Rank 5  |  Rating 4.0

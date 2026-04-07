@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Mindgard driver client — delegates AI red-teaming to the mindgard driver process.
 
 The driver process is launched via :func:`~rune_bench.drivers.make_driver_transport`

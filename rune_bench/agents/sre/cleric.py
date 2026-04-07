@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Cleric agentic runner stub.
 
 Scope:      SRE  |  Rank 5  |  Rating 3.5

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Block 1 — Search Offers.
 
 Finds the best available GPU offer on Vast.ai given price and

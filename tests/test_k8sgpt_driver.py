@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for rune_bench.drivers.k8sgpt — the driver entry point and client.
 
 The driver process calls ``k8sgpt analyze`` as a subprocess.

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Dynamic agent registry with lazy import resolution.
 
 The registry supports two kinds of agents:

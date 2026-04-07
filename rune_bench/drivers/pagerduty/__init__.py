@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """PagerDuty driver client -- delegates incident triage queries to the pagerduty driver process.
 
 This is a hybrid agent: PagerDuty REST API for data retrieval plus Ollama for

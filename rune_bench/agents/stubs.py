@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Enterprise stub utilities for agents that require external configuration.
 
 Agents that are registered in the built-in map but depend on commercial

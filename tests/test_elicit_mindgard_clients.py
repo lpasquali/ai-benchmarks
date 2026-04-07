@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for Elicit and Mindgard driver clients (__init__.py coverage)."""
 
 from __future__ import annotations

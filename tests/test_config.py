@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for rune_bench.common.config — YAML configuration loader."""
 
 from __future__ import annotations

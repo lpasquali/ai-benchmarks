@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """TPM 2.0 attestation driver using the tpm2-tools CLI.
 
 Invokes ``tpm2_quote`` to obtain a PCR quote from the local TPM chip and,

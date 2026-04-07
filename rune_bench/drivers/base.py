@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Driver transport protocol — the base contract for all driver transports.
 
 A ``DriverTransport`` is anything that can send an action + params to an

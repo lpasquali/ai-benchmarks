@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Cost estimation logic for cloud and local environments."""
 
 from typing import Optional

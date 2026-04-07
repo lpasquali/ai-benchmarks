@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Vast.ai LLM resource provider and low-level instance lifecycle modules."""
 
 from .instance import ConnectionDetails, InstanceManager, TeardownResult

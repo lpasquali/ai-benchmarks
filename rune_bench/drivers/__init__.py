@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Driver transport package — factory and public re-exports.
 
 Usage::

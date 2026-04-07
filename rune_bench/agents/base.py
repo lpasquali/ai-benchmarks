@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Protocol definition for agentic runner implementations."""
 
 from dataclasses import dataclass, field

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Attestation driver interface for TPM 2.0 PCR verification."""
 
 from __future__ import annotations

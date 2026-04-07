@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Live integration tests against a real Ollama instance with TinyLlama.
 
 These tests exercise ``OllamaClient`` and ``OllamaModelManager`` end-to-end

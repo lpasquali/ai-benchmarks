@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Midjourney agentic runner stub.
 
 Scope:      Art/Creative  |  Rank 1  |  Rating 5.0

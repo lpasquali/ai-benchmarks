@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """BurpGPT driver client -- delegates web vulnerability scanning to the burpgpt driver process.
 
 The driver process (``rune_bench.drivers.burpgpt.__main__``) talks to the

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """RUNE benchmark catalog — scopes, agents, questions, and chain definitions.
 
 Quick start::

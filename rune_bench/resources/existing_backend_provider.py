@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Existing LLM backend server resource provider."""
 
 from rune_bench.resources.base import ProvisioningResult

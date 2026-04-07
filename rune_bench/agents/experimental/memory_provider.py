@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Experimental Multi-Tier Memory Provider for autonomous agents.
 
 Supports episodic (short-term session logs), semantic (long-term domain knowledge),

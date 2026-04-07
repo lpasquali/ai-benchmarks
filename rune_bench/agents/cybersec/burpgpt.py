@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """BurpGPT agentic runner -- delegates to the burpgpt driver.
 
 Scope:      Cybersec  |  Rank 4  |  Rating 3.5
