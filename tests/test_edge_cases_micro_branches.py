@@ -450,9 +450,9 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
     assert stopped == [True]
 
     # api_backend benchmark warmup branch — patch at provider module level to verify
-    # ExistingOllamaProvider.provision() calls warmup when warmup=True
-    import rune_bench.resources.existing_ollama_provider as _ep
-    from rune_bench.resources.existing_ollama_provider import ExistingOllamaProvider
+    # ExistingBackendProvider.provision() calls warmup when warmup=True
+    import rune_bench.resources.existing_backend_provider as _ep
+    from rune_bench.resources.existing_backend_provider import ExistingBackendProvider
 
     warmups = []
     monkeypatch.setattr(_ep, "use_existing_backend_server", lambda *_a, **_k: type("S", (), {"url": "http://existing"})())
@@ -460,7 +460,7 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
     monkeypatch.setattr(
         api_backend,
         "_make_resource_provider_for_benchmark",
-        lambda req: ExistingOllamaProvider(req.backend_url, model=req.model, warmup=req.backend_warmup, warmup_timeout=req.backend_warmup_timeout),
+        lambda req: ExistingBackendProvider(req.backend_url, model=req.model, warmup=req.backend_warmup, warmup_timeout=req.backend_warmup_timeout),
     )
     api_backend.run_benchmark(
         api_backend.RunBenchmarkRequest(
