@@ -9,6 +9,8 @@ only requires network access to the Glean instance -- not any local SDK.
 
 from __future__ import annotations
 
+from rune_bench.agents.base import AgentResult
+
 from rune_bench.debug import debug_log
 from rune_bench.drivers import DriverTransport, make_driver_transport
 
@@ -26,7 +28,29 @@ class GleanDriverClient:
     ) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("glean")
 
-    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
+        def ask(
+        self,
+        question: str,
+        model: str,
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> str:
+        """Dispatch a question to the driver and return the answer string."""
+        return self.ask_structured(
+            question=question,
+            model=model,
+            backend_url=backend_url,
+            backend_type=backend_type,
+        ).answer
+
+    def ask_structured(
+        self,
+        question: str,
+        model: str,
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> AgentResult:
+        """Dispatch a question to the driver and return a structured AgentResult."""
         """Dispatch a question to the Glean driver and return the answer.
 
         Args:
@@ -57,7 +81,12 @@ class GleanDriverClient:
         if not answer_text:
             raise RuntimeError("Glean driver returned an empty answer.")
 
-        return answer_text
+        return AgentResult(
+            answer=answer_text,
+            result_type=result.get("result_type", "text"),
+            artifacts=result.get("artifacts"),
+            metadata=result.get("metadata"),
+        )
 
 
 GleanRunner = GleanDriverClient

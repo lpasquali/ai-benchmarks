@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from rune_bench.agents.base import AgentResult
+
 import os
 
 from rune_bench.drivers import DriverTransport, make_driver_transport
@@ -20,7 +22,29 @@ class SkillfortifyDriverClient:
     def __init__(self, *, transport: DriverTransport | None = None) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("skillfortify")
 
-    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
+        def ask(
+        self,
+        question: str,
+        model: str,
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> str:
+        """Dispatch a question to the driver and return the answer string."""
+        return self.ask_structured(
+            question=question,
+            model=model,
+            backend_url=backend_url,
+            backend_type=backend_type,
+        ).answer
+
+    def ask_structured(
+        self,
+        question: str,
+        model: str,
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> AgentResult:
+        """Dispatch a question to the driver and return a structured AgentResult."""
         """Send a question to the SkillFortify driver.
 
         Raises:

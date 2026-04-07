@@ -10,6 +10,8 @@ only requires the k8sgpt binary to be installed in the *subprocess* environment
 
 from __future__ import annotations
 
+from rune_bench.agents.base import AgentResult
+
 from pathlib import Path
 
 from rune_bench.debug import debug_log
@@ -34,7 +36,29 @@ class K8sGPTDriverClient:
         self._kubeconfig = kubeconfig
         self._transport: DriverTransport = transport or make_driver_transport("k8sgpt")
 
-    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
+        def ask(
+        self,
+        question: str,
+        model: str,
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> str:
+        """Dispatch a question to the driver and return the answer string."""
+        return self.ask_structured(
+            question=question,
+            model=model,
+            backend_url=backend_url,
+            backend_type=backend_type,
+        ).answer
+
+    def ask_structured(
+        self,
+        question: str,
+        model: str,
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> AgentResult:
+        """Dispatch a question to the driver and return a structured AgentResult."""
         """Dispatch an analysis request to the k8sgpt driver and return the answer.
 
         Args:
@@ -73,4 +97,9 @@ class K8sGPTDriverClient:
         if not answer_text:
             raise RuntimeError("K8sGPT driver returned an empty answer.")
 
-        return answer_text
+        return AgentResult(
+            answer=answer_text,
+            result_type=result.get("result_type", "text"),
+            artifacts=result.get("artifacts"),
+            metadata=result.get("metadata"),
+        )

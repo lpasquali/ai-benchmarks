@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from rune_bench.agents.base import AgentResult
 from rune_bench.backends import get_backend
 from rune_bench.debug import debug_log
 from rune_bench.drivers import DriverTransport, make_driver_transport
@@ -42,21 +43,22 @@ class HolmesDriverClient:
         backend_url: str | None = None,
         backend_type: str = "ollama",
     ) -> str:
-        """Dispatch a question to the holmes driver and return the answer.
+        """Dispatch a question to the holmes driver and return the answer string."""
+        return self.ask_structured(
+            question=question,
+            model=model,
+            backend_url=backend_url,
+            backend_type=backend_type,
+        ).answer
 
-        Fetches LLM backend model capability limits (context window, max output
-        tokens) when *backend_url* is provided and passes them to the driver so
-        it can set the appropriate environment overrides before calling HolmesGPT.
-
-        Args:
-            question: Natural-language question about the Kubernetes cluster.
-            model: LLM model identifier (e.g. ``"llama3.1:8b"``).
-            backend_url: Base URL of the LLM backend server (optional).
-            backend_type: Backend type (e.g. ``"ollama"``, ``"k8s-inference"``).
-
-        Returns:
-            HolmesGPT's textual answer.
-        """
+    def ask_structured(
+        self,
+        question: str,
+        model: str,
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> AgentResult:
+        """Dispatch a question to the holmes driver and return a structured AgentResult."""
         resolved_model = model.strip()
         params: dict = {
             "question": question,
@@ -86,7 +88,12 @@ class HolmesDriverClient:
         if not answer_text:
             raise RuntimeError("Holmes driver returned an empty answer.")
 
-        return answer_text
+        return AgentResult(
+            answer=answer_text,
+            result_type=result.get("result_type", "text"),
+            artifacts=result.get("artifacts"),
+            metadata=result.get("metadata"),
+        )
 
     def _fetch_model_limits(
         self, *, model: str, backend_url: str, backend_type: str = "ollama",

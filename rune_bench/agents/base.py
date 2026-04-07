@@ -48,3 +48,13 @@ class AgentRunner(Protocol):
     ) -> str:
         """Run an investigation query and return the answer as a string."""
         ...
+
+    def ask_structured(
+        self,
+        question: str,
+        model: str,
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> AgentResult:
+        """Run an investigation query and return a structured AgentResult."""
+        ...

@@ -10,6 +10,8 @@ are required.
 
 from __future__ import annotations
 
+from rune_bench.agents.base import AgentResult
+
 from rune_bench.debug import debug_log
 from rune_bench.drivers import DriverTransport, make_driver_transport
 
@@ -75,4 +77,9 @@ class ConsensusDriverClient:
         if not answer_text:
             raise RuntimeError("Consensus driver returned an empty answer.")
 
-        return answer_text
+        return AgentResult(
+            answer=answer_text,
+            result_type=result.get("result_type", "text"),
+            artifacts=result.get("artifacts"),
+            metadata=result.get("metadata"),
+        )
