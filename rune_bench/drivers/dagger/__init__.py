@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Dagger driver client — delegates CI/CD pipeline queries to the dagger driver process.
 
 The driver process is launched via :func:`~rune_bench.drivers.make_driver_transport`

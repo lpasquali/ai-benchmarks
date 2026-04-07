@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Workflow lifecycle metrics for RUNE.
 
 A lightweight, thread-safe metrics layer that counts and times workflow phases.

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Application workflows used by the RUNE CLI.
 
 This module keeps orchestration/business logic out of the CLI layer.

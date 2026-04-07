@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """LLM resource provisioning interfaces and implementations."""
 
 from .base import LLMResourceProvider, ProvisioningResult

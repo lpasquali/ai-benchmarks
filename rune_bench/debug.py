@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Shared debug logging helpers for RUNE."""
 
 from __future__ import annotations

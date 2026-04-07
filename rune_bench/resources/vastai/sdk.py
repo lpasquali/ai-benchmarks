@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Lightweight Vast.ai API client to replace vastai-sdk and avoid CVEs."""
 
 import json

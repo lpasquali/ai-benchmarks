@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Multi-domain agent registry, configuration, and execution APIs."""
 
 from .base import AgentResult, AgentRunner

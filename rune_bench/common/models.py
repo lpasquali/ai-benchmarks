@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Block 2+3 — Model Selection and Disk Sizing.
 
 Selects the largest LLM model that fits in the available VRAM and

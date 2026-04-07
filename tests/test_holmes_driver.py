@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for rune_bench.drivers.holmes.__main__ — the driver entry point.
 
 The driver process calls ``python -m holmes.main ask`` as a subprocess.

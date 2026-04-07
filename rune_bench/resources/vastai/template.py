@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Block 4 — Template Loading.
 
 Fetches Vast.ai templates and resolves a template by its hash,

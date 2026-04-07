@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 import pytest
 
 from rune_bench.agents.experimental.safety_interceptor import SafetyInterceptor, SafetyViolation

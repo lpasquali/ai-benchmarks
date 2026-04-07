@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Persistent SQLite-backed job store for the RUNE API server."""
 
 from __future__ import annotations

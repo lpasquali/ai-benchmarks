@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 from unittest.mock import MagicMock
 
 import rune_bench.workflows as workflows

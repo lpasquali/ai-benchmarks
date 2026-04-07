@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """MultiOn agentic runner stub.
 
 Scope:      Ops/Misc  |  Rank 1  |  Rating 4.5

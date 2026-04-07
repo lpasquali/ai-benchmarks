@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for rune_bench.drivers.langgraph — driver client and __main__ entry point.
 
 LangGraph and langchain_ollama are optional dependencies.  All imports are

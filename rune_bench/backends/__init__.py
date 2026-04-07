@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """LLM backend protocol, registry, and factory.
 
 Backends define HOW to communicate with an LLM — handling auth, model

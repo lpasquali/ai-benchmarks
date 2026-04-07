@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Metoro agentic runner -- delegates to the Metoro driver.
 
 Scope:      SRE  |  Rank 4  |  Rating 4.0

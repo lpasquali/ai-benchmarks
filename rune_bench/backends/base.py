@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Protocol and credential types for LLM backend implementations."""
 
 from dataclasses import dataclass, field

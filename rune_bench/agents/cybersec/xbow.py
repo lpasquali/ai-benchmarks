@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """XBOW agentic runner stub.
 
 Scope:      Cybersec  |  Rank 5  |  Rating 3.5
