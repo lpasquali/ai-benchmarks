@@ -18,7 +18,7 @@ from rune_bench.agents.sre.holmes import HolmesRunner
 from rune_bench.api_client import RuneApiClient
 from rune_bench.common import normalize_url
 from rune_bench.backends.base import ModelCapabilities
-from rune_bench.backends.ollama import OllamaClient, OllamaModelCapabilities, OllamaModelManager
+from rune_bench.backends.ollama import OllamaClient, OllamaModelManager
 from rune_bench.resources.vastai import ConnectionDetails, InstanceManager, TeardownResult
 
 
