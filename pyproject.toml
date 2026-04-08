@@ -39,7 +39,7 @@ dependencies = [
 holmes = [
     "holmesgpt>=0.23.0",
     # supabase<2.8 required to resolve holmesgpt's postgrest==0.16.8 pin conflict
-    "supabase>=2.5,<2.8",
+    "supabase>=2.5,<2.29",
 ]
 vastai = [
     "httpx>=0.27.0",
@@ -49,7 +49,7 @@ catalog = [
 ]
 all = [
     "holmesgpt>=0.23.0",
-    "supabase>=2.5,<2.8",
+    "supabase>=2.5,<2.29",
     "httpx>=0.27.0",
     "pyyaml>=6.0",
 ]
