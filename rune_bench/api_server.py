@@ -325,7 +325,7 @@ class RuneApiApplication:
             raise RuntimeError(f"no backend function registered for job kind: {kind}")
         return handler(request)
 
-    def serve(self, host: str = "0.0.0.0", port: int = 8080) -> None:
+    def serve(self, host: str = "127.0.0.1", port: int = 8080) -> None:
         server = ThreadingHTTPServer((host, port), self.create_handler())
         try:
             server.serve_forever()
