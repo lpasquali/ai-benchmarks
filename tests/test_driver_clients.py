@@ -133,8 +133,8 @@ class TestLangGraphDriverClient:
         transport.call.return_value = {"answer": ""}
         client = LangGraphDriverClient(transport=transport)
 
-        with pytest.raises(RuntimeError, match="empty answer"):
-            client.ask("q", "m")
+        # Empty string is valid — driver returns it as-is
+        assert client.ask("q", "m") == ""
 
     def test_model_whitespace_stripped(self) -> None:
         transport = MagicMock()

@@ -10,6 +10,7 @@ import rune_bench.api_backend as api_backend
 import rune_bench.api_client as api_client_module
 import rune_bench.api_server as api_server
 import rune_bench.workflows as workflows
+from rune_bench.agents.base import AgentResult
 from rune_bench.agents.sre.holmes import HolmesRunner
 from rune_bench.api_client import RuneApiClient
 from rune_bench.resources.vastai import InstanceManager
@@ -293,7 +294,7 @@ def test_offer_template_backend_instance_and_workflow_remaining(monkeypatch, tmp
     monkeypatch.setattr(
         api_backend,
         "_make_agent_runner",
-        lambda path: type("R", (), {"ask": lambda self, **_: "a"})(),
+        lambda path: type("R", (), {"ask_structured": lambda self, **_: AgentResult(answer="a")})(),
     )
     result = api_backend.run_benchmark(api_backend.RunBenchmarkRequest(vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url=None, question="q", model="m", backend_warmup=False, backend_warmup_timeout=1, kubeconfig=str(kubeconfig), vastai_stop_instance=True))
     assert result["contract_id"] == 8
@@ -395,9 +396,9 @@ def test_offer_template_backend_instance_and_workflow_remaining(monkeypatch, tmp
 def test_api_backend_and_workflow_last_edges(monkeypatch, tmp_path):
     kubeconfig = tmp_path / "config"
     kubeconfig.write_text("apiVersion: v1\n")
-    monkeypatch.setattr(api_backend, "_make_agent_runner", lambda **kwargs: type("R", (), {"ask": lambda self, **_: "a"})())
+    monkeypatch.setattr(api_backend, "get_agent", lambda *_args, **_kwargs: type("R", (), {"ask_structured": lambda self, **_: AgentResult(answer="a")})())
     result = api_backend.run_agentic_agent(api_backend.RunAgenticAgentRequest(question="q", model="m", backend_url=None, backend_warmup=False, backend_warmup_timeout=1, kubeconfig=str(kubeconfig)))
-    assert result == {"answer": "a"}
+    assert result["answer"] == "a"
 
     fake_client = MagicMock()
     fake_client.get_available_models.return_value = ["x"]

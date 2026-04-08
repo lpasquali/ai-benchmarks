@@ -6,6 +6,7 @@ import typer
 from rich.console import Console
 
 import rune
+from rune_bench.agents.base import AgentResult
 from rune_bench.backends.ollama import OllamaModelCapabilities
 from rune_bench.workflows import ExistingOllamaServer, VastAIProvisioningResult
 from rune_bench.resources.vastai import ConnectionDetails, TeardownResult
@@ -209,7 +210,7 @@ def test_run_agentic_agent_paths(monkeypatch, tmp_path):
     monkeypatch.setattr(rune, "BACKEND_MODE", "local")
     warmups = []
     monkeypatch.setattr(rune, "_warmup_ollama_model", lambda **_kwargs: warmups.append(True))
-    monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: type("R", (), {"ask": lambda self, **_: "local-answer"})())
+    monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: type("R", (), {"ask_structured": lambda self, **_: AgentResult(answer="local-answer")})())
     rune.run_agentic_agent(debug=False, question="q", model="m", backend_url="http://x", backend_warmup=True, backend_warmup_timeout=1, kubeconfig=kubeconfig, idempotency_key=None)
     assert warmups == [True]
     assert "local-answer" in test_console.export_text()
@@ -246,13 +247,13 @@ def test_run_benchmark_paths(monkeypatch, tmp_path):
     monkeypatch.setattr(rune, "use_existing_backend_server", lambda *_args, **_kwargs: ExistingOllamaServer(url="http://x", model_name="m"))
     monkeypatch.setattr(rune, "_fetch_model_capabilities", lambda *_args, **_kwargs: OllamaModelCapabilities("m", 100, 20))
     monkeypatch.setattr(rune, "_warmup_ollama_model", lambda **_kwargs: None)
-    monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: type("R", (), {"ask": lambda self, **_: "bench-local"})())
+    monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: type("R", (), {"ask_structured": lambda self, **_: AgentResult(answer="bench-local")})())
     rune.run_benchmark(debug=False, vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url="http://x", question="q", model="m", backend_warmup=True, backend_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
     assert "bench-local" in test_console.export_text()
 
     monkeypatch.setattr(rune, "_run_vastai_provisioning", lambda **_kwargs: _result())
     monkeypatch.setattr(rune, "_vastai_sdk", lambda: MagicMock())
-    monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: type("R", (), {"ask": lambda self, **_: "bench-vastai"})())
+    monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: type("R", (), {"ask_structured": lambda self, **_: AgentResult(answer="bench-vastai")})())
     monkeypatch.setattr(rune, "stop_vastai_instance", lambda *_args, **_kwargs: TeardownResult(contract_id=7, destroyed_instance=True, destroyed_volume_ids=[], verification_ok=False, verification_message="warn"))
     rune.run_benchmark(debug=False, vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url=None, question="q", model="m", backend_warmup=False, backend_warmup_timeout=1, kubeconfig=kubeconfig, vastai_stop_instance=True, idempotency_key=None)
     assert "bench-vastai" in test_console.export_text()

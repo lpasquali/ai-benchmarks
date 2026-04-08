@@ -15,6 +15,7 @@ import rune_bench.api_backend as api_backend
 import rune_bench.api_server as api_server
 import rune_bench.backends.ollama as ollama_models_module
 import rune_bench.workflows as workflows
+from rune_bench.agents.base import AgentResult
 from rune_bench.agents.sre.holmes import HolmesRunner
 from rune_bench.api_client import RuneApiClient
 from rune_bench.common import normalize_url
@@ -173,7 +174,7 @@ def test_rune_remaining_branches(monkeypatch, tmp_path):
         pull_warning=None,
     ))
     monkeypatch.setattr(rune, "_warmup_ollama_model", lambda **_k: None)
-    monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: type("R", (), {"ask": lambda self, **_kk: "ok"})())
+    monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: type("R", (), {"ask_structured": lambda self, **_kk: AgentResult(answer="ok")})())
     monkeypatch.setattr(
         rune,
         "stop_vastai_instance",
@@ -430,7 +431,7 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
             "teardown": lambda self, r: stopped.append(True),
         })(),
     )
-    monkeypatch.setattr(api_backend, "_make_agent_runner", lambda _p: type("R", (), {"ask": lambda self, **_k: "ok"})())
+    monkeypatch.setattr(api_backend, "_make_agent_runner", lambda _p: type("R", (), {"ask_structured": lambda self, **_k: AgentResult(answer="ok")})())
     out = api_backend.run_benchmark(
         api_backend.RunBenchmarkRequest(
             vastai=True,
