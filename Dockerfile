@@ -28,7 +28,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 ARG INSTALL_HOLMES=false
 COPY requirements.txt .
 COPY requirements-holmes.txt .
-RUN pip install --no-cache-dir --upgrade pip \
+RUN pip install --no-cache-dir pip==26.0 \
  && pip install --prefer-binary --no-cache-dir -r requirements.txt \
  && if [ "$INSTALL_HOLMES" = "true" ]; then pip install --prefer-binary --no-cache-dir -r requirements-holmes.txt; fi \
  && pip install --no-cache-dir awscli
