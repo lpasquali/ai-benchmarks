@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """SkillFortify driver client — enterprise stub pending API access."""
-
 from __future__ import annotations
+from rune_bench.debug import debug_log
+
 
 from rune_bench.agents.base import AgentResult
 

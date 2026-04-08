@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-from typing import Any
 
 try:
     from playwright.async_api import async_playwright

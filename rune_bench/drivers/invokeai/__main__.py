@@ -20,12 +20,10 @@ from __future__ import annotations
 
 import json
 import sys
-import requests
 
 def _handle_ask(params: dict) -> dict:
     prompt: str = params["prompt"]
     model: str = params["model"]
-    base_url: str = params["base_url"]
 
     # In a real implementation, we would call InvokeAI's REST API.
     # For now, we simulate a successful generation by returning a placeholder URL.

@@ -860,7 +860,7 @@ def run_agentic_agent(
     # Block 10 — Run agentic agent
     try:
         from rune_bench.metrics import span as _span
-        runner = get_agent(agent, kubeconfig=kubeconfig)
+        runner = get_agent(_request.agent, kubeconfig=kubeconfig)
         with _span("agent.ask", model=model, backend="existing"):
             result = runner.ask_structured(
                 question=question,

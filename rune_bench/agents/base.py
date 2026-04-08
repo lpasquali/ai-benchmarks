@@ -29,6 +29,7 @@ class AgentResult:
     result_type: str = "text"  # "text" | "image" | "structured" | "report"
     artifacts: list[dict] | None = None
     metadata: dict | None = None
+    error: str | None = None
 
 
 @runtime_checkable

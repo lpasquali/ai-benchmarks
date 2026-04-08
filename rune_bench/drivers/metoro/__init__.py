@@ -98,9 +98,6 @@ class MetoroDriverClient:
             metadata=result.get("metadata"),
         )
 
-
-MetoroRunner = MetoroDriverClient
-
     async def ask_async(
         self,
         question: str,
@@ -122,7 +119,7 @@ MetoroRunner = MetoroDriverClient
                 ))
 
         debug_log(
-            f"{self.__class__.__name__}.ask_async: question={question!r} model={resolved_model!r} "
+            f"{self.__name__}.ask_async: question={question!r} model={resolved_model!r} "
             f"backend_url={backend_url or '<none>'}"
         )
         result = await self._async_transport.call_async("ask", params)
@@ -144,3 +141,5 @@ MetoroRunner = MetoroDriverClient
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
         )
+
+MetoroRunner = MetoroDriverClient

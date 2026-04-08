@@ -37,3 +37,20 @@ class DriverTransport(Protocol):
             RuntimeError: if the driver process fails or returns an error status.
         """
         ...
+
+
+@runtime_checkable
+class AsyncDriverTransport(Protocol):
+    """Structural protocol for asynchronous driver transports."""
+
+    async def call_async(self, action: str, params: dict) -> dict:
+        """Call a driver action asynchronously and return the result dict.
+
+        Args:
+            action: Driver-specific action name.
+            params: Free-form parameter mapping for the action.
+
+        Returns:
+            Result dict returned by the driver.
+        """
+        ...
