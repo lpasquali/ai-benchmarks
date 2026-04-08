@@ -147,3 +147,6 @@ class ConsensusDriverClient:
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
         )
+
+
+ConsensusRunner = ConsensusDriverClient

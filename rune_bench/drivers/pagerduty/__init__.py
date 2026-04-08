@@ -149,3 +149,6 @@ class PagerDutyDriverClient:
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
         )
+
+
+PagerDutyRunner = PagerDutyDriverClient

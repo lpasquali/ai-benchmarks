@@ -149,3 +149,6 @@ class K8sGPTDriverClient:
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
         )
+
+
+K8sGPTRunner = K8sGPTDriverClient

@@ -160,3 +160,6 @@ class HolmesDriverClient:
         if caps.max_output_tokens:
             limits["max_output_tokens"] = caps.max_output_tokens
         return limits
+
+
+HolmesRunner = HolmesDriverClient

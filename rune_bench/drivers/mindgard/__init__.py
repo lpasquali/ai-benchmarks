@@ -144,3 +144,6 @@ class MindgardDriverClient:
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
         )
+
+
+MindgardRunner = MindgardDriverClient
