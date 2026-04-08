@@ -1,28 +1,40 @@
 # SPDX-License-Identifier: Apache-2.0
-"""XBOW driver client — enterprise stub pending API access."""
+"""Browser-Use driver client — AI-powered browser automation agent.
+
+Browser-Use (https://github.com/browser-use/browser-use) is an open-source
+framework for AI-driven browser automation. This driver delegates browser
+automation tasks to the browseruse driver process via DriverTransport.
+
+Tier 3 — requires Playwright and browser-use package in the subprocess.
+"""
+
 from __future__ import annotations
-from rune_bench.debug import debug_log
-
-
-from rune_bench.agents.base import AgentResult
 
 import os
 
-from rune_bench.drivers import DriverTransport, AsyncDriverTransport, make_driver_transport, make_async_driver_transport
+from rune_bench.agents.base import AgentResult
+from rune_bench.debug import debug_log
+from rune_bench.drivers import (
+    AsyncDriverTransport,
+    DriverTransport,
+    make_async_driver_transport,
+    make_driver_transport,
+)
 
 
-class XbowDriverClient:
-    """XBOW autonomous pentesting agent. Requires enterprise API access.
+class BrowserUseDriverClient:
+    """AI-powered browser automation agent.
 
     Configure via environment variables:
-        RUNE_XBOW_API_KEY   — API key/token
+        RUNE_BROWSERUSE_API_KEY  — OpenAI API key for LLM reasoning
+        RUNE_BROWSERUSE_BASE_URL — Target URL for browser automation
     """
 
-    ONBOARDING_URL = "https://xbow.com/"
+    ONBOARDING_URL = "https://github.com/browser-use/browser-use"
 
     def __init__(self, *, transport: DriverTransport | None = None) -> None:
-        self._transport: DriverTransport = transport or make_driver_transport("xbow")
-        self._async_transport: AsyncDriverTransport = make_async_driver_transport("xbow")
+        self._transport: DriverTransport = transport or make_driver_transport("browseruse")
+        self._async_transport: AsyncDriverTransport = make_async_driver_transport("browseruse")
 
     def ask(
         self,
@@ -46,19 +58,17 @@ class XbowDriverClient:
         backend_url: str | None = None,
         backend_type: str = "ollama",
     ) -> AgentResult:
-        """Dispatch a question to the driver and return a structured AgentResult.
-
-        Send a question to the XBOW driver.
+        """Dispatch a browser automation task and return a structured AgentResult.
 
         Raises:
-            RuntimeError: if ``RUNE_XBOW_API_KEY`` is not set.
+            RuntimeError: if ``RUNE_BROWSERUSE_API_KEY`` is not set.
         """
-        api_key = os.getenv("RUNE_XBOW_API_KEY")
+        api_key = os.getenv("RUNE_BROWSERUSE_API_KEY")
         if not api_key:
             raise RuntimeError(
-                "XBOW requires an enterprise contract or API access. "
+                "Browser-Use requires an LLM API key for reasoning. "
                 f"Visit {self.ONBOARDING_URL} to get started. "
-                "Once provisioned, set RUNE_XBOW_API_KEY."
+                "Set RUNE_BROWSERUSE_API_KEY (typically an OpenAI key)."
             )
         result = self._transport.call("ask", {
             "question": question,
@@ -90,10 +100,6 @@ class XbowDriverClient:
         }
         if backend_url:
             params["backend_url"] = backend_url
-            if hasattr(self, "_fetch_model_limits"):
-                params.update(self._fetch_model_limits(
-                    model=resolved_model, backend_url=backend_url, backend_type=backend_type,
-                ))
 
         debug_log(
             f"{self.__class__.__name__}.ask_async: question={question!r} model={resolved_model!r} "

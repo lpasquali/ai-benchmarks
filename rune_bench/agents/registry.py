@@ -41,6 +41,7 @@ _BUILTIN_AGENTS: dict[str, tuple[str, str, list[str]]] = {
     "spellbook": ("rune_bench.agents.legal.spellbook", "SpellbookRunner", ["api_key"]),
     "dagger": ("rune_bench.agents.ops.dagger", "DaggerRunner", []),
     "crewai": ("rune_bench.agents.ops.crewai", "CrewAIRunner", ["api_key"]),
+    "browseruse": ("rune_bench.agents.ops.browseruse", "BrowserUseRunner", ["api_key"]),
     "sierra": ("rune_bench.agents.ops.sierra", "SierraRunner", ["api_key"]),
     "skillfortify": ("rune_bench.agents.ops.skillfortify", "SkillFortifyRunner", ["api_key"]),
     "midjourney": ("rune_bench.agents.art.midjourney", "MidjourneyRunner", ["api_key", "base_url"]),
