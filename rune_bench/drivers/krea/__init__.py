@@ -67,7 +67,15 @@ class KreaDriverClient:
             "model": model,
             "backend_url": backend_url,
         })
-        return result.get("answer", "")
+        answer = str(result.get("answer", ""))
+        if not answer:
+            raise RuntimeError("Driver returned an empty answer.")
+        return AgentResult(
+            answer=answer,
+            result_type=result.get("result_type", "text"),
+            artifacts=result.get("artifacts"),
+            metadata=result.get("metadata"),
+        )
 
     async def ask_async(
         self,
