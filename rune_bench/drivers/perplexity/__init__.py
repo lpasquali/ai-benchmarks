@@ -137,3 +137,6 @@ class PerplexityDriverClient:
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
         )
+
+
+PerplexityRunner = PerplexityDriverClient

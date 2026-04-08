@@ -119,3 +119,6 @@ class XbowDriverClient:
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
         )
+
+
+XbowRunner = XbowDriverClient

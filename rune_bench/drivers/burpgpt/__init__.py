@@ -145,3 +145,6 @@ class BurpGPTDriverClient:
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
         )
+
+
+BurpGPTRunner = BurpGPTDriverClient
