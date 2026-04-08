@@ -6,6 +6,7 @@ import pytest
 
 import rune_bench.api_backend as api_backend
 import rune_bench.workflows as workflows
+from rune_bench.agents.base import AgentResult
 from rune_bench.common.models import ModelSelector
 from rune_bench.backends.ollama import OllamaClient
 from rune_bench.backends.ollama import OllamaModelManager
@@ -384,9 +385,10 @@ def test_api_backend_functions(monkeypatch, tmp_path):
     kubeconfig.write_text("apiVersion: v1\n")
     warmed = []
     monkeypatch.setattr(api_backend, "warmup_backend_model", lambda *_args, **_kwargs: warmed.append(True) or "m")
-    monkeypatch.setattr(api_backend, "_make_agent_runner", lambda *_args, **_kwargs: type("R", (), {"ask": lambda self, **_: "answer"})())
+    monkeypatch.setattr(api_backend, "get_agent", lambda *_args, **_kwargs: type("R", (), {"ask_structured": lambda self, **_: AgentResult(answer="answer")})())
     areq = api_backend.RunAgenticAgentRequest(question="q", model="m", backend_url="http://x", backend_warmup=True, backend_warmup_timeout=1, kubeconfig=str(kubeconfig))
-    assert api_backend.run_agentic_agent(areq) == {"answer": "answer"}
+    result = api_backend.run_agentic_agent(areq)
+    assert result["answer"] == "answer"
     assert warmed == [True]
 
     monkeypatch.setattr(
