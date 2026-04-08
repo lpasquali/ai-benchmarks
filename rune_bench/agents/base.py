@@ -58,3 +58,13 @@ class AgentRunner(Protocol):
     ) -> AgentResult:
         """Run an investigation query and return a structured AgentResult."""
         ...
+
+    async def ask_async(
+        self,
+        question: str,
+        model: str,
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> AgentResult:
+        """Asynchronously run an investigation query and return an AgentResult."""
+        ...
