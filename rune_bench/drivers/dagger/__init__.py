@@ -139,3 +139,6 @@ class DaggerDriverClient:
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
         )
+
+
+DaggerRunner = DaggerDriverClient

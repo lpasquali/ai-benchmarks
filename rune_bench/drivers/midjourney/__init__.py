@@ -123,3 +123,6 @@ class MidjourneyDriverClient:
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
         )
+
+
+MidjourneyRunner = MidjourneyDriverClient

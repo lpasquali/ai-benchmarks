@@ -120,3 +120,6 @@ class RadiantDriverClient:
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
         )
+
+
+RadiantRunner = RadiantDriverClient
