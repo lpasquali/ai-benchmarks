@@ -118,3 +118,6 @@ class SkillfortifyDriverClient:
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
         )
+
+
+SkillfortifyRunner = SkillfortifyDriverClient

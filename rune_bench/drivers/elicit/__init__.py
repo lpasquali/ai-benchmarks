@@ -138,3 +138,6 @@ class ElicitDriverClient:
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
         )
+
+
+ElicitRunner = ElicitDriverClient

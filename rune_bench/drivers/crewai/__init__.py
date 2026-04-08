@@ -139,3 +139,6 @@ class CrewAIDriverClient:
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
         )
+
+
+CrewAIRunner = CrewAIDriverClient

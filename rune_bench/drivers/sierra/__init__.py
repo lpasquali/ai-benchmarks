@@ -118,3 +118,6 @@ class SierraDriverClient:
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
         )
+
+
+SierraRunner = SierraDriverClient

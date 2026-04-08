@@ -120,3 +120,6 @@ class SpellbookDriverClient:
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
         )
+
+
+SpellbookRunner = SpellbookDriverClient

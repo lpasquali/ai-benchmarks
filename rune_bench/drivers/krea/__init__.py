@@ -120,3 +120,6 @@ class KreaDriverClient:
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
         )
+
+
+KreaRunner = KreaDriverClient

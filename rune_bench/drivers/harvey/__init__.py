@@ -119,3 +119,6 @@ class HarveyDriverClient:
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
         )
+
+
+HarveyRunner = HarveyDriverClient
