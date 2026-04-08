@@ -11,6 +11,8 @@ from __future__ import annotations
 import io
 import json
 import subprocess  # nosec  # tests require subprocess
+from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -199,3 +201,71 @@ def test_main_dunder_main_guard(monkeypatch: pytest.MonkeyPatch, capsys: pytest.
     runpy.run_path(str(main_path), run_name="__main__")
     # No output expected for empty stdin, but the guard must not raise
     assert capsys.readouterr().out.strip() == ""
+
+
+# ---------------------------------------------------------------------------
+# HolmesDriverClient — UAT with mocked transport
+# ---------------------------------------------------------------------------
+
+
+def test_driver_client_ask_returns_answer(tmp_path: Path) -> None:
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {"answer": "pod is crashing due to OOMKill"}
+
+    from rune_bench.drivers.holmes import HolmesDriverClient
+
+    kc = tmp_path / "kubeconfig"
+    kc.write_text("test")
+    client = HolmesDriverClient(kubeconfig=kc, transport=mock_transport)
+    result = client.ask("why is pod crashing?", "llama3.1:8b", "http://ollama:11434")
+
+    assert result == "pod is crashing due to OOMKill"
+    mock_transport.call.assert_called_once()
+
+
+def test_driver_client_ask_structured_returns_agent_result(tmp_path: Path) -> None:
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {
+        "answer": "root cause identified",
+        "result_type": "text",
+        "metadata": {"cluster": "test-cluster"},
+    }
+
+    from rune_bench.drivers.holmes import HolmesDriverClient
+    from rune_bench.agents.base import AgentResult
+
+    kc = tmp_path / "kubeconfig"
+    kc.write_text("test")
+    client = HolmesDriverClient(kubeconfig=kc, transport=mock_transport)
+    result = client.ask_structured("investigate", "m", "http://o:11434")
+
+    assert isinstance(result, AgentResult)
+    assert result.answer == "root cause identified"
+
+
+def test_driver_client_raises_on_missing_answer(tmp_path: Path) -> None:
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {}
+
+    from rune_bench.drivers.holmes import HolmesDriverClient
+
+    kc = tmp_path / "kubeconfig"
+    kc.write_text("test")
+    client = HolmesDriverClient(kubeconfig=kc, transport=mock_transport)
+    with pytest.raises(RuntimeError, match="did not include an answer"):
+        client.ask("q", "m", "http://o:11434")
+
+
+def test_driver_client_raises_on_missing_kubeconfig(tmp_path: Path) -> None:
+    from rune_bench.drivers.holmes import HolmesDriverClient
+
+    fake_kc = tmp_path / "nonexistent"
+    with pytest.raises(FileNotFoundError):
+        HolmesDriverClient(kubeconfig=fake_kc)
+
+
+def test_driver_client_runner_alias() -> None:
+    from rune_bench.agents.sre.holmes import HolmesRunner
+    from rune_bench.drivers.holmes import HolmesDriverClient
+
+    assert HolmesRunner is HolmesDriverClient
