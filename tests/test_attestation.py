@@ -20,6 +20,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from rune_bench.agents.base import AgentResult
 from rune_bench.attestation.factory import get_driver
 from rune_bench.attestation.interface import AttestationDriver, AttestationResult
 from rune_bench.attestation.noop import NoOpDriver
@@ -432,7 +433,7 @@ def test_run_benchmark_skips_attestation_when_not_required(monkeypatch):
     )
 
     mock_runner = MagicMock()
-    mock_runner.ask.return_value = "answer"
+    mock_runner.ask_structured.return_value = AgentResult(answer="answer")
 
     with (
         patch("rune_bench.api_backend._make_resource_provider_for_benchmark", return_value=mock_provider),
@@ -459,7 +460,7 @@ def test_run_benchmark_calls_attestation_when_required(monkeypatch):
     )
 
     mock_runner = MagicMock()
-    mock_runner.ask.return_value = "ans"
+    mock_runner.ask_structured.return_value = AgentResult(answer="ans")
 
     with (
         patch("rune_bench.api_backend._make_resource_provider_for_benchmark", return_value=mock_provider),

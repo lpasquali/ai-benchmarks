@@ -6,6 +6,7 @@ from rune_bench.debug import debug_log
 
 from rune_bench.agents.base import AgentResult
 
+
 import os
 
 from rune_bench.drivers import DriverTransport, AsyncDriverTransport, make_driver_transport, make_async_driver_transport

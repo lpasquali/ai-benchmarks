@@ -185,7 +185,7 @@ class JobStore:
         values.append(job_id)
 
         with self._connect() as conn:
-            conn.execute(f"UPDATE jobs SET {', '.join(fields)} WHERE job_id = ?", values)
+            conn.execute(f"UPDATE jobs SET {', '.join(fields)} WHERE job_id = ?", values)  # nosec B608 — fields are hardcoded column names, values are parameterized
 
     def record_workflow_event(self, event: "MetricsEvent") -> None:
         """Persist a single workflow lifecycle event."""
