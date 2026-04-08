@@ -275,3 +275,73 @@ def test_main_handles_missing_req_id(
 
     response = json.loads(capsys.readouterr().out.strip())
     assert response["id"] == ""
+
+
+# ---------------------------------------------------------------------------
+# CrewAIDriverClient — UAT with mocked transport
+# ---------------------------------------------------------------------------
+
+
+def test_driver_client_ask_returns_answer() -> None:
+    from unittest.mock import MagicMock
+    from rune_bench.drivers.crewai import CrewAIDriverClient
+
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {"answer": "crew completed task"}
+
+    client = CrewAIDriverClient(transport=mock_transport)
+    result = client.ask("analyze NDA", "deepseek-r1:32b", "http://o:11434")
+
+    assert result == "crew completed task"
+    mock_transport.call.assert_called_once()
+
+
+def test_driver_client_ask_structured_returns_agent_result() -> None:
+    from unittest.mock import MagicMock
+    from rune_bench.drivers.crewai import CrewAIDriverClient
+    from rune_bench.agents.base import AgentResult
+
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {
+        "answer": "multi-agent report",
+        "result_type": "report",
+        "metadata": {"agents_used": 3},
+    }
+
+    client = CrewAIDriverClient(transport=mock_transport)
+    result = client.ask_structured("q", "m", "http://o:11434")
+
+    assert isinstance(result, AgentResult)
+    assert result.answer == "multi-agent report"
+    assert result.result_type == "report"
+
+
+def test_driver_client_raises_on_missing_answer() -> None:
+    from unittest.mock import MagicMock
+    from rune_bench.drivers.crewai import CrewAIDriverClient
+
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {}
+
+    client = CrewAIDriverClient(transport=mock_transport)
+    with pytest.raises(RuntimeError, match="did not include an answer"):
+        client.ask("q", "m", "http://o:11434")
+
+
+def test_driver_client_raises_on_empty_answer() -> None:
+    from unittest.mock import MagicMock
+    from rune_bench.drivers.crewai import CrewAIDriverClient
+
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {"answer": ""}
+
+    client = CrewAIDriverClient(transport=mock_transport)
+    with pytest.raises(RuntimeError, match="empty answer"):
+        client.ask("q", "m", "http://o:11434")
+
+
+def test_driver_runner_alias() -> None:
+    from rune_bench.agents.ops.crewai import CrewAIRunner
+    from rune_bench.drivers.crewai import CrewAIDriverClient
+
+    assert CrewAIRunner is CrewAIDriverClient

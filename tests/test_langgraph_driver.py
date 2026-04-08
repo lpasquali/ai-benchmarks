@@ -329,3 +329,72 @@ def test_main_handles_missing_req_id(
 
     response = json.loads(capsys.readouterr().out.strip())
     assert response["id"] == ""
+
+
+# ---------------------------------------------------------------------------
+# LangGraphDriverClient — UAT with mocked transport
+# ---------------------------------------------------------------------------
+
+
+def test_driver_client_ask_returns_answer() -> None:
+    from unittest.mock import MagicMock
+    from rune_bench.drivers.langgraph import LangGraphDriverClient
+
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {"answer": "research findings"}
+
+    client = LangGraphDriverClient(transport=mock_transport)
+    result = client.ask("search for papers on X", "deepseek-r1:32b", "http://o:11434")
+
+    assert result == "research findings"
+    mock_transport.call.assert_called_once()
+
+
+def test_driver_client_ask_structured_returns_agent_result() -> None:
+    from unittest.mock import MagicMock
+    from rune_bench.drivers.langgraph import LangGraphDriverClient
+    from rune_bench.agents.base import AgentResult
+
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {
+        "answer": "found 5 papers",
+        "result_type": "text",
+        "metadata": {"papers_count": 5},
+    }
+
+    client = LangGraphDriverClient(transport=mock_transport)
+    result = client.ask_structured("q", "m", "http://o:11434")
+
+    assert isinstance(result, AgentResult)
+    assert result.answer == "found 5 papers"
+
+
+def test_driver_client_raises_on_missing_answer() -> None:
+    from unittest.mock import MagicMock
+    from rune_bench.drivers.langgraph import LangGraphDriverClient
+
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {}
+
+    client = LangGraphDriverClient(transport=mock_transport)
+    with pytest.raises(RuntimeError, match="did not include an answer"):
+        client.ask("q", "m", "http://o:11434")
+
+
+def test_driver_client_raises_on_none_answer() -> None:
+    from unittest.mock import MagicMock
+    from rune_bench.drivers.langgraph import LangGraphDriverClient
+
+    mock_transport = MagicMock()
+    mock_transport.call.return_value = {"answer": None}
+
+    client = LangGraphDriverClient(transport=mock_transport)
+    with pytest.raises(RuntimeError, match="empty answer"):
+        client.ask("q", "m", "http://o:11434")
+
+
+def test_driver_runner_alias() -> None:
+    from rune_bench.agents.research.langgraph import LangGraphRunner
+    from rune_bench.drivers.langgraph import LangGraphDriverClient
+
+    assert LangGraphRunner is LangGraphDriverClient
