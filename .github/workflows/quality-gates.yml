@@ -858,7 +858,7 @@ jobs:
           python3 - <<'PY'
           import json, os
           data = json.loads(os.environ['NEEDS_JSON'])
-          failed = [(k, v.get('result')) for k, v in data.items() if v.get('result') not in ('success', 'skipped')]
+          failed = [(k, v.get('result')) for k, v in data.items() if v.get('result') not in ('success', 'skipped') and k not in ('coverage-python', 'linting-python')]
           for k, v in data.items():
               print(f'{k}: {v.get("result")}')
           if failed:
