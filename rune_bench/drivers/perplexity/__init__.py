@@ -10,8 +10,14 @@ using ``urllib.request`` and therefore requires no extra dependencies in the
 
 from __future__ import annotations
 
+from rune_bench.agents.base import AgentResult
 from rune_bench.debug import debug_log
-from rune_bench.drivers import DriverTransport, make_driver_transport
+from rune_bench.drivers import (
+    DriverTransport,
+    AsyncDriverTransport,
+    make_driver_transport,
+    make_async_driver_transport,
+)
 
 
 class PerplexityDriverClient:
@@ -27,9 +33,31 @@ class PerplexityDriverClient:
         transport: DriverTransport | None = None,
     ) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("perplexity")
+        self._async_transport: AsyncDriverTransport = make_async_driver_transport("perplexity")
 
-    def ask(self, question: str, model: str = "sonar-pro", backend_url: str | None = None, backend_type: str = "ollama") -> str:
-        """Dispatch a research question to the Perplexity driver and return the answer.
+    def ask(
+        self,
+        question: str,
+        model: str = "sonar-pro",
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> str:
+        """Dispatch a research question to the Perplexity driver and return the answer string."""
+        return self.ask_structured(
+            question=question,
+            model=model,
+            backend_url=backend_url,
+            backend_type=backend_type,
+        ).answer
+
+    def ask_structured(
+        self,
+        question: str,
+        model: str = "sonar-pro",
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> AgentResult:
+        """Dispatch a research question to the Perplexity driver and return a structured AgentResult.
 
         Args:
             question: Natural-language research question.
@@ -64,4 +92,48 @@ class PerplexityDriverClient:
         if not answer_text:
             raise RuntimeError("Perplexity driver returned an empty answer.")
 
-        return answer_text
+        return AgentResult(
+            answer=answer_text,
+            result_type=result.get("result_type", "text"),
+            artifacts=result.get("artifacts"),
+            metadata=result.get("metadata"),
+        )
+
+    async def ask_async(
+        self,
+        question: str,
+        model: str = "sonar-pro",
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> AgentResult:
+        """Dispatch a research question to the Perplexity driver asynchronously."""
+        normalized_model = model.strip()
+        if not normalized_model:
+            raise RuntimeError("Perplexity model must be a non-empty string.")
+        params: dict = {
+            "question": question,
+            "model": normalized_model,
+        }
+
+        debug_log(
+            f"PerplexityDriverClient.ask_async: question={question!r} model={model!r}"
+        )
+        result = await self._async_transport.call_async("ask", params)
+
+        if "answer" not in result:
+            raise RuntimeError("Perplexity driver response did not include an answer.")
+
+        answer = result["answer"]
+        if answer is None:
+            raise RuntimeError("Perplexity driver returned an empty answer.")
+
+        answer_text = str(answer)
+        if not answer_text:
+            raise RuntimeError("Perplexity driver returned an empty answer.")
+
+        return AgentResult(
+            answer=answer_text,
+            result_type=result.get("result_type", "text"),
+            artifacts=result.get("artifacts"),
+            metadata=result.get("metadata"),
+        )

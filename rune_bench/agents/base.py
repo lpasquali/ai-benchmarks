@@ -29,6 +29,7 @@ class AgentResult:
     result_type: str = "text"  # "text" | "image" | "structured" | "report"
     artifacts: list[dict] | None = None
     metadata: dict | None = None
+    error: str | None = None
 
 
 @runtime_checkable
@@ -47,4 +48,24 @@ class AgentRunner(Protocol):
         backend_type: str = "ollama",
     ) -> str:
         """Run an investigation query and return the answer as a string."""
+        ...
+
+    def ask_structured(
+        self,
+        question: str,
+        model: str,
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> AgentResult:
+        """Run an investigation query and return a structured AgentResult."""
+        ...
+
+    async def ask_async(
+        self,
+        question: str,
+        model: str,
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> AgentResult:
+        """Asynchronously run an investigation query and return an AgentResult."""
         ...

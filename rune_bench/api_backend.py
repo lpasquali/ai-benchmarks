@@ -149,19 +149,26 @@ def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
     agent_kwargs: dict[str, Any] = {}
     if kubeconfig_path is not None:
         agent_kwargs["kubeconfig"] = kubeconfig_path
-    if agent_name == "holmes":
-        # Default path -- preserves monkeypatch compatibility in existing tests.
-        runner = _make_agent_runner(**agent_kwargs)
-    else:
-        # Non-default agent: registry's get_agent() filters kwargs by required_config.
+    # Block 10 — Run agentic agent
+    try:
+        from rune_bench.metrics import span as _span
         runner = get_agent(agent_name, **agent_kwargs)
-    answer = runner.ask(
-        question=request.question,
-        model=request.model,
-        backend_url=request.backend_url,
-        backend_type=getattr(request, "backend_type", "ollama"),
-    )
-    return {"answer": answer}
+        with _span("agent.ask", model=request.model, backend="existing"):
+            result = runner.ask_structured(
+                question=request.question,
+                model=request.model,
+                backend_url=request.backend_url,
+                backend_type=getattr(request, "backend_type", "ollama"),
+            )
+    except (FileNotFoundError, RuntimeError) as exc:
+        raise RuntimeError(f"Agent error: {exc}") from exc
+
+    return {
+        "answer": result.answer,
+        "result_type": result.result_type,
+        "artifacts": result.artifacts,
+        "metadata": result.metadata,
+    }
 
 
 def _verify_attestation(target: str) -> None:
@@ -192,7 +199,7 @@ def run_benchmark(request: RunBenchmarkRequest) -> dict:
     effective_model = result.model or request.model
     try:
         runner = _make_agent_runner(Path(request.kubeconfig))
-        answer = runner.ask(
+        agent_result = runner.ask_structured(
             question=request.question,
             model=effective_model,
             backend_url=result.backend_url,
@@ -202,7 +209,10 @@ def run_benchmark(request: RunBenchmarkRequest) -> dict:
         provider.teardown(result)
 
     return {
-        "answer": answer,
+        "answer": agent_result.answer,
+        "result_type": agent_result.result_type,
+        "artifacts": agent_result.artifacts,
+        "metadata": agent_result.metadata,
         "model_name": effective_model,
         "backend_url": result.backend_url,
         "contract_id": result.provider_handle,
