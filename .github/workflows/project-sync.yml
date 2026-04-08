@@ -1,15 +1,106 @@
 # SPDX-License-Identifier: Apache-2.0
+# Sync issues and PRs to the RUNE project board and move between columns.
 name: Project Board Sync
 
 on:
   issues:
-    types: [opened, closed, reopened, labeled, unlabeled]
+    types: [opened, closed, reopened, labeled, unlabeled, assigned]
   pull_request:
     types: [opened, closed, reopened, ready_for_review, converted_to_draft, labeled, unlabeled]
 
+env:
+  PROJECT_ID: "PVT_kwHOABsqts4BT6xG"
+  STATUS_FIELD_ID: "PVTSSF_lAHOABsqts4BT6xGzhBGX1s"
+  STATUS_TODO: "f75ad846"
+  STATUS_IN_PROGRESS: "47fc9ee4"
+  STATUS_DONE: "98236657"
+
 jobs:
   sync:
-    uses: lpasquali/rune-ci/.github/workflows/project-sync.yml@v0.1.0
-    secrets:
-      PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+    name: Sync to project board
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
+    steps:
+      - name: Sync item to project board
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          github-token: ${{ secrets.PROJECT_TOKEN }}
+          script: |
+            const projectId = process.env.PROJECT_ID;
+            const statusFieldId = process.env.STATUS_FIELD_ID;
+            const STATUS = {
+              todo: process.env.STATUS_TODO,
+              in_progress: process.env.STATUS_IN_PROGRESS,
+              done: process.env.STATUS_DONE,
+            };
 
+            // Determine content ID and desired status
+            const isIssue = !!context.payload.issue;
+            const isPR = !!context.payload.pull_request;
+            const action = context.payload.action;
+
+            let contentId, nodeType;
+            if (isIssue) {
+              contentId = context.payload.issue.node_id;
+              nodeType = 'issue';
+            } else if (isPR) {
+              contentId = context.payload.pull_request.node_id;
+              nodeType = 'pr';
+            } else {
+              console.log('No issue or PR in payload, skipping.');
+              return;
+            }
+
+            // Step 1: Add item to project (idempotent — returns existing item if already added)
+            const addResult = await github.graphql(`
+              mutation($projectId: ID!, $contentId: ID!) {
+                addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+                  item { id }
+                }
+              }
+            `, { projectId, contentId });
+
+            const itemId = addResult.addProjectV2ItemById.item.id;
+            console.log(`Project item: ${itemId} (${nodeType}, action=${action})`);
+
+            // Step 2: Determine target status based on event
+            let targetStatus = null;
+
+            if (action === 'opened') {
+              targetStatus = isIssue ? STATUS.todo : STATUS.in_progress;
+            } else if (action === 'reopened') {
+              targetStatus = STATUS.todo;
+            } else if (action === 'closed') {
+              targetStatus = STATUS.done;
+            } else if (action === 'assigned' && isIssue) {
+              targetStatus = STATUS.in_progress;
+            } else if (action === 'ready_for_review' && isPR) {
+              targetStatus = STATUS.in_progress;
+            } else if (action === 'converted_to_draft' && isPR) {
+              targetStatus = STATUS.in_progress;
+            }
+
+            // Step 3: Update status if we have a target
+            if (targetStatus) {
+              await github.graphql(`
+                mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $value: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId
+                    itemId: $itemId
+                    fieldId: $fieldId
+                    value: {singleSelectOptionId: $value}
+                  }) {
+                    projectV2Item { id }
+                  }
+                }
+              `, {
+                projectId,
+                itemId,
+                fieldId: statusFieldId,
+                value: targetStatus,
+              });
+              const statusName = Object.entries(STATUS).find(([,v]) => v === targetStatus)?.[0] || 'unknown';
+              console.log(`Status set to: ${statusName}`);
+            } else {
+              console.log(`No status change needed for action: ${action}`);
+            }
