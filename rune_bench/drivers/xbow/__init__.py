@@ -6,7 +6,6 @@ from rune_bench.debug import debug_log
 
 from rune_bench.agents.base import AgentResult
 
-from rune_bench.agents.base import AgentResult
 
 import os
 
