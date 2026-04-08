@@ -55,7 +55,18 @@ class LangGraphDriverClient:
         backend_url: str | None = None,
         backend_type: str = "ollama",
     ) -> AgentResult:
-        """Dispatch a question to the driver and return a structured AgentResult."""
+        """Dispatch a question to the driver and return a structured AgentResult.
+
+        Dispatch a question to the LangGraph driver and return the answer.
+
+        Args:
+            question: Natural-language research question.
+            model: Ollama model identifier (e.g. ``"llama3.1:8b"``).
+            backend_url: Base URL of the Ollama server (optional).
+
+        Returns:
+            The LangGraph research workflow's textual answer.
+        """
         params: dict = {
             "question": question,
             "model": model.strip(),
@@ -122,3 +133,5 @@ class LangGraphDriverClient:
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
         )
+
+LangGraphRunner = LangGraphDriverClient
