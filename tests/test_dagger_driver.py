@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for rune_bench.drivers.dagger — driver entry point and client.
 
 The dagger-io package is optional, so all tests mock it entirely.

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Harvey AI agentic runner stub.
 
 Scope:      Legal  |  Rank 1  |  Rating 4.8

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 #!/usr/bin/env python3
 """rune.py — CLI entry point for RUNE.
 
@@ -38,7 +39,8 @@ from rune_bench.common import (
 )
 from rune_bench.debug import set_debug
 from rune_bench.metrics import InMemoryCollector, set_collector, clear_collector
-from rune_bench.backends.ollama import OllamaClient, OllamaModelCapabilities, OllamaModelManager
+from rune_bench.backends import get_backend
+from rune_bench.backends.base import ModelCapabilities
 from rune_bench.agents.registry import get_agent
 from rune_bench.workflows import (
     ExistingOllamaServer,
@@ -218,11 +220,14 @@ def _confirm_instance_creation() -> bool:
     return ack == "yes"
 
 
-def _fetch_model_capabilities(backend_url: str, model: str) -> OllamaModelCapabilities | None:
-    """Try to fetch model capabilities from Ollama; return None on any failure."""
+def _fetch_model_capabilities(
+    backend_url: str, model: str, backend_type: str = "ollama",
+) -> ModelCapabilities | None:
+    """Try to fetch model capabilities from the backend; return None on any failure."""
     try:
-        normalized = OllamaModelManager.create(backend_url).normalize_model_name(model)
-        return OllamaClient(backend_url).get_model_capabilities(normalized)
+        backend = get_backend(backend_type, backend_url)
+        normalized = backend.normalize_model_name(model)
+        return backend.get_model_capabilities(normalized)
     except RuntimeError:
         return None
 
@@ -238,7 +243,7 @@ def _vastai_sdk() -> "VastAI":
     return VastAI(api_key=api_key, raw=True)
 
 
-def _apply_model_limits(capabilities: OllamaModelCapabilities) -> None:
+def _apply_model_limits(capabilities: ModelCapabilities) -> None:
     """Pre-set LiteLLM override env vars so the agent skips the redundant re-fetch."""
     import os
 
@@ -250,7 +255,7 @@ def _apply_model_limits(capabilities: OllamaModelCapabilities) -> None:
             os.environ[env_name] = str(value)
 
 
-def _print_existing_ollama(server: ExistingOllamaServer, capabilities: OllamaModelCapabilities | None = None) -> None:
+def _print_existing_ollama(server: ExistingOllamaServer, capabilities: ModelCapabilities | None = None) -> None:
     table = Table(title="Existing Ollama Server", show_header=True, header_style="bold magenta")
     table.add_column("Property", style="dim")
     table.add_column("Value")
@@ -265,7 +270,7 @@ def _print_existing_ollama(server: ExistingOllamaServer, capabilities: OllamaMod
     console.print(table)
 
 
-def _print_vastai_result(result: VastAIProvisioningResult, capabilities: OllamaModelCapabilities | None = None) -> None:
+def _print_vastai_result(result: VastAIProvisioningResult, capabilities: ModelCapabilities | None = None) -> None:
     console.print(f"[green]Best offer:[/green] id={result.offer_id}, gpu_total_ram={result.total_vram_mb} MB")
     console.print(f"[green]Selected model:[/green] {result.model_name} (~{result.model_vram_mb} MB VRAM)")
     console.print(f"[green]Required disk:[/green] {result.required_disk_gb} GB")

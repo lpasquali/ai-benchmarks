@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """StdioTransport — drives an external process via newline-delimited JSON on stdio.
 
 Wire protocol (v1):

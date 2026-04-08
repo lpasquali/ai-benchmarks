@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """NoOp attestation driver for local/dev environments.
 
 Always passes — use only when hardware TPM is unavailable or unnecessary.

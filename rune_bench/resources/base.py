@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Protocol and data types for LLM resource provisioning."""
 
 from dataclasses import dataclass, field
@@ -15,6 +16,7 @@ class ProvisioningResult:
 
     backend_url: str | None
     model: str | None = None
+    backend_type: str = "ollama"
     provider_handle: Any = field(default=None, hash=False, compare=False)
 
 

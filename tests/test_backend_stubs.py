@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 import pytest
 from rune_bench.backends.base import BackendCredentials
 from rune_bench.backends.openai import OpenAIBackend

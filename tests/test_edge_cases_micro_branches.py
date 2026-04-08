@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 import runpy
 import sys
 import threading
@@ -17,7 +18,8 @@ import rune_bench.workflows as workflows
 from rune_bench.agents.sre.holmes import HolmesRunner
 from rune_bench.api_client import RuneApiClient
 from rune_bench.common import normalize_url
-from rune_bench.backends.ollama import OllamaClient, OllamaModelCapabilities, OllamaModelManager
+from rune_bench.backends.base import ModelCapabilities
+from rune_bench.backends.ollama import OllamaClient, OllamaModelManager
 from rune_bench.resources.vastai import ConnectionDetails, InstanceManager, TeardownResult
 
 
@@ -350,14 +352,17 @@ def test_holmes_and_ollama_remaining_branches(monkeypatch, tmp_path):
     kubeconfig.write_text("apiVersion: v1\n")
     runner = HolmesRunner(kubeconfig)
 
-    # _fetch_model_limits success path via driver module monkeypatches
-    monkeypatch.setattr(holmes_driver_module.OllamaModelManager, "create", lambda *_: type("M", (), {"normalize_model_name": lambda self, m: "norm"})())
-    monkeypatch.setattr(holmes_driver_module, "OllamaClient", lambda *_: type("C", (), {"get_model_capabilities": lambda self, _m: OllamaModelCapabilities("norm", 10, 2)})())
+    # _fetch_model_limits success path via get_backend monkeypatch
+    fake_backend = type("B", (), {
+        "normalize_model_name": lambda self, m: "norm",
+        "get_model_capabilities": lambda self, _m: ModelCapabilities("norm", 10, 2),
+    })()
+    monkeypatch.setattr(holmes_driver_module, "get_backend", lambda *_args, **_kw: fake_backend)
     limits = runner._fetch_model_limits(model="m", backend_url="http://x")
     assert limits.get("context_window") == 10
 
     # _fetch_model_limits failure path
-    monkeypatch.setattr(holmes_driver_module, "OllamaClient", lambda *_: type("C", (), {"get_model_capabilities": lambda self, _m: (_ for _ in ()).throw(RuntimeError("bad"))})())
+    monkeypatch.setattr(holmes_driver_module, "get_backend", lambda *_args, **_kw: (_ for _ in ()).throw(RuntimeError("bad")))
     limits2 = runner._fetch_model_limits(model="m", backend_url="http://x")
     assert limits2 == {}
 
@@ -446,9 +451,9 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
     assert stopped == [True]
 
     # api_backend benchmark warmup branch — patch at provider module level to verify
-    # ExistingOllamaProvider.provision() calls warmup when warmup=True
-    import rune_bench.resources.existing_ollama_provider as _ep
-    from rune_bench.resources.existing_ollama_provider import ExistingOllamaProvider
+    # ExistingBackendProvider.provision() calls warmup when warmup=True
+    import rune_bench.resources.existing_backend_provider as _ep
+    from rune_bench.resources.existing_backend_provider import ExistingBackendProvider
 
     warmups = []
     monkeypatch.setattr(_ep, "use_existing_backend_server", lambda *_a, **_k: type("S", (), {"url": "http://existing"})())
@@ -456,7 +461,7 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
     monkeypatch.setattr(
         api_backend,
         "_make_resource_provider_for_benchmark",
-        lambda req: ExistingOllamaProvider(req.backend_url, model=req.model, warmup=req.backend_warmup, warmup_timeout=req.backend_warmup_timeout),
+        lambda req: ExistingBackendProvider(req.backend_url, model=req.model, warmup=req.backend_warmup, warmup_timeout=req.backend_warmup_timeout),
     )
     api_backend.run_benchmark(
         api_backend.RunBenchmarkRequest(
@@ -481,7 +486,7 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
         store=api_server.JobStore(tmp_path / "jobs.db"),
         security=api_server.ApiSecurityConfig(auth_disabled=True, tenant_tokens={}),
     )
-    monkeypatch.setattr(api_server, "list_backend_models", lambda _url: (_ for _ in ()).throw(RuntimeError("bad-ollama")))
+    monkeypatch.setattr(api_server, "list_backend_models", lambda _url, **kw: (_ for _ in ()).throw(RuntimeError("bad-ollama")))
     server = api_server.ThreadingHTTPServer(("127.0.0.1", 0), app.create_handler())
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

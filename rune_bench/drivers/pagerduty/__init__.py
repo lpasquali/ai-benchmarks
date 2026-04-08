@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """PagerDuty driver client -- delegates incident triage queries to the pagerduty driver process.
 
 This is a hybrid agent: PagerDuty REST API for data retrieval plus Ollama for
@@ -34,7 +35,7 @@ class PagerDutyDriverClient:
         self._kubeconfig = kubeconfig
         self._transport: DriverTransport = transport or make_driver_transport("pagerduty")
 
-    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
         """Dispatch a triage question to the pagerduty driver and return the answer.
 
         Args:

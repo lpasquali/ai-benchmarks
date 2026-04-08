@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Agent configuration resolution framework."""
 
 import os
@@ -28,7 +29,7 @@ def resolve_agent_config(agent_name: str, kwargs: dict[str, Any] | None = None) 
         base_url = os.environ.get("BURP_API_URL")
 
     model = kwargs.get("model") or os.environ.get(f"{prefix}MODEL")
-    ollama_url = kwargs.get("ollama_url") or os.environ.get(f"{prefix}OLLAMA_URL")
+    backend_url = kwargs.get("backend_url") or os.environ.get(f"{prefix}BACKEND_URL") or os.environ.get(f"{prefix}OLLAMA_URL")
     
     extra = {}
     if agent_name == "dagger":
@@ -43,6 +44,6 @@ def resolve_agent_config(agent_name: str, kwargs: dict[str, Any] | None = None) 
         base_url=base_url,
         kubeconfig=kubeconfig,
         model=model,
-        ollama_url=ollama_url,
+        backend_url=backend_url,
         extra=extra,
     )

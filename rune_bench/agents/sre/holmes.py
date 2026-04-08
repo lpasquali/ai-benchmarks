@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """HolmesGPT agent for RUNE — thin re-export kept for backward compatibility.
 
 The implementation has moved to :mod:`rune_bench.drivers.holmes`.

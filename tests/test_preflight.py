@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for preflight cost-check paths: CLI behaviour and api_client validation."""
 
 from __future__ import annotations

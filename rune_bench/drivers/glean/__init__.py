@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Glean driver client -- delegates enterprise search queries to the glean driver process.
 
 The driver process is launched via :func:`~rune_bench.drivers.make_driver_transport`
@@ -25,7 +26,7 @@ class GleanDriverClient:
     ) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("glean")
 
-    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
         """Dispatch a question to the Glean driver and return the answer.
 
         Args:

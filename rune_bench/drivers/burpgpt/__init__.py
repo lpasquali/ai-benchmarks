@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """BurpGPT driver client -- delegates web vulnerability scanning to the burpgpt driver process.
 
 The driver process (``rune_bench.drivers.burpgpt.__main__``) talks to the
@@ -32,7 +33,7 @@ class BurpGPTDriverClient:
     ) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("burpgpt")
 
-    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
         """Dispatch a scan request to the burpgpt driver and return findings.
 
         Args:

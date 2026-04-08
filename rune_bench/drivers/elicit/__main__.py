@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Elicit driver entry point — receives JSON actions on stdin, writes results to stdout.
 
 Run as::

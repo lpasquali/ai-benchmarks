@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Mindgard driver client — delegates AI red-teaming to the mindgard driver process.
 
 The driver process is launched via :func:`~rune_bench.drivers.make_driver_transport`
@@ -32,7 +33,7 @@ class MindgardDriverClient:
     ) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("mindgard")
 
-    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
         """Dispatch a red-team assessment to the mindgard driver and return findings.
 
         Args:

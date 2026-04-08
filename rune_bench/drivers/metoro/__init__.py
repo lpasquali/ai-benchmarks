@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Metoro driver client -- delegates eBPF observability queries to the metoro driver process.
 
 The driver process is launched via :func:`~rune_bench.drivers.make_driver_transport`
@@ -32,7 +33,7 @@ class MetoroDriverClient:
         self._kubeconfig = kubeconfig
         self._transport: DriverTransport = transport or make_driver_transport("metoro")
 
-    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
         """Dispatch a question to the Metoro driver and return the answer.
 
         Args:

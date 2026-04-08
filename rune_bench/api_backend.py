@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Local execution backend behind the RUNE HTTP API."""
 
 from __future__ import annotations
@@ -16,13 +17,8 @@ from rune_bench.api_contracts import (
 from rune_bench.common import ModelSelector
 from rune_bench.metrics import span  # noqa: F401 (used by workflows layer)
 from rune_bench.resources.base import LLMResourceProvider
-from rune_bench.resources.existing_ollama_provider import ExistingOllamaProvider
-from rune_bench.workflows import (
-    list_backend_models as list_backend_models_wf,
-    list_running_backend_models,
-    use_existing_backend_server,
-    warmup_backend_model,
-)
+from rune_bench.resources.existing_backend_provider import ExistingBackendProvider
+from rune_bench.workflows import warmup_backend_model
 
 try:
     from rune_bench.resources.vastai.sdk import VastAI
@@ -53,11 +49,12 @@ def _make_resource_provider_for_benchmark(request: RunBenchmarkRequest) -> LLMRe
             reliability=request.reliability,
             stop_on_teardown=request.vastai_stop_instance,
         )
-    return ExistingOllamaProvider(
+    return ExistingBackendProvider(
         request.backend_url,
         model=request.model,
         warmup=request.backend_warmup,
         warmup_timeout=request.backend_warmup_timeout,
+        backend_type=getattr(request, "backend_type", "ollama"),
     )
 
 
@@ -73,7 +70,10 @@ def _make_resource_provider_for_ollama_instance(request: RunLLMInstanceRequest) 
             reliability=request.reliability,
             stop_on_teardown=False,
         )
-    return ExistingOllamaProvider(request.backend_url)
+    return ExistingBackendProvider(
+        request.backend_url,
+        backend_type=getattr(request, "backend_type", "ollama"),
+    )
 
 
 def _make_agent_runner(agent_name: str | Path = "holmes", *, kubeconfig: Path | None = None) -> Any:
@@ -106,12 +106,14 @@ def list_vastai_models() -> list[dict]:
     ]
 
 
-def list_backend_models(backend_url: str) -> dict:
-    server = use_existing_backend_server(backend_url, model_name="<n/a>")
+def list_backend_models(backend_url: str, *, backend_type: str = "ollama") -> dict:
+    from rune_bench.backends import get_backend
+    backend = get_backend(backend_type, backend_url)
     return {
-        "backend_url": server.url,
-        "models": list_backend_models_wf(server.url),
-        "running_models": list_running_backend_models(server.url),
+        "backend_url": backend.base_url,
+        "backend_type": backend_type,
+        "models": backend.list_models(),
+        "running_models": backend.list_running_models(),
     }
 
 
@@ -157,6 +159,7 @@ def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
         question=request.question,
         model=request.model,
         backend_url=request.backend_url,
+        backend_type=getattr(request, "backend_type", "ollama"),
     )
     return {"answer": answer}
 
@@ -193,6 +196,7 @@ def run_benchmark(request: RunBenchmarkRequest) -> dict:
             question=request.question,
             model=effective_model,
             backend_url=result.backend_url,
+            backend_type=getattr(request, "backend_type", "ollama"),
         )
     finally:
         provider.teardown(result)

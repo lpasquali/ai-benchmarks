@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Protocol definition for agentic runner implementations."""
 
 from dataclasses import dataclass, field
@@ -11,7 +12,7 @@ class AgentConfig:
     base_url: str | None = None
     kubeconfig: str | None = None
     model: str | None = None
-    ollama_url: str | None = None
+    backend_url: str | None = None
     extra: dict[str, str] = field(default_factory=dict)
 
 
@@ -38,6 +39,12 @@ class AgentRunner(Protocol):
     The ``ask()`` method returns a plain string for backward compatibility.
     """
 
-    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
+    def ask(
+        self,
+        question: str,
+        model: str,
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> str:
         """Run an investigation query and return the answer as a string."""
         ...

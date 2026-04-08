@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for cost estimation: api_backend.get_cost_estimate and common.costs.CostEstimator."""
 
 from __future__ import annotations

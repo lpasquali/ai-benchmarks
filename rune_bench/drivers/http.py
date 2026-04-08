@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """HttpTransport — drives a remote driver server via the rune job-poll protocol.
 
 The server must implement:

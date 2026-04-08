@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """K8sGPT driver client — delegates k8sgpt analysis queries to the k8sgpt driver process.
 
 The driver process is launched via :func:`~rune_bench.drivers.make_driver_transport`
@@ -33,7 +34,7 @@ class K8sGPTDriverClient:
         self._kubeconfig = kubeconfig
         self._transport: DriverTransport = transport or make_driver_transport("k8sgpt")
 
-    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
         """Dispatch an analysis request to the k8sgpt driver and return the answer.
 
         Args:

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Experimental Reflection Agent Runner.
 
 Implements a basic self-reflection loop for cognitive agents.

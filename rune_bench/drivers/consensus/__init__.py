@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Consensus driver client — delegates research queries to the consensus driver process.
 
 The driver process is launched via :func:`~rune_bench.drivers.make_driver_transport`
@@ -33,6 +34,7 @@ class ConsensusDriverClient:
         question: str,
         model: str = "",
         backend_url: str | None = None,
+        backend_type: str = "ollama",
         limit: int | None = None,
     ) -> str:
         """Dispatch a research question to the consensus driver and return the answer.

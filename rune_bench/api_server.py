@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """HTTP server for RUNE API mode."""
 
 from __future__ import annotations
@@ -100,7 +101,8 @@ class RuneApiApplication:
         self.backend_functions = backend_functions or {
             "agentic-agent": _run_agentic_backend,
             "benchmark": _run_benchmark_backend,
-            "ollama-instance": _run_llm_instance_backend,
+            "llm-instance": _run_llm_instance_backend,
+            "ollama-instance": _run_llm_instance_backend,  # deprecated alias
             "cost-estimate": _get_cost_estimate_backend,
         }
         self.store.mark_incomplete_jobs_failed()
@@ -190,15 +192,16 @@ class RuneApiApplication:
                     self._write_json(200, {"models": list_vastai_models()})
                     return
 
-                if path == "/v1/ollama/models":
+                if path in ("/v1/llm/models", "/v1/ollama/models"):
                     query = parse_qs(parsed.query)
                     backend_url = query.get("backend_url", [""])[0]
+                    backend_type = query.get("backend_type", ["ollama"])[0]
                     if not backend_url:
                         self._write_json(400, {"error": "missing required query parameter: backend_url"})
                         return
                     try:
-                        payload = list_backend_models(backend_url)
-                    except RuntimeError as exc:
+                        payload = list_backend_models(backend_url, backend_type=backend_type)
+                    except (RuntimeError, ValueError) as exc:
                         self._write_json(400, {"error": str(exc)})
                         return
                     self._write_json(200, payload)
@@ -257,7 +260,8 @@ class RuneApiApplication:
                 endpoint_to_kind = {
                     "/v1/jobs/agentic-agent": "agentic-agent",
                     "/v1/jobs/benchmark": "benchmark",
-                    "/v1/jobs/ollama-instance": "ollama-instance",
+                    "/v1/jobs/llm-instance": "llm-instance",
+                    "/v1/jobs/ollama-instance": "llm-instance",  # deprecated alias
                 }
                 kind = endpoint_to_kind.get(path)
                 if not kind:
@@ -309,7 +313,7 @@ class RuneApiApplication:
             request = RunAgenticAgentRequest(**payload)
         elif kind == "benchmark":
             request = RunBenchmarkRequest(**payload)
-        elif kind == "ollama-instance":
+        elif kind in ("llm-instance", "ollama-instance"):
             request = RunLLMInstanceRequest(**payload)
         elif kind == "cost-estimate":
             request = CostEstimationRequest(**payload)

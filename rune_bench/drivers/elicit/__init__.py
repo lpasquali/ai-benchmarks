@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Elicit driver client — delegates literature-review queries to the elicit driver process.
 
 The driver process is launched via :func:`~rune_bench.drivers.make_driver_transport`
@@ -27,7 +28,7 @@ class ElicitDriverClient:
     ) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("elicit")
 
-    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
         """Dispatch a research question to the elicit driver and return the answer.
 
         Args:

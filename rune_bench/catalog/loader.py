@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Catalog loader for RUNE — supports CSV (default) and YAML (extended).
 
 Loading priority

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Holmes driver client — delegates HolmesGPT queries to the holmes driver process.
 
 The driver process is launched via :func:`~rune_bench.drivers.make_driver_transport`
@@ -11,7 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from rune_bench.backends.ollama import OllamaClient, OllamaModelManager
+from rune_bench.backends import get_backend
 from rune_bench.debug import debug_log
 from rune_bench.drivers import DriverTransport, make_driver_transport
 
@@ -34,17 +35,24 @@ class HolmesDriverClient:
         self._kubeconfig = kubeconfig
         self._transport: DriverTransport = transport or make_driver_transport("holmes")
 
-    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
+    def ask(
+        self,
+        question: str,
+        model: str,
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> str:
         """Dispatch a question to the holmes driver and return the answer.
 
-        Fetches Ollama model capability limits (context window, max output tokens)
-        when *backend_url* is provided and passes them to the driver so it can set
-        the appropriate environment overrides before calling HolmesGPT.
+        Fetches LLM backend model capability limits (context window, max output
+        tokens) when *backend_url* is provided and passes them to the driver so
+        it can set the appropriate environment overrides before calling HolmesGPT.
 
         Args:
             question: Natural-language question about the Kubernetes cluster.
-            model: Ollama model identifier (e.g. ``"llama3.1:8b"``).
-            backend_url: Base URL of the Ollama server (optional).
+            model: LLM model identifier (e.g. ``"llama3.1:8b"``).
+            backend_url: Base URL of the LLM backend server (optional).
+            backend_type: Backend type (e.g. ``"ollama"``, ``"k8s-inference"``).
 
         Returns:
             HolmesGPT's textual answer.
@@ -57,7 +65,9 @@ class HolmesDriverClient:
         }
         if backend_url:
             params["backend_url"] = backend_url
-            params.update(self._fetch_model_limits(model=resolved_model, backend_url=backend_url))
+            params.update(self._fetch_model_limits(
+                model=resolved_model, backend_url=backend_url, backend_type=backend_type,
+            ))
 
         debug_log(
             f"HolmesDriverClient.ask: question={question!r} model={resolved_model!r} "
@@ -78,11 +88,14 @@ class HolmesDriverClient:
 
         return answer_text
 
-    def _fetch_model_limits(self, *, model: str, backend_url: str) -> dict:
+    def _fetch_model_limits(
+        self, *, model: str, backend_url: str, backend_type: str = "ollama",
+    ) -> dict:
         """Return context_window / max_output_tokens for *model*, or ``{}`` on error."""
         try:
-            normalized = OllamaModelManager.create(backend_url).normalize_model_name(model)
-            caps = OllamaClient(backend_url).get_model_capabilities(normalized)
+            backend = get_backend(backend_type, backend_url)
+            normalized = backend.normalize_model_name(model)
+            caps = backend.get_model_capabilities(normalized)
         except Exception as exc:  # noqa: BLE001
             debug_log(f"Could not fetch model limits for {model!r}: {exc}")
             return {}

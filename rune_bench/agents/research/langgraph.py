@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """LangGraph agentic runner — delegates to the LangGraph driver.
 
 Scope:      Research  |  Rank 4  |  Rating 4.0

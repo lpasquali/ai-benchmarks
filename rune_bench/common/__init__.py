@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Common utilities and shared data structures."""
 
 from .config import INIT_TEMPLATE, get_loaded_config_files, load_config, peek_profile_from_argv

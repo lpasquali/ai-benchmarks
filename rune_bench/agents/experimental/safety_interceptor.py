@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Experimental Safety Interceptor (Observer Agent).
 
 Acts as middleware to evaluate tool execution requests against safety policies

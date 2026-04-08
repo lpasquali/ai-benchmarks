@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Harvey AI driver entry point — enterprise stub.
 
 Wire protocol (v1):

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """XBOW driver client — enterprise stub pending API access."""
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ class XbowDriverClient:
     def __init__(self, *, transport: DriverTransport | None = None) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("xbow")
 
-    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
         """Send a question to the XBOW driver.
 
         Raises:

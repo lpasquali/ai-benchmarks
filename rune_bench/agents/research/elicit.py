@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Elicit agentic runner — delegates to the Elicit driver for literature review.
 
 Scope:      Research  |  Rank 3  |  Rating 4.0

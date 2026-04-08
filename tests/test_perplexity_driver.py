@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for rune_bench.drivers.perplexity — driver entry point and client.
 
 The driver subprocess calls the Perplexity REST API via make_http_request.

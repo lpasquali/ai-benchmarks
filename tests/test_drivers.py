@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for the driver transport infrastructure.
 
 Covers StdioTransport, HttpTransport, and the make_driver_transport() factory.
