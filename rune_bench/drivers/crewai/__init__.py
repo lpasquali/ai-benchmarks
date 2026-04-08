@@ -25,9 +25,11 @@ class CrewAIDriverClient:
 
     def __init__(
         self,
+        api_key: str | None = None,
         *,
         transport: DriverTransport | None = None,
     ) -> None:
+        self._api_key = api_key
         self._transport: DriverTransport = transport or make_driver_transport("crewai")
         self._async_transport: AsyncDriverTransport = make_async_driver_transport("crewai")
 
