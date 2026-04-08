@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 name: Release
 
 on:
@@ -6,153 +7,16 @@ on:
       - "v*"
 
 permissions:
-  contents: read
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  contents: write
+  packages: write
+  id-token: write
+  attestations: write
 
 jobs:
-  verify-tag:
-    name: Verify tag is on main
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
-      - name: Verify tag is on main
-        run: |
-          git fetch origin main
-          # Dereference annotated tags to their commit SHA before the ancestry check.
-          COMMIT_SHA=$(git rev-parse "${GITHUB_SHA}^{commit}" 2>/dev/null || echo "$GITHUB_SHA")
-          if ! git merge-base --is-ancestor "$COMMIT_SHA" origin/main; then
-            echo "ERROR: Tagged commit is not reachable from origin/main." >&2
-            echo "Tags must only be pushed AFTER merging to main." >&2
-            exit 1
-          fi
-
-  build-amd64:
-    name: Build image (amd64)
-    needs: [verify-tag]
-    if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
-
-      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push amd64 image
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ghcr.io/lpasquali/rune:${{ github.ref_name }}-amd64
-          cache-from: type=registry,ref=ghcr.io/lpasquali/rune:buildcache-amd64
-          cache-to: type=registry,ref=ghcr.io/lpasquali/rune:buildcache-amd64,mode=max
-
-  build-arm64:
-    name: Build image (arm64)
-    needs: [verify-tag]
-    if: github.ref_type == 'tag'
-    runs-on: ubuntu-24.04-arm
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
-
-      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push arm64 image
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/arm64
-          push: true
-          tags: ghcr.io/lpasquali/rune:${{ github.ref_name }}-arm64
-          cache-from: type=registry,ref=ghcr.io/lpasquali/rune:buildcache-arm64
-          cache-to: type=registry,ref=ghcr.io/lpasquali/rune:buildcache-arm64,mode=max
-
-  publish:
-    name: Create multi-arch manifest and GitHub Release
-    needs: [build-amd64, build-arm64]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write   # Required to create GitHub Releases
-      packages: write   # Required to push to GHCR
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create and push multi-arch manifest
-        run: |
-          docker buildx imagetools create \
-            --tag ghcr.io/lpasquali/rune:${{ github.ref_name }} \
-            --tag ghcr.io/lpasquali/rune:latest \
-            ghcr.io/lpasquali/rune:${{ github.ref_name }}-amd64 \
-            ghcr.io/lpasquali/rune:${{ github.ref_name }}-arm64
-
-      - name: Notify rune-charts to sync image tag
-        env:
-          CROSS_REPO_TOKEN: ${{ secrets.RUNE_CHARTS_BOT_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -z "${CROSS_REPO_TOKEN:-}" ]; then
-            echo "RUNE_CHARTS_BOT_TOKEN is not set. Skipping cross-repo notification."
-            exit 0
-          fi
-          curl -fsSL -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${CROSS_REPO_TOKEN}" \
-            https://api.github.com/repos/lpasquali/rune-charts/dispatches \
-            -d @- <<JSON
-          {
-            "event_type": "image-published",
-            "client_payload": {
-              "source_repo": "${GITHUB_REPOSITORY}",
-              "image_name": "ghcr.io/lpasquali/rune",
-              "image_tag": "${{ github.ref_name }}"
-            }
-          }
-          JSON
-
-
+  release:
+    uses: lpasquali/rune-ci/.github/workflows/release.yml@v0.1.0
+    with:
+      image-name: "rune"
+      notify-charts: true
+    secrets:
+      RUNE_CHARTS_BOT_TOKEN: ${{ secrets.RUNE_CHARTS_BOT_TOKEN }}
