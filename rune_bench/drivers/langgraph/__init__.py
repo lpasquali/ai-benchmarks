@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""LangGraph driver client — delegates research queries to the langgraph driver process.
+"""LangGraph driver client — delegates research and SRE queries to the langgraph driver process.
 
 The driver process is launched via :func:`~rune_bench.drivers.make_driver_transport`
 (stdio subprocess by default, HTTP server in production).  The driver itself
@@ -10,39 +10,58 @@ environment — not in the rune core process.
 
 from __future__ import annotations
 
+from pathlib import Path
+from rune_bench.agents.base import AgentResult
+
 from rune_bench.debug import debug_log
-from rune_bench.drivers import DriverTransport, make_driver_transport
+from rune_bench.drivers import DriverTransport, AsyncDriverTransport, make_driver_transport, make_async_driver_transport
 
 
 class LangGraphDriverClient:
-    """Run stateful multi-agent research flows via LangGraph.
+    """Run stateful multi-agent flows via LangGraph.
 
-    Unlike the Holmes driver, LangGraph does not require a kubeconfig — it is a
-    pure-Python framework that uses Ollama as its LLM backend.
+    Supports both Research and SRE scopes. For SRE tasks, a kubeconfig is required.
     """
 
     def __init__(
         self,
+        kubeconfig: Path | None = None,
         *,
         transport: DriverTransport | None = None,
     ) -> None:
+        self._kubeconfig = kubeconfig
         self._transport: DriverTransport = transport or make_driver_transport("langgraph")
+        self._async_transport: AsyncDriverTransport = make_async_driver_transport("langgraph")
 
-    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
-        """Dispatch a question to the LangGraph driver and return the answer.
+    def ask(
+        self,
+        question: str,
+        model: str,
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> str:
+        """Dispatch a question to the driver and return the answer string."""
+        return self.ask_structured(
+            question=question,
+            model=model,
+            backend_url=backend_url,
+            backend_type=backend_type,
+        ).answer
 
-        Args:
-            question: Natural-language research question.
-            model: Ollama model identifier (e.g. ``"llama3.1:8b"``).
-            backend_url: Base URL of the Ollama server (optional).
-
-        Returns:
-            The LangGraph research workflow's textual answer.
-        """
+    def ask_structured(
+        self,
+        question: str,
+        model: str,
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> AgentResult:
+        """Dispatch a question to the driver and return a structured AgentResult."""
         params: dict = {
             "question": question,
             "model": model.strip(),
         }
+        if self._kubeconfig:
+            params["kubeconfig_path"] = str(self._kubeconfig)
         if backend_url:
             params["backend_url"] = backend_url
 
@@ -59,8 +78,47 @@ class LangGraphDriverClient:
         if answer is None:
             raise RuntimeError("LangGraph driver returned an empty answer.")
 
-        answer_text = str(answer)
-        if not answer_text:
-            raise RuntimeError("LangGraph driver returned an empty answer.")
+        return AgentResult(
+            answer=str(answer),
+            result_type=result.get("result_type", "text"),
+            artifacts=result.get("artifacts"),
+            metadata=result.get("metadata"),
+        )
 
-        return answer_text
+    async def ask_async(
+        self,
+        question: str,
+        model: str,
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> AgentResult:
+        """Dispatch a question to the driver asynchronously."""
+        resolved_model = model.strip()
+        params: dict = {
+            "question": question,
+            "model": resolved_model,
+        }
+        if self._kubeconfig:
+            params["kubeconfig_path"] = str(self._kubeconfig)
+        if backend_url:
+            params["backend_url"] = backend_url
+
+        debug_log(
+            f"{self.__class__.__name__}.ask_async: question={question!r} model={resolved_model!r} "
+            f"backend_url={backend_url or '<none>'}"
+        )
+        result = await self._async_transport.call_async("ask", params)
+
+        if "answer" not in result:
+            raise RuntimeError("Driver response did not include an answer.")
+
+        answer = result["answer"]
+        if answer is None:
+            raise RuntimeError("Driver returned an empty answer.")
+
+        return AgentResult(
+            answer=str(answer),
+            result_type=result.get("result_type", "text"),
+            artifacts=result.get("artifacts"),
+            metadata=result.get("metadata"),
+        )

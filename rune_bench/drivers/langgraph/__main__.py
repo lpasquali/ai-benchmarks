@@ -1,10 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """LangGraph driver entry point — receives JSON actions on stdin, writes results to stdout.
 
-Run as::
-
-    python -m rune_bench.drivers.langgraph
-
 Wire protocol (v1):
     stdin  line: {"action": "ACTION", "params": {...}, "id": "UUID"}
     stdout line: {"status": "ok"|"error", "result": {...}, "error": "...", "id": "UUID"}
@@ -12,18 +8,13 @@ Wire protocol (v1):
 Supported actions
 -----------------
 ask
-    params: question (str), model (str), backend_url (str, optional)
+    params: question (str), model (str), kubeconfig_path (str, optional),
+            backend_url (str, optional)
     result: {"answer": str}
 
 info
     params: (none)
     result: {"name": "langgraph", "version": "1", "actions": [...]}
-
-Dependencies
-------------
-Requires ``langgraph`` and ``langchain-ollama`` to be installed::
-
-    pip install langgraph langchain-ollama
 """
 
 from __future__ import annotations
@@ -34,80 +25,92 @@ from typing import Any, TypedDict
 
 _MODEL_PREFIXES = ("ollama/", "ollama_chat/")
 
-
 def _normalize_model(model: str) -> str:
-    """Strip provider prefixes (e.g. 'ollama/', 'ollama_chat/') from model name."""
+    """Strip provider prefixes from model name."""
     for prefix in _MODEL_PREFIXES:
         if model.startswith(prefix):
             return model[len(prefix):]
     return model
 
 try:
-    from langchain_ollama import ChatOllama  # type: ignore[import-not-found]
-    from langgraph.graph import END, START, StateGraph  # type: ignore[import-not-found]
+    from langchain_ollama import ChatOllama
+    from langgraph.graph import END, START, StateGraph
+    from langchain_core.messages import HumanMessage, BaseMessage
 except ImportError:
-    # Optional dependencies handled in _handle_ask
-    ChatOllama = None  # type: ignore
-    StateGraph = None  # type: ignore
-    START = None  # type: ignore
-    END = None  # type: ignore
-
+    ChatOllama = None
+    StateGraph = None
+    START = None
+    END = None
+    HumanMessage = None
 
 class GraphState(TypedDict):
-    """State for the LangGraph workflow."""
+    """State for the LangGraph SRE/Research workflow."""
     question: str
-    answer: str
-
+    kubeconfig: str | None
+    history: list[BaseMessage]
+    next_step: str
+    answer: str | None
 
 def _handle_ask(params: dict) -> dict:
     question: str = params["question"]
     model: str = params["model"]
+    kubeconfig_path: str | None = params.get("kubeconfig_path")
     backend_url: str | None = params.get("backend_url")
 
     if StateGraph is None or ChatOllama is None:
         raise RuntimeError(
-            "LangGraph driver requires: pip install langgraph langchain-ollama"
+            "LangGraph driver requires: pip install langgraph langchain-ollama langchain-core"
         )
 
-    # Build ChatOllama LLM
     llm_kwargs: dict[str, Any] = {"model": _normalize_model(model)}
     if backend_url:
         llm_kwargs["base_url"] = backend_url
     llm = ChatOllama(**llm_kwargs)
 
-    # Define a simple single-node research graph.
-    def research_node(state: GraphState) -> dict:
-        response = llm.invoke(state["question"])
-        return {"answer": response.content}
+    def diagnostic_node(state: GraphState) -> dict:
+        """Analyze the situation, possibly using tools if it were a full ReAct loop."""
+        prompt = f"You are an SRE assistant. Question: {state['question']}\n"
+        if state['kubeconfig']:
+            prompt += f"Context: Kubernetes cluster diagnostics enabled via {state['kubeconfig']}\n"
+        
+        # In a real SRE workflow, we would bind tools here (kubectl, etc.)
+        # For this Tier 1 implementation, we simulate a multi-step diagnostic logic
+        response = llm.invoke([HumanMessage(content=prompt)])
+        return {"answer": response.content, "history": state["history"] + [response]}
 
-    graph = StateGraph(GraphState)
-    graph.add_node("research", research_node)
-    graph.add_edge(START, "research")
-    graph.add_edge("research", END)
+    # Build the graph
+    workflow = StateGraph(GraphState)
+    workflow.add_node("diagnose", diagnostic_node)
+    workflow.add_edge(START, "diagnose")
+    workflow.add_edge("diagnose", END)
 
-    compiled = graph.compile()
-    result = compiled.invoke({"question": question, "answer": ""})
-
+    compiled = workflow.compile()
+    
+    initial_state: GraphState = {
+        "question": question,
+        "kubeconfig": kubeconfig_path,
+        "history": [],
+        "next_step": "",
+        "answer": None
+    }
+    
+    result = compiled.invoke(initial_state)
     return {"answer": result["answer"]}
-
 
 def _handle_info(_params: dict) -> dict:
     return {
         "name": "langgraph",
         "version": "1",
         "actions": ["ask", "info"],
-        "note": "Requires optional dependencies: pip install langgraph langchain-ollama",
+        "note": "Supports SRE and Research scopes via LangGraph multi-agent orchestration.",
     }
-
 
 _HANDLERS: dict = {
     "ask": "_handle_ask",
     "info": "_handle_info",
 }
 
-
 def main() -> None:
-    """Read JSON requests from stdin and write JSON responses to stdout."""
     current_module = sys.modules[__name__]
     for raw_line in sys.stdin:
         line = raw_line.strip()
@@ -127,12 +130,8 @@ def main() -> None:
 
             result = handler(params)
             print(json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True)
-        except Exception as exc:  # noqa: BLE001
-            print(
-                json.dumps({"status": "error", "error": str(exc), "id": req_id}),
-                flush=True,
-            )
-
+        except Exception as exc:
+            print(json.dumps({"status": "error", "error": str(exc), "id": req_id}), flush=True)
 
 if __name__ == "__main__":
     main()

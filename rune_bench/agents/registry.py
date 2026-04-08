@@ -30,7 +30,7 @@ _BUILTIN_AGENTS: dict[str, tuple[str, str, list[str]]] = {
     "perplexity": ("rune_bench.agents.research.perplexity", "PerplexityRunner", ["api_key"]),
     "glean": ("rune_bench.agents.research.glean", "GleanRunner", ["api_key"]),
     "elicit": ("rune_bench.agents.research.elicit", "ElicitRunner", ["api_key"]),
-    "langgraph": ("rune_bench.agents.research.langgraph", "LangGraphRunner", []),
+    "langgraph": ("rune_bench.agents.research.langgraph", "LangGraphRunner", ["kubeconfig"]),
     "consensus": ("rune_bench.agents.research.consensus", "ConsensusRunner", []),
     "pentestgpt": ("rune_bench.agents.cybersec.pentestgpt", "PentestGPTRunner", ["api_key"]),
     "radiant": ("rune_bench.agents.cybersec.radiant", "RadiantSecurityRunner", ["api_key", "base_url"]),
@@ -44,6 +44,7 @@ _BUILTIN_AGENTS: dict[str, tuple[str, str, list[str]]] = {
     "sierra": ("rune_bench.agents.ops.sierra", "SierraRunner", ["api_key"]),
     "skillfortify": ("rune_bench.agents.ops.skillfortify", "SkillFortifyRunner", ["api_key"]),
     "midjourney": ("rune_bench.agents.art.midjourney", "MidjourneyRunner", ["api_key", "base_url"]),
+    "invokeai": ("rune_bench.agents.art.invokeai", "InvokeAIRunner", ["base_url"]),
     "comfyui": ("rune_bench.agents.art.comfyui", "ComfyUIRunner", ["base_url"]),
     "krea": ("rune_bench.agents.art.krea", "KreaRunner", ["api_key"]),
 }

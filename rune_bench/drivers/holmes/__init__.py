@@ -12,9 +12,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from rune_bench.agents.base import AgentResult
 from rune_bench.backends import get_backend
 from rune_bench.debug import debug_log
-from rune_bench.drivers import DriverTransport, make_driver_transport
+from rune_bench.drivers import DriverTransport, AsyncDriverTransport, make_driver_transport, make_async_driver_transport
 
 
 class HolmesDriverClient:
@@ -34,6 +35,7 @@ class HolmesDriverClient:
             raise FileNotFoundError(f"kubeconfig not found: {kubeconfig}")
         self._kubeconfig = kubeconfig
         self._transport: DriverTransport = transport or make_driver_transport("holmes")
+        self._async_transport: AsyncDriverTransport = make_async_driver_transport("holmes")
 
     def ask(
         self,
@@ -42,21 +44,22 @@ class HolmesDriverClient:
         backend_url: str | None = None,
         backend_type: str = "ollama",
     ) -> str:
-        """Dispatch a question to the holmes driver and return the answer.
+        """Dispatch a question to the holmes driver and return the answer string."""
+        return self.ask_structured(
+            question=question,
+            model=model,
+            backend_url=backend_url,
+            backend_type=backend_type,
+        ).answer
 
-        Fetches LLM backend model capability limits (context window, max output
-        tokens) when *backend_url* is provided and passes them to the driver so
-        it can set the appropriate environment overrides before calling HolmesGPT.
-
-        Args:
-            question: Natural-language question about the Kubernetes cluster.
-            model: LLM model identifier (e.g. ``"llama3.1:8b"``).
-            backend_url: Base URL of the LLM backend server (optional).
-            backend_type: Backend type (e.g. ``"ollama"``, ``"k8s-inference"``).
-
-        Returns:
-            HolmesGPT's textual answer.
-        """
+    def ask_structured(
+        self,
+        question: str,
+        model: str,
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> AgentResult:
+        """Dispatch a question to the holmes driver and return a structured AgentResult."""
         resolved_model = model.strip()
         params: dict = {
             "question": question,
@@ -86,7 +89,58 @@ class HolmesDriverClient:
         if not answer_text:
             raise RuntimeError("Holmes driver returned an empty answer.")
 
-        return answer_text
+        return AgentResult(
+            answer=answer_text,
+            result_type=result.get("result_type", "text"),
+            artifacts=result.get("artifacts"),
+            metadata=result.get("metadata"),
+        )
+
+
+    async def ask_async(
+        self,
+        question: str,
+        model: str,
+        backend_url: str | None = None,
+        backend_type: str = "ollama",
+    ) -> AgentResult:
+        """Dispatch a question to the driver asynchronously."""
+        resolved_model = model.strip()
+        params: dict = {
+            "question": question,
+            "model": resolved_model,
+            "kubeconfig_path": str(self._kubeconfig),
+        }
+        if backend_url:
+            params["backend_url"] = backend_url
+            if hasattr(self, "_fetch_model_limits"):
+                params.update(self._fetch_model_limits(
+                    model=resolved_model, backend_url=backend_url, backend_type=backend_type,
+                ))
+
+        debug_log(
+            f"{self.__class__.__name__}.ask_async: question={question!r} model={resolved_model!r} "
+            f"backend_url={backend_url or '<none>'}"
+        )
+        result = await self._async_transport.call_async("ask", params)
+
+        if "answer" not in result:
+            raise RuntimeError("Driver response did not include an answer.")
+
+        answer = result["answer"]
+        if answer is None:
+            raise RuntimeError("Driver returned an empty answer.")
+
+        answer_text = str(answer)
+        if not answer_text:
+            raise RuntimeError("Driver returned an empty answer.")
+
+        return AgentResult(
+            answer=answer_text,
+            result_type=result.get("result_type", "text"),
+            artifacts=result.get("artifacts"),
+            metadata=result.get("metadata"),
+        )
 
     def _fetch_model_limits(
         self, *, model: str, backend_url: str, backend_type: str = "ollama",

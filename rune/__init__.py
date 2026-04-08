@@ -834,11 +834,17 @@ def run_agentic_agent(
         result_obj = payload.get("result")
         http_result: dict[str, object] = result_obj if isinstance(result_obj, dict) else {}
         answer = http_result.get("answer") or payload.get("answer")
+        result_type = str(http_result.get("result_type", payload.get("result_type", "text")))
+        artifacts = http_result.get("artifacts") or payload.get("artifacts")
+
         if not isinstance(answer, str) or not answer.strip():
             _print_error_and_exit("HTTP backend finished but did not return an agent answer")
 
-        console.print("\n[bold green]Agent Answer[/bold green]")
+        console.print(f"\n[bold green]Agent Answer ({result_type})[/bold green]")
         console.print(answer)
+        if artifacts:
+            console.print(f"\n[bold blue]Artifacts ({len(artifacts)})[/bold blue]")
+            console.print(artifacts)
         return
 
     _cli_metrics = InMemoryCollector()
@@ -854,17 +860,25 @@ def run_agentic_agent(
     # Block 10 — Run agentic agent
     try:
         from rune_bench.metrics import span as _span
-        runner = get_agent("holmes", kubeconfig=kubeconfig)
+        runner = get_agent(_request.agent, kubeconfig=kubeconfig)
         with _span("agent.ask", model=model, backend="existing"):
-            answer = runner.ask(question=question, model=model, backend_url=backend_url)
+            result = runner.ask_structured(
+                question=question,
+                model=model,
+                backend_url=backend_url,
+                backend_type=_resolve_backend_type(None),
+            )
     except (FileNotFoundError, RuntimeError) as exc:
         console.print(f"[red]Agent error:[/red] {exc}")
         raise typer.Exit(1)
 
     _print_metrics_summary(_cli_metrics)
     clear_collector()
-    console.print("\n[bold green]Agent Answer[/bold green]")
-    console.print(answer)
+    console.print(f"\n[bold green]Agent Answer ({result.result_type})[/bold green]")
+    console.print(result.answer)
+    if result.artifacts:
+        console.print(f"\n[bold blue]Artifacts ({len(result.artifacts)})[/bold blue]")
+        console.print(result.artifacts)
 
 
 @app.command("run-benchmark")
@@ -992,11 +1006,17 @@ def run_benchmark(
         result_obj = payload.get("result")
         http_result: dict[str, object] = result_obj if isinstance(result_obj, dict) else {}
         answer = http_result.get("answer") or payload.get("answer")
+        result_type = str(http_result.get("result_type", payload.get("result_type", "text")))
+        artifacts = http_result.get("artifacts") or payload.get("artifacts")
+
         if not isinstance(answer, str) or not answer.strip():
             _print_error_and_exit("HTTP backend finished but did not return a benchmark answer")
 
-        console.print("\n[bold green]Agent Answer[/bold green]")
+        console.print(f"\n[bold green]Agent Answer ({result_type})[/bold green]")
         console.print(answer)
+        if artifacts:
+            console.print(f"\n[bold blue]Artifacts ({len(artifacts)})[/bold blue]")
+            console.print(artifacts)
         return
 
     _cli_metrics = InMemoryCollector()
@@ -1066,7 +1086,7 @@ def run_benchmark(
     # Block 10 — Run agentic agent
     try:
         runner = get_agent("holmes", kubeconfig=kubeconfig)
-        answer = runner.ask(
+        result = runner.ask_structured(
             question=question,
             model=selected_model_name,
             backend_url=selected_backend_url,
@@ -1094,8 +1114,11 @@ def run_benchmark(
 
     _print_metrics_summary(_cli_metrics)
     clear_collector()
-    console.print("\n[bold green]Agent Answer[/bold green]")
-    console.print(answer)
+    console.print(f"\n[bold green]Agent Answer ({result.result_type})[/bold green]")
+    console.print(result.answer)
+    if result.artifacts:
+        console.print(f"\n[bold blue]Artifacts ({len(result.artifacts)})[/bold blue]")
+        console.print(result.artifacts)
 
 
 if __name__ == "__main__":

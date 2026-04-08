@@ -65,3 +65,48 @@ class StdioTransport:
             )
 
         return response.get("result", {})
+
+
+class AsyncStdioTransport:
+    """Send a single JSON request to a driver subprocess asynchronously and return the result."""
+
+    def __init__(self, cmd: list[str]) -> None:
+        self._cmd = cmd
+
+    async def call_async(self, action: str, params: dict) -> dict:
+        import asyncio
+        request_id = str(uuid.uuid4())
+        request = {"action": action, "params": params, "id": request_id}
+        request_json = json.dumps(request)
+        debug_log(f"AsyncStdioTransport → {self._cmd[0]} action={action!r} id={request_id}")
+
+        proc = await asyncio.create_subprocess_exec(
+            *self._cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        stdout, stderr = await proc.communicate(input=request_json.encode() + b"\n")
+
+        if proc.returncode != 0:
+            detail = stderr.decode().strip() or stdout.decode().strip() or f"exit {proc.returncode}"
+            raise RuntimeError(f"Driver process {self._cmd[0]!r} failed: {detail}")
+
+        stdout_str = stdout.decode().strip()
+        if not stdout_str:
+            raise RuntimeError(f"Driver process {self._cmd[0]!r} produced no output")
+
+        try:
+            response = json.loads(stdout_str)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"Driver process {self._cmd[0]!r} returned invalid JSON: {exc}"
+            ) from exc
+
+        if response.get("status") == "error":
+            raise RuntimeError(
+                f"Driver error from {self._cmd[0]!r}: {response.get('error', '<no detail>')}"
+            )
+
+        return response.get("result", {})
