@@ -4,6 +4,10 @@
 from __future__ import annotations
 
 import json
+<<<<<<< HEAD
+=======
+from typing import Any
+>>>>>>> 6e07db3 (feat: implement Manual and Browser transports for non-API agents (#89))
 
 from rich.console import Console
 from rich.panel import Panel
