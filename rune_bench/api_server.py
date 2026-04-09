@@ -26,9 +26,19 @@ from rune_bench.api_backend import (
 )
 from rune_bench.api_contracts import (
     CostEstimationRequest,
+    CreateProfileRequest,
     RunAgenticAgentRequest,
     RunBenchmarkRequest,
     RunLLMInstanceRequest,
+    SettingsResponse,
+    UpdateSettingsRequest,
+)
+from rune_bench.common import (
+    create_profile,
+    get_raw_config,
+    load_config,
+    peek_profile_from_argv,
+    update_settings,
 )
 from rune_bench.metrics import SQLiteMetricsCollector, clear_collector, set_collector, set_job_id, span
 from rune_bench.storage import StoragePort
@@ -194,6 +204,32 @@ class RuneApiApplication:
                     self._write_json(401, {"error": str(exc)})
                     return
 
+                if path == "/v1/settings":
+                    raw = get_raw_config()
+                    active_profile = peek_profile_from_argv()
+                    effective = load_config(active_profile)
+                    
+                    def redact(d: dict) -> dict:
+                        """Recursively redact sensitive keys (token, key, secret)."""
+                        redacted = {}
+                        for k, v in d.items():
+                            if isinstance(v, dict):
+                                redacted[k] = redact(v)
+                            elif any(s in k.lower() for s in ("token", "key", "secret")):
+                                redacted[k] = "[REDACTED]"
+                            else:
+                                redacted[k] = v
+                        return redacted
+
+                    response = SettingsResponse(
+                        defaults=redact(raw.get("defaults") or {}),
+                        profiles=redact(raw.get("profiles") or {}),
+                        active_profile=active_profile,
+                        effective_config=redact(effective),
+                    )
+                    self._write_json(200, response.to_dict())
+                    return
+
                 if path == "/v1/catalog/vastai-models":
                     self._write_json(200, {"models": list_vastai_models()})
                     return
@@ -329,6 +365,43 @@ class RuneApiApplication:
 
                 self._write_json(404, {"error": f"unknown path: {path}"})
 
+            def do_PUT(self) -> None:
+                self._handle_update()
+
+            def do_PATCH(self) -> None:
+                self._handle_update()
+
+            def _handle_update(self) -> None:
+                parsed = urlparse(self.path)
+                path = parsed.path
+                try:
+                    _ = self._authenticate()
+                except PermissionError as exc:
+                    self._write_json(401, {"error": str(exc)})
+                    return
+
+                try:
+                    payload = self._read_json()
+                except ValueError as exc:
+                    self._write_json(400, {"error": str(exc)})
+                    return
+
+                if path == "/v1/settings":
+                    try:
+                        req = UpdateSettingsRequest(**payload)
+                        path_updated = update_settings(req.settings, req.profile)
+                        # Reload config for the current process to pick up changes
+                        load_config(peek_profile_from_argv())
+                        self._write_json(200, {
+                            "status": "updated",
+                            "profile": req.profile or "defaults",
+                            "file": str(path_updated),
+                        })
+                    except Exception as exc:
+                        self._write_json(400, {"error": str(exc)})
+                    return
+                self._write_json(404, {"error": f"unknown path: {path}"})
+
             def do_POST(self) -> None:
                 parsed = urlparse(self.path)
                 path = parsed.path
@@ -342,6 +415,21 @@ class RuneApiApplication:
                     payload = self._read_json()
                 except ValueError as exc:
                     self._write_json(400, {"error": str(exc)})
+                    return
+
+                if path == "/v1/settings/profiles":
+                    try:
+                        req = CreateProfileRequest(**payload)
+                        path_updated = create_profile(req.name, req.settings)
+                        # Reload config for the current process to pick up changes
+                        load_config(peek_profile_from_argv())
+                        self._write_json(201, {
+                            "status": "created",
+                            "profile": req.name,
+                            "file": str(path_updated),
+                        })
+                    except Exception as exc:
+                        self._write_json(400, {"error": str(exc)})
                     return
 
                 if path == "/v1/estimates":
