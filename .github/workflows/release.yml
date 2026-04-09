@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   release:
-    uses: lpasquali/rune-ci/.github/workflows/release.yml@main
+    uses: lpasquali/rune-ci/.github/workflows/release.yml@95f0b3fd7c0cdbab72a42e71343c27125997bca5 # main
     with:
       image-name: "rune"
       notify-charts: true

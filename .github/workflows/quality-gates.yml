@@ -57,12 +57,12 @@ jobs:
 
   # ─── Shared: Security scanning (gitleaks + SBOM) ────────────────────────────
   security:
-    uses: lpasquali/rune-ci/.github/workflows/security-scan.yml@main
+    uses: lpasquali/rune-ci/.github/workflows/security-scan.yml@95f0b3fd7c0cdbab72a42e71343c27125997bca5 # main
     secrets: inherit
 
   # ─── Shared: Python quality (coverage + lint + SAST + license) ──────────────
   python-quality:
-    uses: lpasquali/rune-ci/.github/workflows/python-quality.yml@main
+    uses: lpasquali/rune-ci/.github/workflows/python-quality.yml@95f0b3fd7c0cdbab72a42e71343c27125997bca5 # main
     with:
       python-version: "3.14"
       coverage-threshold: "97"
@@ -74,7 +74,7 @@ jobs:
 
   # ─── Shared: Integration (Ollama + Smoke) ──────────────────────────────────
   integration:
-    uses: lpasquali/rune-ci/.github/workflows/python-integration.yml@main
+    uses: lpasquali/rune-ci/.github/workflows/python-integration.yml@95f0b3fd7c0cdbab72a42e71343c27125997bca5 # main
     needs: [changes, python-quality]
     if: needs.changes.outputs.python == 'true'
     with:
@@ -84,7 +84,7 @@ jobs:
   container:
     needs: [changes, security]
     if: needs.changes.outputs.docker == 'true'
-    uses: lpasquali/rune-ci/.github/workflows/container-build.yml@main
+    uses: lpasquali/rune-ci/.github/workflows/container-build.yml@95f0b3fd7c0cdbab72a42e71343c27125997bca5 # main
     with:
       image-name: "rune"
       push: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
@@ -93,6 +93,6 @@ jobs:
   compliance:
     needs: [security, python-quality, integration, container]
     if: always()
-    uses: lpasquali/rune-ci/.github/workflows/pr-compliance.yml@main
+    uses: lpasquali/rune-ci/.github/workflows/pr-compliance.yml@95f0b3fd7c0cdbab72a42e71343c27125997bca5 # main
     with:
       needs-json: ${{ toJson(needs) }}
