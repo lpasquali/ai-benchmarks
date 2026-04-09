@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, Protocol
 
 if TYPE_CHECKING:
-    from rune_bench.job_store import JobStore
+    from rune_bench.storage import StoragePort
 
 
 @dataclass
@@ -94,7 +94,7 @@ class InMemoryCollector:
 class SQLiteMetricsCollector:
     """Persists MetricsEvents to the workflow_events table in the job store."""
 
-    def __init__(self, store: "JobStore") -> None:
+    def __init__(self, store: "StoragePort") -> None:
         self._store = store
 
     def record(self, event: MetricsEvent) -> None:
