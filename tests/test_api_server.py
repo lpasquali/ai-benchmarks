@@ -101,7 +101,7 @@ def test_api_server_enforces_tenant_scoping_and_idempotency(rune_api_server):
 
 def test_api_server_rate_limiting(rune_api_server):
     base_url, _state = rune_api_server
-    
+
     # Attempt 10 failed logins
     for i in range(10):
         request = Request(f"{base_url}/v1/catalog/vastai-models")
@@ -109,7 +109,7 @@ def test_api_server_rate_limiting(rune_api_server):
         with pytest.raises(HTTPError) as exc:
             urlopen(request)
         assert exc.value.code == 401
-    
+
     # 11th attempt should trigger rate limit
     request = Request(f"{base_url}/v1/catalog/vastai-models")
     request.add_header("Authorization", "Bearer invalid-token")
@@ -118,3 +118,136 @@ def test_api_server_rate_limiting(rune_api_server):
     assert exc.value.code == 401
     payload = json.loads(exc.value.read().decode("utf-8"))
     assert payload["error"] == "rate limit exceeded"
+
+
+# ── /v1/chains/{run_id}/state ───────────────────────────────────────────────
+
+
+def _auth_headers(token: str, tenant: str) -> dict:
+    return {
+        "Authorization": f"Bearer {token}",
+        "X-Tenant-ID": tenant,
+    }
+
+
+def _get_json(url: str, headers: dict) -> dict:
+    request = Request(url)
+    for k, v in headers.items():
+        request.add_header(k, v)
+    with urlopen(request) as response:  # nosec  # local test request
+        return json.loads(response.read().decode("utf-8"))
+
+
+def test_chain_state_returns_404_for_unknown_run(rune_api_server):
+    base_url, _ = rune_api_server
+    request = Request(f"{base_url}/v1/chains/does-not-exist/state")
+    request.add_header("Authorization", "Bearer token-a")  # nosec
+    request.add_header("X-Tenant-ID", "tenant-a")
+    with pytest.raises(HTTPError) as exc:
+        urlopen(request)  # nosec
+    assert exc.value.code == 404
+    payload = json.loads(exc.value.read().decode("utf-8"))
+    assert "chain run not found" in payload["error"]
+
+
+def test_chain_state_returns_404_for_other_tenants_run(rune_api_server):
+    base_url, _ = rune_api_server
+    client_a = RuneApiClient(base_url, api_token="token-a", tenant_id="tenant-a")  # nosec
+    job_id = client_a.submit_agentic_agent_job(
+        {
+            "question": "q",
+            "model": "m",
+            "backend_url": None,
+            "backend_warmup": False,
+            "backend_warmup_timeout": 1,
+            "kubeconfig": "/tmp/cfg",  # nosec
+        },
+        idempotency_key="t1",
+    )
+
+    request = Request(f"{base_url}/v1/chains/{job_id}/state")
+    request.add_header("Authorization", "Bearer token-b")  # nosec
+    request.add_header("X-Tenant-ID", "tenant-b")
+    with pytest.raises(HTTPError) as exc:
+        urlopen(request)  # nosec
+    assert exc.value.code == 404
+
+
+def test_chain_state_returns_empty_shell_when_job_exists_but_no_chain_state(rune_api_server, tmp_path):
+    base_url, _ = rune_api_server
+    client_a = RuneApiClient(base_url, api_token="token-a", tenant_id="tenant-a")  # nosec
+    job_id = client_a.submit_agentic_agent_job(
+        {
+            "question": "q",
+            "model": "m",
+            "backend_url": None,
+            "backend_warmup": False,
+            "backend_warmup_timeout": 1,
+            "kubeconfig": "/tmp/cfg",  # nosec
+        },
+        idempotency_key="empty-shell",
+    )
+
+    payload = _get_json(
+        f"{base_url}/v1/chains/{job_id}/state",
+        _auth_headers("token-a", "tenant-a"),
+    )
+    assert payload == {
+        "run_id": job_id,
+        "nodes": [],
+        "edges": [],
+        "overall_status": "pending",
+    }
+
+
+def test_chain_state_returns_full_state_shape(rune_api_server):
+    """Verify the API endpoint returns the documented JSON shape.
+
+    Full populated-state behavior is exercised at the JobStore level in
+    test_job_store.py (where we control the DB directly). This test confirms
+    the wire format the dashboard will consume.
+    """
+    base_url, _ = rune_api_server
+    client_a = RuneApiClient(base_url, api_token="token-a", tenant_id="tenant-a")  # nosec
+    job_id = client_a.submit_agentic_agent_job(
+        {
+            "question": "q",
+            "model": "m",
+            "backend_url": None,
+            "backend_warmup": False,
+            "backend_warmup_timeout": 1,
+            "kubeconfig": "/tmp/cfg",  # nosec
+        },
+        idempotency_key="full-state",
+    )
+
+    payload = _get_json(
+        f"{base_url}/v1/chains/{job_id}/state",
+        _auth_headers("token-a", "tenant-a"),
+    )
+    # Empty-shell shape (no chain state initialized for this job)
+    assert payload["run_id"] == job_id
+    assert payload["overall_status"] == "pending"
+    assert payload["nodes"] == []
+    assert payload["edges"] == []
+
+
+def test_chain_state_endpoint_requires_auth(rune_api_server):
+    base_url, _ = rune_api_server
+    request = Request(f"{base_url}/v1/chains/anything/state")
+    with pytest.raises(HTTPError) as exc:
+        urlopen(request)  # nosec
+    assert exc.value.code == 401
+
+
+def test_chain_state_endpoint_rejects_empty_run_id(rune_api_server):
+    base_url, _ = rune_api_server
+    # /v1/chains//state has empty run_id between the two slashes
+    request = Request(f"{base_url}/v1/chains//state")
+    request.add_header("Authorization", "Bearer token-a")  # nosec
+    request.add_header("X-Tenant-ID", "tenant-a")
+    with pytest.raises(HTTPError) as exc:
+        urlopen(request)  # nosec
+    assert exc.value.code == 400
+    payload = json.loads(exc.value.read().decode("utf-8"))
+    assert "missing run_id" in payload["error"]

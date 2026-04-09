@@ -91,6 +91,145 @@ class JobStore:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_workflow_events_event ON workflow_events(event)"
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS chain_state (
+                    job_id TEXT PRIMARY KEY,
+                    state_json TEXT NOT NULL,
+                    overall_status TEXT NOT NULL,
+                    updated_at REAL NOT NULL
+                )
+                """
+            )
+
+    # ── Chain state ────────────────────────────────────────────────────────
+    #
+    # Persists the live execution state of a multi-agent chain (DAG) keyed by
+    # job_id. The full state is stored as a single JSON blob (one row per job)
+    # to keep node-status updates atomic and avoid per-node row management.
+    #
+    # Schema of state_json:
+    #   {
+    #     "nodes": [
+    #       {"id": "step-name", "agent_name": "...", "status": "pending|running|success|failed|skipped",
+    #        "started_at": <float|null>, "finished_at": <float|null>, "error": <str|null>}
+    #     ],
+    #     "edges": [{"from": "dep-step-name", "to": "step-name"}]
+    #   }
+
+    _CHAIN_STATUS_PRIORITY = ("failed", "running", "pending", "success", "skipped")
+
+    @classmethod
+    def _compute_overall_chain_status(cls, nodes: list[dict]) -> str:
+        if not nodes:
+            return "pending"
+        statuses = {n.get("status", "pending") for n in nodes}
+        if "failed" in statuses:
+            return "failed"
+        if "running" in statuses:
+            return "running"
+        if "pending" in statuses:
+            return "pending"
+        # all nodes terminal-non-failed: success unless every node was skipped
+        if statuses == {"skipped"}:
+            return "skipped"
+        return "success"
+
+    def record_chain_initialized(
+        self,
+        *,
+        job_id: str,
+        nodes: list[dict],
+        edges: list[dict],
+    ) -> None:
+        """Initialize chain state for a job. Idempotent — overwrites any prior state."""
+        normalized_nodes: list[dict] = []
+        for node in nodes:
+            normalized_nodes.append(
+                {
+                    "id": node["id"],
+                    "agent_name": node.get("agent_name", ""),
+                    "status": node.get("status", "pending"),
+                    "started_at": node.get("started_at"),
+                    "finished_at": node.get("finished_at"),
+                    "error": node.get("error"),
+                }
+            )
+        normalized_edges = [{"from": e["from"], "to": e["to"]} for e in edges]
+        state = {"nodes": normalized_nodes, "edges": normalized_edges}
+        overall = self._compute_overall_chain_status(normalized_nodes)
+        now = time.time()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO chain_state(job_id, state_json, overall_status, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(job_id) DO UPDATE SET
+                    state_json = excluded.state_json,
+                    overall_status = excluded.overall_status,
+                    updated_at = excluded.updated_at
+                """,
+                (job_id, json.dumps(state), overall, now),
+            )
+
+    def record_chain_node_transition(
+        self,
+        *,
+        job_id: str,
+        node_id: str,
+        status: str,
+        started_at: float | None = None,
+        finished_at: float | None = None,
+        error: str | None = None,
+    ) -> None:
+        """Update one node's fields and recompute overall status. Raises if chain not initialized."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT state_json FROM chain_state WHERE job_id = ?",
+                (job_id,),
+            ).fetchone()
+            if row is None:
+                raise RuntimeError(f"chain state not initialized for job_id={job_id}")
+            state = json.loads(row["state_json"])
+            for node in state["nodes"]:
+                if node["id"] == node_id:
+                    node["status"] = status
+                    if started_at is not None:
+                        node["started_at"] = started_at
+                    if finished_at is not None:
+                        node["finished_at"] = finished_at
+                    if error is not None:
+                        node["error"] = error
+                    break
+            else:
+                raise RuntimeError(
+                    f"chain node {node_id!r} not found in state for job_id={job_id}"
+                )
+            overall = self._compute_overall_chain_status(state["nodes"])
+            conn.execute(
+                """
+                UPDATE chain_state
+                SET state_json = ?, overall_status = ?, updated_at = ?
+                WHERE job_id = ?
+                """,
+                (json.dumps(state), overall, time.time(), job_id),
+            )
+
+    def get_chain_state(self, job_id: str) -> dict | None:
+        """Return {nodes, edges, overall_status} for the chain, or None if no state recorded."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT state_json, overall_status FROM chain_state WHERE job_id = ?",
+                (job_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            state = json.loads(row["state_json"])
+            return {
+                "nodes": state["nodes"],
+                "edges": state["edges"],
+                "overall_status": row["overall_status"],
+            }
 
     def mark_incomplete_jobs_failed(self, message: str = "server restarted before job completion") -> None:
         now = time.time()
