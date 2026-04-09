@@ -62,83 +62,15 @@ class SQLiteStorageAdapter:
         return connection
 
     def _initialize(self) -> None:
+        # Schema creation is delegated to the Migrator so the same set of
+        # versioned ``NNNN_*.sql`` files drives every storage backend (today
+        # SQLite; rune#233 adds Postgres). The Migrator is idempotent, so
+        # reopening an existing database is a no-op.
+        from rune_bench.storage.migrator import Migrator
+
         with self._connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS jobs (
-                    job_id TEXT PRIMARY KEY,
-                    tenant_id TEXT NOT NULL,
-                    kind TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    request_json TEXT NOT NULL,
-                    result_json TEXT,
-                    error TEXT,
-                    message TEXT,
-                    created_at REAL NOT NULL,
-                    updated_at REAL NOT NULL
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS idempotency_keys (
-                    tenant_id TEXT NOT NULL,
-                    operation TEXT NOT NULL,
-                    idempotency_key TEXT NOT NULL,
-                    job_id TEXT NOT NULL,
-                    created_at REAL NOT NULL,
-                    PRIMARY KEY (tenant_id, operation, idempotency_key)
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS workflow_events (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    job_id TEXT,
-                    event TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    duration_ms REAL,
-                    error_type TEXT,
-                    labels_json TEXT,
-                    recorded_at REAL NOT NULL
-                )
-                """
-            )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_workflow_events_job_id ON workflow_events(job_id)"
-            )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_workflow_events_event ON workflow_events(event)"
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS chain_state (
-                    job_id TEXT PRIMARY KEY,
-                    state_json TEXT NOT NULL,
-                    overall_status TEXT NOT NULL,
-                    updated_at REAL NOT NULL
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS audit_artifact (
-                    artifact_id TEXT PRIMARY KEY,
-                    job_id TEXT NOT NULL,
-                    kind TEXT NOT NULL,
-                    name TEXT NOT NULL,
-                    size_bytes INTEGER NOT NULL,
-                    sha256 TEXT NOT NULL,
-                    content BLOB NOT NULL,
-                    created_at REAL NOT NULL
-                )
-                """
-            )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_audit_artifact_job_id ON audit_artifact(job_id)"
-            )
+            Migrator().apply_pending(conn)
 
     # ── Chain state ────────────────────────────────────────────────────────
     #
