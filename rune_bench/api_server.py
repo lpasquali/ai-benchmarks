@@ -30,8 +30,14 @@ from rune_bench.api_contracts import (
     RunBenchmarkRequest,
     RunLLMInstanceRequest,
 )
-from rune_bench.job_store import JobRecord, JobStore
 from rune_bench.metrics import SQLiteMetricsCollector, clear_collector, set_collector, set_job_id, span
+from rune_bench.storage import StoragePort
+from rune_bench.storage.sqlite import JobRecord, SQLiteStorageAdapter
+
+# Back-compat alias: legacy tests and callers still reference
+# ``rune_bench.api_server.JobStore``. The class is now
+# ``SQLiteStorageAdapter`` under ``rune_bench.storage.sqlite``.
+JobStore = SQLiteStorageAdapter
 
 BackendRequest: TypeAlias = (
     RunAgenticAgentRequest | RunBenchmarkRequest | RunLLMInstanceRequest | CostEstimationRequest
@@ -92,7 +98,7 @@ class RuneApiApplication:
     def __init__(
         self,
         *,
-        store: JobStore,
+        store: StoragePort,
         security: ApiSecurityConfig,
         backend_functions: dict[str, BackendHandler] | None = None,
     ) -> None:
@@ -112,7 +118,7 @@ class RuneApiApplication:
     @classmethod
     def from_env(cls) -> "RuneApiApplication":
         db_path = os.environ.get("RUNE_API_DB_PATH", ".rune-api/jobs.db")
-        return cls(store=JobStore(Path(db_path)), security=ApiSecurityConfig.from_env())
+        return cls(store=SQLiteStorageAdapter(Path(db_path)), security=ApiSecurityConfig.from_env())
 
     def create_handler(self):
         app = self
