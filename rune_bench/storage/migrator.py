@@ -21,6 +21,17 @@ import time
 
 _FILENAME_RE = re.compile(r"^(\d{4})_.*\.sql$")
 
+# Tables created by migrations 0001–0005 before ``schema_version`` existed
+# (legacy on-disk SQLite). Used to pre-seed ``schema_version`` so unconditional
+# ``CREATE TABLE`` migrations do not fail on upgrade. See rune#241.
+_PREEXISTING_TABLE_TO_MIGRATION: dict[str, int] = {
+    "jobs": 1,
+    "idempotency_keys": 2,
+    "workflow_events": 3,
+    "chain_state": 4,
+    "audit_artifact": 5,
+}
+
 
 class Migrator:
     """Apply pending SQL migrations to a SQLite connection.
@@ -47,6 +58,7 @@ class Migrator:
         and re-raises :class:`RuntimeError` with the offending version and
         filename so the underlying driver error is never swallowed.
         """
+        self._bootstrap_legacy_schema(conn)
         self._ensure_bookkeeping_table(conn)
         applied = self._already_applied(conn)
         newly_applied: list[int] = []
@@ -78,6 +90,54 @@ class Migrator:
             newly_applied.append(version)
 
         return newly_applied
+
+    def _bootstrap_legacy_schema(self, conn: sqlite3.Connection) -> None:
+        """Pre-seed ``schema_version`` when upgrading a pre-migration SQLite file.
+
+        Legacy databases created before the migrator landed already contain domain
+        tables but no ``schema_version`` row. :meth:`_ensure_bookkeeping_table`
+        would create an empty bookkeeping table and the first migration would
+        fail with "table already exists". Detect that case via ``sqlite_master``
+        and record versions for tables that are already present.
+        """
+        has_schema_version = (
+            conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_version'"
+            ).fetchone()
+            is not None
+        )
+        if has_schema_version:
+            return
+
+        existing = {
+            str(row[0])
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        pre_existing_versions = sorted(
+            v
+            for tbl, v in _PREEXISTING_TABLE_TO_MIGRATION.items()
+            if tbl in existing
+        )
+        if not pre_existing_versions:
+            return
+
+        conn.execute(
+            """
+            CREATE TABLE schema_version (
+                version INTEGER PRIMARY KEY,
+                applied_at REAL NOT NULL
+            )
+            """
+        )
+        now = time.time()
+        for version in pre_existing_versions:
+            conn.execute(
+                "INSERT INTO schema_version(version, applied_at) VALUES (?, ?)",
+                (version, now),
+            )
+        conn.commit()
 
     def _ensure_bookkeeping_table(self, conn: sqlite3.Connection) -> None:
         conn.execute(
