@@ -78,3 +78,115 @@ def test_backward_compatible_aliases():
     assert workflows.list_running_ollama_models is workflows.list_running_backend_models
     assert workflows.warmup_existing_ollama_model is workflows.warmup_backend_model
     assert workflows.provision_vastai_ollama is workflows.provision_vastai_backend
+
+
+# ── run_chain_workflow + JobStoreChainRecorder ──────────────────────────────
+
+
+import asyncio  # noqa: E402
+
+from unittest.mock import AsyncMock  # noqa: E402
+
+from rune_bench.agents.base import AgentResult  # noqa: E402
+from rune_bench.job_store import JobStore  # noqa: E402
+
+
+def test_jobstore_chain_recorder_initialize_delegates_to_store(tmp_path):
+    store = JobStore(tmp_path / "jobs.db")
+    recorder = workflows.JobStoreChainRecorder(store)
+
+    recorder.initialize(
+        job_id="job-1",
+        nodes=[{"id": "a", "agent_name": "X"}],
+        edges=[],
+    )
+    state = store.get_chain_state("job-1")
+    assert state is not None
+    assert [n["id"] for n in state["nodes"]] == ["a"]
+
+
+def test_jobstore_chain_recorder_transition_delegates_to_store(tmp_path):
+    store = JobStore(tmp_path / "jobs.db")
+    recorder = workflows.JobStoreChainRecorder(store)
+    recorder.initialize(
+        job_id="job-1",
+        nodes=[{"id": "a", "agent_name": "X"}],
+        edges=[],
+    )
+    recorder.transition(
+        job_id="job-1",
+        node_id="a",
+        status="success",
+        started_at=1.0,
+        finished_at=2.0,
+    )
+    state = store.get_chain_state("job-1")
+    assert state is not None
+    assert state["nodes"][0]["status"] == "success"
+    assert state["nodes"][0]["started_at"] == 1.0
+    assert state["nodes"][0]["finished_at"] == 2.0
+    assert state["overall_status"] == "success"
+
+
+def test_run_chain_workflow_persists_full_state_via_store(tmp_path):
+    """End-to-end: run_chain_workflow runs the engine and the JobStore reflects the final DAG state."""
+    from rune_bench.agents.chain import ChainStep
+
+    store = JobStore(tmp_path / "jobs.db")
+
+    agent = MagicMock()
+    agent.ask_async = AsyncMock(return_value=AgentResult(answer="ok"))
+    steps = [
+        ChainStep(name="draft", agent=agent, question_template="{topic}"),
+        ChainStep(name="review", agent=agent, question_template="{draft}", dependencies=["draft"]),
+    ]
+
+    result = asyncio.run(
+        workflows.run_chain_workflow(
+            steps=steps,
+            initial_context={"topic": "ai"},
+            model="m",
+            job_id="job-xyz",
+            store=store,
+        )
+    )
+
+    assert "draft" in result.steps
+    assert "review" in result.steps
+
+    state = store.get_chain_state("job-xyz")
+    assert state is not None
+    assert state["overall_status"] == "success"
+    assert {n["id"] for n in state["nodes"]} == {"draft", "review"}
+    assert state["edges"] == [{"from": "draft", "to": "review"}]
+    for node in state["nodes"]:
+        assert node["status"] == "success"
+        assert node["started_at"] is not None
+        assert node["finished_at"] is not None
+
+
+def test_run_chain_workflow_records_failure_in_store(tmp_path):
+    from rune_bench.agents.chain import ChainStep
+    import pytest as _pytest
+
+    store = JobStore(tmp_path / "jobs.db")
+
+    failing_agent = MagicMock()
+    failing_agent.ask_async = AsyncMock(side_effect=RuntimeError("boom"))
+    steps = [ChainStep(name="only", agent=failing_agent, question_template="{topic}")]
+
+    with _pytest.raises(RuntimeError, match="boom"):
+        asyncio.run(
+            workflows.run_chain_workflow(
+                steps=steps,
+                initial_context={"topic": "ai"},
+                model="m",
+                job_id="job-fail",
+                store=store,
+            )
+        )
+
+    state = store.get_chain_state("job-fail")
+    assert state is not None
+    assert state["overall_status"] == "failed"
+    assert state["nodes"][0]["error"] == "boom"
