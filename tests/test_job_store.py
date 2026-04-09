@@ -189,3 +189,114 @@ def test_chain_state_initialize_empty_nodes_overall_pending(tmp_path):
     assert state["nodes"] == []
     assert state["edges"] == []
     assert state["overall_status"] == "pending"
+
+
+# ── Audit artifacts ─────────────────────────────────────────────────────────
+
+
+import hashlib  # noqa: E402 — grouped with audit-artifact tests
+
+
+def test_audit_artifact_record_and_list_returns_metadata_only(tmp_path):
+    store = JobStore(tmp_path / "jobs.db")
+    payload = b'{"_type": "slsa.provenance"}'
+    artifact_id = store.record_audit_artifact(
+        job_id="job-1", kind="slsa_provenance", name="provenance.json", content=payload
+    )
+    assert artifact_id  # uuid
+
+    artifacts = store.list_audit_artifacts("job-1")
+    assert len(artifacts) == 1
+    a = artifacts[0]
+    assert a["artifact_id"] == artifact_id
+    assert a["kind"] == "slsa_provenance"
+    assert a["name"] == "provenance.json"
+    assert a["size_bytes"] == len(payload)
+    assert a["sha256"] == hashlib.sha256(payload).hexdigest()
+    assert a["created_at"] > 0
+    # Bytes are intentionally NOT in the list response
+    assert "content" not in a
+
+
+def test_audit_artifact_list_orders_by_created_at(tmp_path):
+    store = JobStore(tmp_path / "jobs.db")
+    a1 = store.record_audit_artifact(
+        job_id="job-1", kind="sbom", name="first.json", content=b"{}"
+    )
+    a2 = store.record_audit_artifact(
+        job_id="job-1", kind="tla_report", name="second.txt", content=b"PASS"
+    )
+    artifacts = store.list_audit_artifacts("job-1")
+    assert [a["artifact_id"] for a in artifacts] == [a1, a2]
+
+
+def test_audit_artifact_list_returns_empty_for_unknown_job(tmp_path):
+    store = JobStore(tmp_path / "jobs.db")
+    assert store.list_audit_artifacts("nope") == []
+
+
+def test_audit_artifact_list_is_job_scoped(tmp_path):
+    store = JobStore(tmp_path / "jobs.db")
+    store.record_audit_artifact(
+        job_id="job-a", kind="sbom", name="a.json", content=b"{}"
+    )
+    store.record_audit_artifact(
+        job_id="job-b", kind="sbom", name="b.json", content=b"{}"
+    )
+    a = store.list_audit_artifacts("job-a")
+    b = store.list_audit_artifacts("job-b")
+    assert len(a) == 1 and a[0]["name"] == "a.json"
+    assert len(b) == 1 and b[0]["name"] == "b.json"
+
+
+def test_audit_artifact_get_returns_bytes_name_kind(tmp_path):
+    store = JobStore(tmp_path / "jobs.db")
+    payload = b"binary\x00data"
+    artifact_id = store.record_audit_artifact(
+        job_id="job-1", kind="sigstore_bundle", name="bundle.sig", content=payload
+    )
+    fetched = store.get_audit_artifact(job_id="job-1", artifact_id=artifact_id)
+    assert fetched is not None
+    content, name, kind = fetched
+    assert content == payload
+    assert name == "bundle.sig"
+    assert kind == "sigstore_bundle"
+
+
+def test_audit_artifact_get_returns_none_for_unknown_artifact(tmp_path):
+    store = JobStore(tmp_path / "jobs.db")
+    assert store.get_audit_artifact(job_id="job-1", artifact_id="missing") is None
+
+
+def test_audit_artifact_get_is_job_scoped(tmp_path):
+    """Cross-job access by artifact_id alone must fail (returns None)."""
+    store = JobStore(tmp_path / "jobs.db")
+    aid = store.record_audit_artifact(
+        job_id="job-a", kind="sbom", name="x.json", content=b"{}"
+    )
+    # Same artifact_id, wrong job_id → not found
+    assert store.get_audit_artifact(job_id="job-b", artifact_id=aid) is None
+
+
+def test_audit_artifact_record_rejects_unknown_kind(tmp_path):
+    store = JobStore(tmp_path / "jobs.db")
+    with pytest.raises(ValueError, match="unknown audit artifact kind"):
+        store.record_audit_artifact(
+            job_id="job-1", kind="invented", name="x", content=b""
+        )
+
+
+def test_audit_artifact_record_accepts_all_known_kinds(tmp_path):
+    store = JobStore(tmp_path / "jobs.db")
+    for kind in [
+        "slsa_provenance",
+        "sbom",
+        "tla_report",
+        "sigstore_bundle",
+        "rekor_entry",
+        "tpm_attestation",
+    ]:
+        store.record_audit_artifact(
+            job_id="job-1", kind=kind, name=f"{kind}.bin", content=b"x"
+        )
+    assert len(store.list_audit_artifacts("job-1")) == 6
