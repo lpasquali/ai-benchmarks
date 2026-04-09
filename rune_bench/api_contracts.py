@@ -155,3 +155,57 @@ class CostEstimationResponse:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class ChainStateResponse:
+    """State of a multi-agent chain (DAG) execution, suitable for dashboard rendering.
+
+    `nodes` items: {id, agent_name, status, started_at, finished_at, error}
+    `edges` items: {from, to}
+    `overall_status` ∈ {pending, running, success, failed, skipped}
+    """
+
+    run_id: str
+    nodes: list[dict]
+    edges: list[dict]
+    overall_status: str
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class AuditArtifact:
+    """Metadata for one piece of compliance evidence collected against a run.
+
+    ``kind`` ∈ {slsa_provenance, sbom, tla_report, sigstore_bundle, rekor_entry, tpm_attestation}.
+    ``download_url`` is a relative path that the dashboard can resolve against the rune API base.
+    """
+
+    artifact_id: str
+    kind: str
+    name: str
+    size_bytes: int
+    sha256: str
+    created_at: float
+    download_url: str
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class AuditArtifactsResponse:
+    """List + summary of all audit artifacts associated with a benchmark run.
+
+    ``summary.kinds_present`` is a sorted list of distinct kinds for quick
+    dashboard badge rendering without re-iterating ``artifacts``.
+    """
+
+    run_id: str
+    artifacts: list[dict]
+    summary: dict
+
+    def to_dict(self) -> dict:
+        return asdict(self)

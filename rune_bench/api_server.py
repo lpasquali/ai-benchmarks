@@ -30,8 +30,14 @@ from rune_bench.api_contracts import (
     RunBenchmarkRequest,
     RunLLMInstanceRequest,
 )
-from rune_bench.job_store import JobRecord, JobStore
 from rune_bench.metrics import SQLiteMetricsCollector, clear_collector, set_collector, set_job_id, span
+from rune_bench.storage import StoragePort
+from rune_bench.storage.sqlite import JobRecord, SQLiteStorageAdapter
+
+# Back-compat alias: legacy tests and callers still reference
+# ``rune_bench.api_server.JobStore``. The class is now
+# ``SQLiteStorageAdapter`` under ``rune_bench.storage.sqlite``.
+JobStore = SQLiteStorageAdapter
 
 BackendRequest: TypeAlias = (
     RunAgenticAgentRequest | RunBenchmarkRequest | RunLLMInstanceRequest | CostEstimationRequest
@@ -92,7 +98,7 @@ class RuneApiApplication:
     def __init__(
         self,
         *,
-        store: JobStore,
+        store: StoragePort,
         security: ApiSecurityConfig,
         backend_functions: dict[str, BackendHandler] | None = None,
     ) -> None:
@@ -112,7 +118,7 @@ class RuneApiApplication:
     @classmethod
     def from_env(cls) -> "RuneApiApplication":
         db_path = os.environ.get("RUNE_API_DB_PATH", ".rune-api/jobs.db")
-        return cls(store=JobStore(Path(db_path)), security=ApiSecurityConfig.from_env())
+        return cls(store=SQLiteStorageAdapter(Path(db_path)), security=ApiSecurityConfig.from_env())
 
     def create_handler(self):
         app = self
@@ -304,6 +310,95 @@ class RuneApiApplication:
                     self._write_json(200, _job_to_payload(job))
                     return
 
+                if path.startswith("/v1/chains/") and path.endswith("/state"):
+                    run_id = path.removeprefix("/v1/chains/").removesuffix("/state").strip()
+                    if not run_id:
+                        self._write_json(400, {"error": "missing run_id in /v1/chains/{run_id}/state"})
+                        return
+                    job = app.store.get_job(run_id, tenant_id=tenant_id)
+                    if job is None:
+                        self._write_json(404, {"error": f"chain run not found: {run_id}"})
+                        return
+                    state = app.store.get_chain_state(run_id)
+                    if state is None:
+                        # Job exists but chain state hasn't been initialized yet — return an
+                        # empty shell so the dashboard can render a placeholder.
+                        self._write_json(
+                            200,
+                            {
+                                "run_id": run_id,
+                                "nodes": [],
+                                "edges": [],
+                                "overall_status": "pending",
+                            },
+                        )
+                        return
+                    self._write_json(200, {"run_id": run_id, **state})
+                    return
+
+                if path.startswith("/v1/audits/") and "/artifacts" in path:
+                    # Two shapes:
+                    #   /v1/audits/{run_id}/artifacts            → list metadata
+                    #   /v1/audits/{run_id}/artifacts/{aid}      → stream bytes
+                    rest = path.removeprefix("/v1/audits/")
+                    if "/artifacts" not in rest:
+                        self._write_json(404, {"error": f"unknown path: {path}"})
+                        return
+                    run_id, _, tail = rest.partition("/artifacts")
+                    run_id = run_id.strip()
+                    if not run_id:
+                        self._write_json(400, {"error": "missing run_id in /v1/audits/{run_id}/artifacts"})
+                        return
+                    job = app.store.get_job(run_id, tenant_id=tenant_id)
+                    if job is None:
+                        self._write_json(404, {"error": f"audit run not found: {run_id}"})
+                        return
+
+                    if tail in ("", "/"):
+                        # List metadata
+                        artifacts = app.store.list_audit_artifacts(run_id)
+                        for a in artifacts:
+                            a["download_url"] = (
+                                f"/v1/audits/{run_id}/artifacts/{a['artifact_id']}"
+                            )
+                        kinds_present = sorted({a["kind"] for a in artifacts})
+                        self._write_json(
+                            200,
+                            {
+                                "run_id": run_id,
+                                "artifacts": artifacts,
+                                "summary": {
+                                    "total_count": len(artifacts),
+                                    "kinds_present": kinds_present,
+                                },
+                            },
+                        )
+                        return
+
+                    # tail is "/<artifact_id>"
+                    artifact_id = tail.lstrip("/").strip()
+                    if not artifact_id:
+                        self._write_json(400, {"error": "missing artifact_id"})
+                        return
+                    record = app.store.get_audit_artifact(
+                        job_id=run_id, artifact_id=artifact_id
+                    )
+                    if record is None:
+                        self._write_json(404, {"error": f"artifact not found: {artifact_id}"})
+                        return
+                    content, name, kind = record
+                    content_type = _audit_artifact_content_type(kind)
+                    self.send_response(200)
+                    self.send_header("Content-Type", content_type)
+                    self.send_header("Content-Length", str(len(content)))
+                    self.send_header(
+                        "Content-Disposition",
+                        f'attachment; filename="{name}"',
+                    )
+                    self.end_headers()
+                    self.wfile.write(content)
+                    return
+
                 self._write_json(404, {"error": f"unknown path: {path}"})
 
             def do_PUT(self) -> None:
@@ -481,6 +576,21 @@ class RuneApiApplication:
             server.serve_forever()
         finally:
             server.server_close()
+
+
+_AUDIT_ARTIFACT_CONTENT_TYPES: dict[str, str] = {
+    "slsa_provenance": "application/json",
+    "sbom": "application/json",
+    "tla_report": "text/plain; charset=utf-8",
+    "rekor_entry": "application/json",
+    "sigstore_bundle": "application/octet-stream",
+    "tpm_attestation": "application/octet-stream",
+}
+
+
+def _audit_artifact_content_type(kind: str) -> str:
+    """Map an audit artifact kind to its HTTP Content-Type for download responses."""
+    return _AUDIT_ARTIFACT_CONTENT_TYPES.get(kind, "application/octet-stream")
 
 
 def _job_to_payload(job: JobRecord) -> dict:
