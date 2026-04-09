@@ -7,7 +7,7 @@ from rune_bench.api_server import RuneApiApplication
 
 
 def main() -> None:
-    host = os.environ.get("RUNE_API_HOST", "0.0.0.0")
+    host = os.environ.get("RUNE_API_HOST", "127.0.0.1")
     port = int(os.environ.get("RUNE_API_PORT", "8080"))
     app = RuneApiApplication.from_env()
     app.serve(host=host, port=port)
