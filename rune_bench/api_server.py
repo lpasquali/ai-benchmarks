@@ -140,6 +140,53 @@ class RuneApiApplication:
                     raise ValueError("JSON request body must be an object")
                 return payload
 
+            def _handle_get_trace(self, run_id: str) -> None:
+                """Stream real-time SSE trace logs for a run/job."""
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "keep-alive")
+                self.end_headers()
+
+                # Simple polling loop against the SQLite job store to fetch new workflow events
+                last_count = 0
+                while True:
+                    try:
+                        # Find the job to ensure it exists
+                        job = app.store.get_job(run_id)
+                        if not job:
+                            self.wfile.write(b"event: error\ndata: job not found\n\n")
+                            self.wfile.flush()
+                            break
+
+                        # Fetch events
+                        with app.store._connect() as conn:
+                            cursor = conn.execute(
+                                "SELECT * FROM workflow_events WHERE job_id = ? ORDER BY id ASC", 
+                                (run_id,)
+                            )
+                            events = [dict(r) for r in cursor.fetchall()]
+
+                        # Yield new events
+                        for ev in events[last_count:]:
+                            payload = json.dumps(ev)
+                            self.wfile.write(f"data: {payload}\n\n".encode("utf-8"))
+                            self.wfile.flush()
+
+                        last_count = len(events)
+
+                        # If the job is finished, close the stream
+                        if job and job.status in ("completed", "failed"):
+                            self.wfile.write(b"event: end\ndata: stream closed\n\n")
+                            self.wfile.flush()
+                            break
+
+                        time.sleep(0.5)
+
+                    except Exception as e:
+                        # Client disconnected or DB error
+                        break
+
             def _authenticate(self) -> str:
                 client_ip = self.client_address[0]
                 now = time.time()
@@ -207,6 +254,15 @@ class RuneApiApplication:
                     self._write_json(200, payload)
                     return
 
+                if path == "/v1/settings":
+                    from rune_bench.common.config import load_config
+                    try:
+                        cfg = load_config()
+                        self._write_json(200, cfg)
+                    except Exception as exc:
+                        self._write_json(500, {"error": str(exc)})
+                    return
+
                 if path == "/v1/metrics/summary":
                     query = parse_qs(parsed.query)
                     filter_job_id = query.get("job_id", [None])[0]
@@ -214,8 +270,24 @@ class RuneApiApplication:
                     self._write_json(200, {"events": summary})
                     return
 
-                if path.startswith("/v1/jobs/"):
-                    job_id = path.removeprefix("/v1/jobs/").strip()
+                if path.startswith("/v1/jobs/") or path.startswith("/v1/runs/"):
+                    job_id = path.replace("/v1/runs/", "").replace("/v1/jobs/", "").strip()
+                    
+                    if job_id.endswith("/interaction"):
+                        raw_job_id = job_id.removesuffix("/interaction").strip()
+                        from rune_bench.interactive import session_manager
+                        prompt = session_manager.get_pending_prompt(raw_job_id)
+                        if not prompt:
+                            self._write_json(404, {"error": "no pending prompt"})
+                        else:
+                            self._write_json(200, {"prompt": prompt})
+                        return
+
+                    if job_id.endswith("/trace"):
+                        raw_job_id = job_id.removesuffix("/trace").strip()
+                        self._handle_get_trace(raw_job_id)
+                        return
+
                     if job_id.endswith("/events"):
                         raw_job_id = job_id.removesuffix("/events").strip()
                         job = app.store.get_job(raw_job_id, tenant_id=tenant_id)
@@ -233,6 +305,47 @@ class RuneApiApplication:
                     return
 
                 self._write_json(404, {"error": f"unknown path: {path}"})
+
+            def do_PUT(self) -> None:
+                parsed = urlparse(self.path)
+                path = parsed.path
+                try:
+                    tenant_id = self._authenticate()
+                except PermissionError as exc:
+                    self._write_json(401, {"error": str(exc)})
+                    return
+
+                try:
+                    payload = self._read_json()
+                except ValueError as exc:
+                    self._write_json(400, {"error": str(exc)})
+                    return
+
+                if path == "/v1/settings":
+                    try:
+                        import yaml
+                        from pathlib import Path
+                        from rune_bench.common.config import _find_config_file, _PROJECT_CANDIDATES
+                        cfg_file = _find_config_file(_PROJECT_CANDIDATES) or Path("rune.yaml")
+                        data = {}
+                        if cfg_file.exists():
+                            with open(cfg_file, "r") as fh:
+                                data = yaml.safe_load(fh) or {}
+                        
+                        # Apply top-level updates safely
+                        for k, v in payload.items():
+                            if k == "profiles":
+                                continue  # Handled via POST
+                            data[k] = v
+                            
+                        with open(cfg_file, "w") as fh:
+                            yaml.dump(data, fh, sort_keys=False)
+                            
+                        self._write_json(200, {"status": "ok"})
+                    except Exception as exc:
+                        self._write_json(400, {"error": str(exc)})
+                    return
+                self._write_json(404, {"error": "not found"})
 
             def do_POST(self) -> None:
                 parsed = urlparse(self.path)
@@ -256,6 +369,43 @@ class RuneApiApplication:
                     except Exception as exc:
                         self._write_json(400, {"error": str(exc)})
                     return
+
+                if path == "/v1/settings/profiles":
+                    try:
+                        import yaml
+                        from rune_bench.common.config import _find_config_file, _PROJECT_CANDIDATES
+                        cfg_file = _find_config_file(_PROJECT_CANDIDATES) or Path("rune.yaml")
+                        data = {}
+                        if cfg_file.exists():
+                            with open(cfg_file, "r") as fh:
+                                data = yaml.safe_load(fh) or {}
+                        
+                        profile_name = payload.get("name")
+                        if not profile_name:
+                            raise ValueError("Profile name required")
+                        
+                        profiles = data.setdefault("profiles", {})
+                        profiles[profile_name] = payload.get("config", {})
+                        
+                        with open(cfg_file, "w") as fh:
+                            yaml.dump(data, fh, sort_keys=False)
+                            
+                        self._write_json(200, {"status": "ok"})
+                    except Exception as exc:
+                        self._write_json(400, {"error": str(exc)})
+                    return
+
+                if path.startswith("/v1/jobs/") or path.startswith("/v1/runs/"):
+                    job_id = path.replace("/v1/runs/", "").replace("/v1/jobs/", "").strip()
+                    if job_id.endswith("/interaction"):
+                        raw_job_id = job_id.removesuffix("/interaction").strip()
+                        from rune_bench.interactive import session_manager
+                        try:
+                            session_manager.provide_input(raw_job_id, payload)
+                            self._write_json(200, {"status": "ok"})
+                        except ValueError as e:
+                            self._write_json(400, {"error": str(e)})
+                        return
 
                 endpoint_to_kind = {
                     "/v1/jobs/agentic-agent": "agentic-agent",

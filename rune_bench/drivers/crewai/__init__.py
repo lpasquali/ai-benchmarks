@@ -94,6 +94,8 @@ class CrewAIDriverClient:
             result_type=result.get("result_type", "text"),
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
+            token_usage=result.get("token_usage"),
+            telemetry=result.get("telemetry"),
         )
 
     async def ask_async(
@@ -138,6 +140,8 @@ class CrewAIDriverClient:
             result_type=result.get("result_type", "text"),
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
+            token_usage=result.get("token_usage"),
+            telemetry=result.get("telemetry"),
         )
 
 

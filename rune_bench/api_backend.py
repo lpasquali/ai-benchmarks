@@ -163,11 +163,18 @@ def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
     except (FileNotFoundError, RuntimeError) as exc:
         raise RuntimeError(f"Agent error: {exc}") from exc
 
+    from dataclasses import asdict
+    
+    token_usage = getattr(result, "token_usage", None)
+    telemetry = getattr(result, "telemetry", None)
+
     return {
         "answer": result.answer,
         "result_type": result.result_type,
         "artifacts": result.artifacts,
         "metadata": result.metadata,
+        "token_usage": asdict(token_usage) if token_usage else None,
+        "telemetry": asdict(telemetry) if telemetry else None,
     }
 
 
@@ -184,6 +191,9 @@ def _verify_attestation(target: str) -> None:
 
 
 def run_benchmark(request: RunBenchmarkRequest) -> dict:
+    import time
+    start_time = time.monotonic()
+
     if request.attestation_required:
         _verify_attestation(request.kubeconfig)
 
@@ -208,11 +218,46 @@ def run_benchmark(request: RunBenchmarkRequest) -> dict:
     finally:
         provider.teardown(result)
 
+    end_time = time.monotonic()
+    duration_ms = (end_time - start_time) * 1000
+
+    from rune_bench.common.costs import CostEstimator, FailClosedError
+    from rune_bench.api_contracts import CostEstimationRequest
+    import asyncio
+
+    cost_req = CostEstimationRequest(
+        vastai=request.vastai,
+        min_dph=request.min_dph,
+        max_dph=request.max_dph,
+        model=request.model,
+        estimated_duration_seconds=int(end_time - start_time)
+    )
+    estimator = CostEstimator()
+    try:
+        cost_resp = asyncio.run(estimator.estimate(cost_req))
+        projected_cost_usd = cost_resp.projected_cost_usd
+    except FailClosedError:
+        projected_cost_usd = None
+
+    from dataclasses import asdict
+    from rune_bench.agents.base import Telemetry
+
+    token_usage = getattr(agent_result, "token_usage", None)
+    telemetry = getattr(agent_result, "telemetry", None)
+
+    if telemetry is None:
+        telemetry = Telemetry()
+
+    telemetry.duration_ms = duration_ms
+    telemetry.cost_usd = projected_cost_usd
+
     return {
         "answer": agent_result.answer,
         "result_type": agent_result.result_type,
         "artifacts": agent_result.artifacts,
         "metadata": agent_result.metadata,
+        "token_usage": asdict(token_usage) if token_usage else None,
+        "telemetry": asdict(telemetry),
         "model_name": effective_model,
         "backend_url": result.backend_url,
         "contract_id": result.provider_handle,

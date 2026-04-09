@@ -94,6 +94,8 @@ class HolmesDriverClient:
             result_type=result.get("result_type", "text"),
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
+            token_usage=result.get("token_usage"),
+            telemetry=result.get("telemetry"),
         )
 
 
@@ -140,6 +142,8 @@ class HolmesDriverClient:
             result_type=result.get("result_type", "text"),
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
+            token_usage=result.get("token_usage"),
+            telemetry=result.get("telemetry"),
         )
 
     def _fetch_model_limits(

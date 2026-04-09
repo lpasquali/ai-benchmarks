@@ -17,6 +17,20 @@ class AgentConfig:
 
 
 @dataclass
+class TokenUsage:
+    """Granular token tracking for LLM interactions."""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+@dataclass
+class Telemetry:
+    """Execution telemetry for latency and cost tracking."""
+    duration_ms: float = 0.0
+    time_to_first_token_ms: float | None = None
+    cost_usd: float | None = None
+
+@dataclass
 class AgentResult:
     """Structured result from any agent.
 
@@ -30,6 +44,14 @@ class AgentResult:
     artifacts: list[dict] | None = None
     metadata: dict | None = None
     error: str | None = None
+    token_usage: TokenUsage | None = None
+    telemetry: Telemetry | None = None
+
+    def __post_init__(self):
+        if isinstance(self.token_usage, dict):
+            self.token_usage = TokenUsage(**self.token_usage)
+        if isinstance(self.telemetry, dict):
+            self.telemetry = Telemetry(**self.telemetry)
 
 
 @runtime_checkable

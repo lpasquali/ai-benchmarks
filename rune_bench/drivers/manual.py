@@ -18,6 +18,23 @@ class ManualDriverTransport:
         self._console = console or Console()
 
     def call(self, action: str, params: dict) -> dict:
+        from rune_bench.metrics import _tls
+        from rune_bench.interactive import session_manager
+        import sys
+        
+        job_id = getattr(_tls, "job_id", None)
+        
+        # If running in a background job (not an interactive TTY) or API mode, yield to session manager
+        if job_id and not sys.stdout.isatty():
+            prompt_data = {
+                "action": action,
+                "params": params,
+                "message": "Please perform this action manually and provide the result JSON."
+            }
+            debug_log(f"ManualDriverTransport suspending for API interaction on job_id {job_id}")
+            result = session_manager.request_input(job_id, prompt_data)
+            return result
+
         self._console.print(Panel(
             f"[bold yellow]MANUAL ACTION REQUIRED[/bold yellow]\n\n"
             f"[bold]Action:[/bold] {action}\n"
