@@ -48,9 +48,17 @@ def test_api_server_new_routes(tmp_path, monkeypatch):
     h = run_handler(app, "/v1/settings", "PUT", b'{"test": 1}')
     assert h.code in (200, 400)
     
+    # PUT error path (invalid JSON)
+    h = run_handler(app, "/v1/settings", "PUT", b'{"test":')
+    assert h.code == 400
+
     h = run_handler(app, "/v1/settings/profiles", "POST", b'{"name": "test", "config": {}}')
     assert h.code in (200, 400)
     
+    # Missing profile name
+    h = run_handler(app, "/v1/settings/profiles", "POST", b'{"config": {}}')
+    assert h.code == 400
+
     # Interaction GET missing
     h = run_handler(app, "/v1/runs/test_job/interaction")
     assert h.code == 404
@@ -59,8 +67,6 @@ def test_api_server_new_routes(tmp_path, monkeypatch):
     from rune_bench.interactive import session_manager
     session_manager.pending_prompts["test_job"] = {"a": 1}
     h = run_handler(app, "/v1/runs/test_job/interaction")
-    if h.code != 200:
-        print("ERROR PAYLOAD:", h.wfile.write.call_args)
     assert h.code == 200
     
     # Interaction POST valid
@@ -71,17 +77,36 @@ def test_api_server_new_routes(tmp_path, monkeypatch):
     h = run_handler(app, "/v1/runs/missing/interaction", "POST", b'{"ans": 2}')
     assert h.code == 400
     
-    # Trace logic (minimal test so it doesn't block)
-    store.create_job(tenant_id="t1", kind="benchmark", request_payload={"a": 1}, idempotency_key="job1")
-    store.update_job("job1", status="completed")
+    # Trace logic (loop fully executed)
+    job_id, _ = store.create_job(tenant_id="t1", kind="benchmark", request_payload={"a": 1}, idempotency_key="job1")
+    store.update_job(job_id, status="completed")
     
-    # Mock time.sleep to throw Exception to break the while True loop instantly if it didn't break
+    # We don't want an exception here, we want it to gracefully break when job is completed
     import time
-    def _sleep(*args): raise RuntimeError("stop loop")
+    def _sleep(*args): pass
     monkeypatch.setattr(time, "sleep", _sleep)
     
-    h = run_handler(app, "/v1/runs/job1/trace")
+    h = run_handler(app, f"/v1/runs/{job_id}/trace")
     assert h.code == 200
     
+    # Force DB error inside the loop
+    def _bad_connect(): raise RuntimeError("db error")
+    monkeypatch.setattr(store, "_connect", _bad_connect)
+    h = run_handler(app, f"/v1/runs/{job_id}/trace")
+    assert h.code == 200
+    
+    # Trace missing job
     h = run_handler(app, "/v1/runs/missing_job/trace")
     assert h.code == 200
+    
+    # POST interaction on invalid JSON
+    h = run_handler(app, "/v1/runs/job1/interaction", "POST", b'{invalid')
+    assert h.code == 400
+
+    # POST to missing endpoint
+    h = run_handler(app, "/v1/fake", "POST", b'{}')
+    assert h.code == 404
+
+    # PUT to missing endpoint
+    h = run_handler(app, "/v1/fake", "PUT", b'{}')
+    assert h.code == 404
