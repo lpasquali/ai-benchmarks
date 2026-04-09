@@ -258,6 +258,69 @@ class RuneApiApplication:
                     self._write_json(200, {"run_id": run_id, **state})
                     return
 
+                if path.startswith("/v1/audits/") and "/artifacts" in path:
+                    # Two shapes:
+                    #   /v1/audits/{run_id}/artifacts            → list metadata
+                    #   /v1/audits/{run_id}/artifacts/{aid}      → stream bytes
+                    rest = path.removeprefix("/v1/audits/")
+                    if "/artifacts" not in rest:
+                        self._write_json(404, {"error": f"unknown path: {path}"})
+                        return
+                    run_id, _, tail = rest.partition("/artifacts")
+                    run_id = run_id.strip()
+                    if not run_id:
+                        self._write_json(400, {"error": "missing run_id in /v1/audits/{run_id}/artifacts"})
+                        return
+                    job = app.store.get_job(run_id, tenant_id=tenant_id)
+                    if job is None:
+                        self._write_json(404, {"error": f"audit run not found: {run_id}"})
+                        return
+
+                    if tail in ("", "/"):
+                        # List metadata
+                        artifacts = app.store.list_audit_artifacts(run_id)
+                        for a in artifacts:
+                            a["download_url"] = (
+                                f"/v1/audits/{run_id}/artifacts/{a['artifact_id']}"
+                            )
+                        kinds_present = sorted({a["kind"] for a in artifacts})
+                        self._write_json(
+                            200,
+                            {
+                                "run_id": run_id,
+                                "artifacts": artifacts,
+                                "summary": {
+                                    "total_count": len(artifacts),
+                                    "kinds_present": kinds_present,
+                                },
+                            },
+                        )
+                        return
+
+                    # tail is "/<artifact_id>"
+                    artifact_id = tail.lstrip("/").strip()
+                    if not artifact_id:
+                        self._write_json(400, {"error": "missing artifact_id"})
+                        return
+                    record = app.store.get_audit_artifact(
+                        job_id=run_id, artifact_id=artifact_id
+                    )
+                    if record is None:
+                        self._write_json(404, {"error": f"artifact not found: {artifact_id}"})
+                        return
+                    content, name, kind = record
+                    content_type = _audit_artifact_content_type(kind)
+                    self.send_response(200)
+                    self.send_header("Content-Type", content_type)
+                    self.send_header("Content-Length", str(len(content)))
+                    self.send_header(
+                        "Content-Disposition",
+                        f'attachment; filename="{name}"',
+                    )
+                    self.end_headers()
+                    self.wfile.write(content)
+                    return
+
                 self._write_json(404, {"error": f"unknown path: {path}"})
 
             def do_POST(self) -> None:
@@ -357,6 +420,21 @@ class RuneApiApplication:
             server.serve_forever()
         finally:
             server.server_close()
+
+
+_AUDIT_ARTIFACT_CONTENT_TYPES: dict[str, str] = {
+    "slsa_provenance": "application/json",
+    "sbom": "application/json",
+    "tla_report": "text/plain; charset=utf-8",
+    "rekor_entry": "application/json",
+    "sigstore_bundle": "application/octet-stream",
+    "tpm_attestation": "application/octet-stream",
+}
+
+
+def _audit_artifact_content_type(kind: str) -> str:
+    """Map an audit artifact kind to its HTTP Content-Type for download responses."""
+    return _AUDIT_ARTIFACT_CONTENT_TYPES.get(kind, "application/octet-stream")
 
 
 def _job_to_payload(job: JobRecord) -> dict:
