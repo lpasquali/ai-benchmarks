@@ -317,3 +317,83 @@ def run_preflight_cost_check(
 def _extract_ollama_service_url(details: ConnectionDetails) -> str | None:
     """Backward-compatible alias for :meth:`OllamaBackend.extract_service_url`."""
     return OllamaBackend.extract_service_url(details)
+
+
+# ── Multi-agent chain orchestration ───────────────────────────────────────────
+
+
+class JobStoreChainRecorder:
+    """Adapter that lets ``ChainExecutionEngine`` write its DAG state to a ``JobStore``.
+
+    The engine emits ``initialize`` once and one ``transition`` per node state
+    change (running / success / failed). This adapter forwards each call to the
+    matching JobStore method, so a dashboard polling
+    ``GET /v1/chains/{run_id}/state`` can render the live DAG.
+    """
+
+    def __init__(self, store: "JobStore") -> None:  # noqa: F821 — forward ref
+        self._store = store
+
+    def initialize(self, *, job_id: str, nodes: list[dict], edges: list[dict]) -> None:
+        self._store.record_chain_initialized(job_id=job_id, nodes=nodes, edges=edges)
+
+    def transition(
+        self,
+        *,
+        job_id: str,
+        node_id: str,
+        status: str,
+        started_at: float | None = None,
+        finished_at: float | None = None,
+        error: str | None = None,
+    ) -> None:
+        self._store.record_chain_node_transition(
+            job_id=job_id,
+            node_id=node_id,
+            status=status,
+            started_at=started_at,
+            finished_at=finished_at,
+            error=error,
+        )
+
+
+async def run_chain_workflow(
+    *,
+    steps: "list[ChainStep]",  # noqa: F821 — forward ref
+    initial_context: dict[str, object],
+    model: str,
+    job_id: str,
+    store: "JobStore",  # noqa: F821 — forward ref
+    backend_url: str | None = None,
+) -> "ChainResult":  # noqa: F821 — forward ref
+    """Run a multi-agent chain and persist its live DAG state to ``store``.
+
+    This is the production entry point for executing a ``ChainExecutionEngine``.
+    A ``JobStoreChainRecorder`` is wired into the engine so every step
+    transition is durably recorded against ``job_id`` and made available via
+    ``GET /v1/chains/{job_id}/state``.
+
+    Parameters
+    ----------
+    steps:
+        Ordered list of ``ChainStep`` instances forming a DAG.
+    initial_context:
+        Variables made available to the first step's question template.
+    model:
+        Model name passed to each agent's ``ask_async``.
+    job_id:
+        The job/run identifier under which chain state is persisted. The same
+        id is used by ``GET /v1/chains/{job_id}/state`` so the dashboard can
+        correlate the run with its DAG view.
+    store:
+        ``JobStore`` instance that will receive ``initialize`` and per-node
+        ``transition`` calls via ``JobStoreChainRecorder``.
+    backend_url:
+        Optional backend URL forwarded to each agent.
+    """
+    # Local imports to avoid hard import cycles at module load time.
+    from rune_bench.agents.chain import ChainExecutionEngine
+
+    recorder = JobStoreChainRecorder(store)
+    engine = ChainExecutionEngine(steps, recorder=recorder, job_id=job_id)
+    return await engine.execute(initial_context, model=model, backend_url=backend_url)
