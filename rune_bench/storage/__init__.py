@@ -12,10 +12,12 @@ from __future__ import annotations
 from urllib.parse import urlparse
 
 from rune_bench.storage.base import StoragePort
+from rune_bench.storage.migrator import Migrator
 from rune_bench.storage.sqlite import JobRecord, SQLiteStorageAdapter
 
 __all__ = [
     "JobRecord",
+    "Migrator",
     "SQLiteStorageAdapter",
     "StoragePort",
     "make_storage",
