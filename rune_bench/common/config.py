@@ -281,3 +281,83 @@ def get_loaded_config_files() -> list[Path]:
     if f := _find_config_file(_PROJECT_CANDIDATES):
         files.append(f)
     return files
+
+
+def get_raw_config() -> dict[str, Any]:
+    """Return the raw merged configuration from all files without env injection."""
+    global_file = _find_config_file(_GLOBAL_CANDIDATES)
+    project_file = _find_config_file(_PROJECT_CANDIDATES)
+
+    raw: dict[str, Any] = {}
+    if global_file:
+        raw = _merge(raw, _parse_yaml(global_file))
+    if project_file:
+        raw = _merge(raw, _parse_yaml(project_file))
+    return raw
+
+
+def save_config(data: dict[str, Any], global_config: bool = False) -> Path:
+    """Save the configuration dict back to the preferred YAML file.
+
+    Args:
+        data: The configuration dictionary to save.
+        global_config: If True, save to ~/.rune/config.yaml. If False,
+                      prefer project-level rune.yaml.
+
+    Returns:
+        The Path to the saved file.
+    """
+    if global_config:
+        path = _find_config_file(_GLOBAL_CANDIDATES) or _GLOBAL_CANDIDATES[0]
+    else:
+        path = _find_config_file(_PROJECT_CANDIDATES) or _PROJECT_CANDIDATES[0]
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w") as fh:
+        yaml.safe_dump(data, fh, sort_keys=False, default_flow_style=False)
+    return path
+
+
+def update_settings(updates: dict[str, Any], profile: str | None = None) -> Path:
+    """Update specific settings in the configuration and save to disk.
+
+    Args:
+        updates: Key-value pairs of settings to update.
+        profile: Profile name to update. If None, updates 'defaults'.
+
+    Returns:
+        The Path to the saved file.
+    """
+    raw = get_raw_config()
+    section = "profiles" if profile else "defaults"
+    
+    if section not in raw:
+        raw[section] = {}
+    
+    if profile:
+        if profile not in raw["profiles"]:
+            raw["profiles"][profile] = {}
+        raw["profiles"][profile] = _merge(raw["profiles"][profile], updates)
+    else:
+        raw["defaults"] = _merge(raw.get("defaults") or {}, updates)
+
+    # Determine which file to write to. If a project file exists, update it.
+    # Otherwise, if a global file exists, update it.
+    project_file = _find_config_file(_PROJECT_CANDIDATES)
+    global_config = project_file is None and _find_config_file(_GLOBAL_CANDIDATES) is not None
+    
+    return save_config(raw, global_config=global_config)
+
+
+def create_profile(name: str, settings: dict[str, Any]) -> Path:
+    """Create a new profile with the given settings and save to disk."""
+    raw = get_raw_config()
+    if "profiles" not in raw:
+        raw["profiles"] = {}
+    
+    raw["profiles"][name] = settings
+    
+    project_file = _find_config_file(_PROJECT_CANDIDATES)
+    global_config = project_file is None and _find_config_file(_GLOBAL_CANDIDATES) is not None
+    
+    return save_config(raw, global_config=global_config)

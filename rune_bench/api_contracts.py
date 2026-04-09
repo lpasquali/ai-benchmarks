@@ -209,3 +209,38 @@ class AuditArtifactsResponse:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class SettingsResponse:
+    """Current RUNE configuration including defaults and all profiles."""
+
+    defaults: dict
+    profiles: dict[str, dict]
+    active_profile: str | None
+    effective_config: dict
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class UpdateSettingsRequest:
+    """Request to update RUNE configuration settings."""
+
+    settings: dict
+    profile: str | None = None  # None means update the 'defaults' section
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class CreateProfileRequest:
+    """Request to create a new configuration profile."""
+
+    name: str
+    settings: dict
+
+    def to_dict(self) -> dict:
+        return asdict(self)
