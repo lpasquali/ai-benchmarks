@@ -97,6 +97,120 @@ class TestChainExecutionEngine:
         assert step.name == "s"
         assert step.dependencies == []
 
+    # ── Recorder integration ────────────────────────────────────────────
+
+    def test_engine_without_recorder_does_not_raise(self) -> None:
+        """Existing call sites that pass no recorder must continue to work."""
+        from rune_bench.agents.chain import ChainExecutionEngine, ChainStep
+
+        agent = MagicMock()
+        agent.ask_async = AsyncMock(return_value=AgentResult(answer="ok"))
+        engine = ChainExecutionEngine(
+            [ChainStep(name="a", agent=agent, question_template="{topic}")],
+        )
+        # No recorder, no job_id → no exceptions
+        result = asyncio.run(engine.execute({"topic": "x"}, model="m"))
+        assert result.steps["a"].answer == "ok"
+
+    def test_engine_with_recorder_emits_initialize_and_transitions(self) -> None:
+        from rune_bench.agents.chain import ChainExecutionEngine, ChainStep
+
+        agent = MagicMock()
+        agent.ask_async = AsyncMock(return_value=AgentResult(answer="ok"))
+
+        recorder = MagicMock()
+        engine = ChainExecutionEngine(
+            [ChainStep(name="step1", agent=agent, question_template="{topic}")],
+            recorder=recorder,
+            job_id="job-42",
+        )
+
+        asyncio.run(engine.execute({"topic": "x"}, model="m"))
+
+        # initialize called once with the full DAG shell
+        recorder.initialize.assert_called_once()
+        init_kwargs = recorder.initialize.call_args.kwargs
+        assert init_kwargs["job_id"] == "job-42"
+        assert [n["id"] for n in init_kwargs["nodes"]] == ["step1"]
+        assert init_kwargs["edges"] == []
+        assert all(n["status"] == "pending" for n in init_kwargs["nodes"])
+
+        # transition called with running then success for the step
+        statuses = [c.kwargs["status"] for c in recorder.transition.call_args_list]
+        assert statuses == ["running", "success"]
+        for call in recorder.transition.call_args_list:
+            assert call.kwargs["job_id"] == "job-42"
+            assert call.kwargs["node_id"] == "step1"
+
+    def test_engine_recorder_records_dependency_edges(self) -> None:
+        from rune_bench.agents.chain import ChainExecutionEngine, ChainStep
+
+        agent = MagicMock()
+        agent.ask_async = AsyncMock(return_value=AgentResult(answer="ok"))
+        recorder = MagicMock()
+
+        steps = [
+            ChainStep(name="a", agent=agent, question_template="{topic}"),
+            ChainStep(name="b", agent=agent, question_template="{a}", dependencies=["a"]),
+        ]
+        engine = ChainExecutionEngine(steps, recorder=recorder, job_id="job-1")
+        asyncio.run(engine.execute({"topic": "x"}, model="m"))
+
+        edges = recorder.initialize.call_args.kwargs["edges"]
+        assert edges == [{"from": "a", "to": "b"}]
+
+    def test_engine_recorder_records_failure(self) -> None:
+        from rune_bench.agents.chain import ChainExecutionEngine, ChainStep
+
+        agent = MagicMock()
+        agent.ask_async = AsyncMock(side_effect=RuntimeError("boom"))
+        recorder = MagicMock()
+        engine = ChainExecutionEngine(
+            [ChainStep(name="a", agent=agent, question_template="{topic}")],
+            recorder=recorder,
+            job_id="job-1",
+        )
+        with pytest.raises(RuntimeError, match="boom"):
+            asyncio.run(engine.execute({"topic": "x"}, model="m"))
+
+        statuses = [c.kwargs["status"] for c in recorder.transition.call_args_list]
+        assert "failed" in statuses
+        failed_call = next(c for c in recorder.transition.call_args_list if c.kwargs["status"] == "failed")
+        assert failed_call.kwargs["error"] == "boom"
+
+    def test_engine_recorder_records_template_failure(self) -> None:
+        from rune_bench.agents.chain import ChainExecutionEngine, ChainStep
+
+        agent = MagicMock()
+        agent.ask_async = AsyncMock(return_value=AgentResult(answer="ok"))
+        recorder = MagicMock()
+        engine = ChainExecutionEngine(
+            [ChainStep(name="a", agent=agent, question_template="{missing}")],
+            recorder=recorder,
+            job_id="job-1",
+        )
+        with pytest.raises(RuntimeError, match="template missing context"):
+            asyncio.run(engine.execute({}, model="m"))
+
+        statuses = [c.kwargs["status"] for c in recorder.transition.call_args_list]
+        assert statuses == ["failed"]
+
+    def test_engine_with_recorder_but_no_job_id_skips_calls(self) -> None:
+        """Defensive: if job_id is None the recorder is silently ignored."""
+        from rune_bench.agents.chain import ChainExecutionEngine, ChainStep
+
+        agent = MagicMock()
+        agent.ask_async = AsyncMock(return_value=AgentResult(answer="ok"))
+        recorder = MagicMock()
+        engine = ChainExecutionEngine(
+            [ChainStep(name="a", agent=agent, question_template="{topic}")],
+            recorder=recorder,
+            job_id=None,
+        )
+        asyncio.run(engine.execute({"topic": "x"}, model="m"))
+        recorder.initialize.assert_not_called()
+        recorder.transition.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # ManualDriverTransport

@@ -232,6 +232,32 @@ class RuneApiApplication:
                     self._write_json(200, _job_to_payload(job))
                     return
 
+                if path.startswith("/v1/chains/") and path.endswith("/state"):
+                    run_id = path.removeprefix("/v1/chains/").removesuffix("/state").strip()
+                    if not run_id:
+                        self._write_json(400, {"error": "missing run_id in /v1/chains/{run_id}/state"})
+                        return
+                    job = app.store.get_job(run_id, tenant_id=tenant_id)
+                    if job is None:
+                        self._write_json(404, {"error": f"chain run not found: {run_id}"})
+                        return
+                    state = app.store.get_chain_state(run_id)
+                    if state is None:
+                        # Job exists but chain state hasn't been initialized yet — return an
+                        # empty shell so the dashboard can render a placeholder.
+                        self._write_json(
+                            200,
+                            {
+                                "run_id": run_id,
+                                "nodes": [],
+                                "edges": [],
+                                "overall_status": "pending",
+                            },
+                        )
+                        return
+                    self._write_json(200, {"run_id": run_id, **state})
+                    return
+
                 self._write_json(404, {"error": f"unknown path: {path}"})
 
             def do_POST(self) -> None:

@@ -155,3 +155,21 @@ class CostEstimationResponse:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class ChainStateResponse:
+    """State of a multi-agent chain (DAG) execution, suitable for dashboard rendering.
+
+    `nodes` items: {id, agent_name, status, started_at, finished_at, error}
+    `edges` items: {from, to}
+    `overall_status` ∈ {pending, running, success, failed, skipped}
+    """
+
+    run_id: str
+    nodes: list[dict]
+    edges: list[dict]
+    overall_status: str
+
+    def to_dict(self) -> dict:
+        return asdict(self)
