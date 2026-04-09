@@ -101,6 +101,23 @@ class JobStore:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS audit_artifact (
+                    artifact_id TEXT PRIMARY KEY,
+                    job_id TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    size_bytes INTEGER NOT NULL,
+                    sha256 TEXT NOT NULL,
+                    content BLOB NOT NULL,
+                    created_at REAL NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_audit_artifact_job_id ON audit_artifact(job_id)"
+            )
 
     # ── Chain state ────────────────────────────────────────────────────────
     #
@@ -230,6 +247,109 @@ class JobStore:
                 "edges": state["edges"],
                 "overall_status": row["overall_status"],
             }
+
+    # ── Audit artifacts ────────────────────────────────────────────────────
+    #
+    # Persists compliance evidence (SLSA provenance, SBOM, TLA+ verification,
+    # Sigstore bundle, Rekor entry, TPM attestation) collected against a
+    # benchmark run, keyed by ``(job_id, artifact_id)``. Bytes are stored as
+    # SQLite BLOBs because the typical artifact is small (KB to low-MB) and
+    # we want list+download to be transactional and self-contained. A future
+    # migration can move BLOBs out to filesystem/S3 if needed.
+
+    _AUDIT_ARTIFACT_KINDS = frozenset(
+        {
+            "slsa_provenance",
+            "sbom",
+            "tla_report",
+            "sigstore_bundle",
+            "rekor_entry",
+            "tpm_attestation",
+        }
+    )
+
+    def record_audit_artifact(
+        self,
+        *,
+        job_id: str,
+        kind: str,
+        name: str,
+        content: bytes,
+    ) -> str:
+        """Insert a new audit artifact and return its generated artifact_id.
+
+        Raises ``ValueError`` if ``kind`` is not in the allowed set.
+        """
+        if kind not in self._AUDIT_ARTIFACT_KINDS:
+            raise ValueError(
+                f"unknown audit artifact kind {kind!r}; expected one of "
+                f"{sorted(self._AUDIT_ARTIFACT_KINDS)}"
+            )
+        import hashlib
+
+        artifact_id = str(uuid.uuid4())
+        sha256 = hashlib.sha256(content).hexdigest()
+        size_bytes = len(content)
+        now = time.time()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO audit_artifact(
+                    artifact_id, job_id, kind, name, size_bytes, sha256, content, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (artifact_id, job_id, kind, name, size_bytes, sha256, content, now),
+            )
+        return artifact_id
+
+    def list_audit_artifacts(self, job_id: str) -> list[dict]:
+        """Return metadata for all artifacts of a job (no bytes), oldest first."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT artifact_id, kind, name, size_bytes, sha256, created_at
+                FROM audit_artifact
+                WHERE job_id = ?
+                ORDER BY created_at ASC, artifact_id ASC
+                """,
+                (job_id,),
+            ).fetchall()
+        return [
+            {
+                "artifact_id": row["artifact_id"],
+                "kind": row["kind"],
+                "name": row["name"],
+                "size_bytes": row["size_bytes"],
+                "sha256": row["sha256"],
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ]
+
+    def get_audit_artifact(
+        self,
+        *,
+        job_id: str,
+        artifact_id: str,
+    ) -> tuple[bytes, str, str] | None:
+        """Return ``(content_bytes, name, kind)`` for one artifact, or ``None`` if missing.
+
+        The ``job_id`` is required (and matched in the WHERE clause) so callers
+        cannot fetch an artifact that doesn't belong to the job they're querying
+        — this is the building block the API endpoint uses for tenant scoping.
+        """
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT content, name, kind
+                FROM audit_artifact
+                WHERE job_id = ? AND artifact_id = ?
+                """,
+                (job_id, artifact_id),
+            ).fetchone()
+        if row is None:
+            return None
+        return bytes(row["content"]), row["name"], row["kind"]
 
     def mark_incomplete_jobs_failed(self, message: str = "server restarted before job completion") -> None:
         now = time.time()
