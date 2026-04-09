@@ -77,7 +77,11 @@ Issues = "https://github.com/lpasquali/rune/issues"
 include = ["rune*", "rune_bench*"]
 
 [tool.setuptools.package-data]
-"rune_bench" = ["catalog/defaults/*.csv", "catalog/defaults/*.yaml"]
+"rune_bench" = [
+    "catalog/defaults/*.csv",
+    "catalog/defaults/*.yaml",
+    "storage/migrations/*.sql",
+]
 "*" = ["py.typed"]
 
 [tool.mypy]
