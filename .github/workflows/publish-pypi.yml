@@ -96,7 +96,7 @@ jobs:
           echo "Version check passed: $PKG_VERSION"
 
       - name: Install build tools
-        run: pip install --upgrade pip build twine
+        run: pip install --upgrade 'pip>=26.0' build twine
 
       - name: Build sdist and wheel
         run: python -m build
@@ -104,7 +104,7 @@ jobs:
       - name: Verify bare install works (no extras)
         run: |
           python -m venv .venv-bare
-          .venv-bare/bin/pip install --upgrade pip --quiet
+          .venv-bare/bin/pip install --upgrade 'pip>=26.0' --quiet
           .venv-bare/bin/pip install dist/*.whl --quiet
           .venv-bare/bin/python -c "from rune import app; print('bare import: OK')"
           .venv-bare/bin/python -m rune --help
