@@ -51,7 +51,7 @@ class InMemoryCollector:
     """Accumulates events in memory; suitable for CLI mode.
 
     After the workflow completes, call :meth:`summary_rows` to get
-    per-event aggregates for display.
+    per-event aggregate rows for display.
     """
 
     def __init__(self) -> None:

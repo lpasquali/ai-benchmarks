@@ -33,6 +33,7 @@ from rune_bench.api_contracts import (
     RunLLMInstanceRequest,
 )
 from rune_bench.metrics import SQLiteMetricsCollector, clear_collector, set_collector, set_job_id, span
+from rune_bench.metrics.pricing import make_pricing_sooth_sayer
 from rune_bench.storage import StoragePort, make_storage, resolve_storage_url
 from rune_bench.storage.sqlite import JobRecord, SQLiteStorageAdapter
 
@@ -331,6 +332,27 @@ class RuneApiApplication:
                     filter_job_id = query.get("job_id", [None])[0]
                     summary = app.store.get_events_summary(job_id=filter_job_id)
                     self._write_json(200, {"events": summary})
+                    return
+
+                if path == "/v1/finops/simulate":
+                    query = parse_qs(parsed.query)
+                    agent = (query.get("agent", [""])[0] or "").strip()
+                    suite = (query.get("suite", [""])[0] or "").strip()
+                    gpu = (query.get("gpu", [""])[0] or "").strip()
+                    model = (query.get("model", [""])[0] or "").strip()
+                    try:
+                        sooth = make_pricing_sooth_sayer(app.store)
+                        payload = sooth.simulate(
+                            tenant_id=tenant_id,
+                            agent=agent,
+                            suite=suite,
+                            gpu=gpu,
+                            model=model,
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        self._write_json(500, {"error": f"finops simulation failed: {exc}"})
+                        return
+                    self._write_json(200, payload)
                     return
 
                 if path.startswith("/v1/jobs/"):
