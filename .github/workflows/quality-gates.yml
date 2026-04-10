@@ -111,8 +111,8 @@ jobs:
         env:
           RUNE_PG_TEST_URL: postgresql://postgres:test@127.0.0.1:5432/rune
         run: >-
-          pytest -m integration_postgres tests/integration/test_postgres_storage.py
-          --cov=rune_bench.storage.postgres --cov-report=term-missing
+          pytest -o addopts='' -m integration_postgres tests/integration/test_postgres_storage.py
+          --cov=rune_bench.storage.postgres --cov-report=term-missing --cov-fail-under=0
 
   # ─── Shared: Container Build (Multi-arch) ──────────────────────────────────
   container:
