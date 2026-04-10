@@ -5,7 +5,13 @@ from __future__ import annotations
 
 import pytest
 
-from rune_bench.storage import StoragePort, SQLiteStorageAdapter, make_storage
+import rune_bench.storage as storage_module
+from rune_bench.storage import (
+    StoragePort,
+    SQLiteStorageAdapter,
+    make_storage,
+    resolve_storage_url,
+)
 
 
 def test_make_storage_sqlite_memory() -> None:
@@ -60,10 +66,33 @@ def test_make_storage_sqlite_plus_pysqlite_alias(tmp_path) -> None:
     assert db_file.exists()
 
 
+def test_make_storage_sqlite_relative_dot_path(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    store = make_storage("sqlite:///./nested/jobs.db")
+
+    assert isinstance(store, SQLiteStorageAdapter)
+    store.create_job(tenant_id="t", kind="benchmark", request_payload={})
+    assert (tmp_path / "nested" / "jobs.db").exists()
+
+
+def test_make_storage_postgresql_uses_postgres_adapter(monkeypatch) -> None:
+    captured: dict[str, str] = {}
+
+    class FakePostgresAdapter:
+        def __init__(self, url: str) -> None:
+            captured["url"] = url
+
+    monkeypatch.setattr(storage_module, "PostgresStorageAdapter", FakePostgresAdapter)
+
+    store = make_storage("postgresql://user:pass@localhost:5432/rune")
+
+    assert isinstance(store, FakePostgresAdapter)
+    assert captured["url"] == "postgresql://user:pass@localhost:5432/rune"
+
+
 @pytest.mark.parametrize(
     "url",
     [
-        "postgresql://user:pass@localhost/db",
         "redis://localhost:6379/0",
         "mysql://localhost/db",
         "http://example.com/db",
@@ -76,6 +105,28 @@ def test_make_storage_unknown_scheme_raises(url: str) -> None:
     message = str(exc_info.value)
     assert "unsupported storage URL scheme" in message
     assert "sqlite://" in message  # lists supported schemes
+
+
+def test_resolve_storage_url_prefers_explicit_url(monkeypatch) -> None:
+    monkeypatch.setenv("RUNE_DB_URL", "postgresql://env")
+    monkeypatch.setenv("RUNE_API_DB_PATH", ".rune-api/jobs.db")
+
+    resolved = resolve_storage_url("postgresql://explicit", legacy_db_path="legacy.db")
+
+    assert resolved == "postgresql://explicit"
+
+
+def test_resolve_storage_url_legacy_memory_path() -> None:
+    assert resolve_storage_url(None, legacy_db_path=":memory:") == "sqlite:///:memory:"
+
+
+def test_resolve_storage_url_legacy_relative_path(monkeypatch) -> None:
+    monkeypatch.delenv("RUNE_DB_URL", raising=False)
+    monkeypatch.setenv("RUNE_API_DB_PATH", ".rune-api/jobs.db")
+
+    resolved = resolve_storage_url()
+
+    assert resolved == "sqlite:///./.rune-api/jobs.db"
 
 
 def test_storage_port_protocol_matches_sqlite_adapter(tmp_path) -> None:

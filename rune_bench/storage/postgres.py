@@ -1,101 +1,82 @@
 # SPDX-License-Identifier: Apache-2.0
-"""SQLite-backed implementation of :class:`rune_bench.storage.StoragePort`."""
+"""PostgreSQL-backed implementation of :class:`rune_bench.storage.StoragePort`."""
 
 from __future__ import annotations
 
+import hashlib
 import json
-import sqlite3
+import os
 import time
 import uuid
 from contextlib import contextmanager
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Iterator
+
+from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
+
+from rune_bench.storage.migrator import Migrator
+from rune_bench.storage.sqlite import JobRecord
 
 if TYPE_CHECKING:
     from rune_bench.metrics import MetricsEvent
 
 
-@dataclass(frozen=True)
-class JobRecord:
-    job_id: str
-    tenant_id: str
-    kind: str
-    status: str
-    request_payload: dict
-    result_payload: dict | None
-    error: str | None
-    message: str | None
-    created_at: float
-    updated_at: float
+class PostgresStorageAdapter:
+    _CHAIN_STATUS_PRIORITY = ("failed", "running", "pending", "success", "skipped")
+    _AUDIT_ARTIFACT_KINDS = frozenset(
+        {
+            "slsa_provenance",
+            "sbom",
+            "tla_report",
+            "sigstore_bundle",
+            "rekor_entry",
+            "tpm_attestation",
+        }
+    )
 
-
-class SQLiteStorageAdapter:
-    def __init__(self, db_path: str | Path) -> None:
-        self._db_path = str(db_path)
-        self._memory_uri: str | None = None
-        if self._db_path == ":memory:":
-            # A bare ":memory:" connection is per-connection, so every
-            # ``self._connect()`` call would land on a different empty
-            # database. Use SQLite's shared-cache memory URI with a unique
-            # name so that every connection in this process sees the same
-            # in-memory database, then we pin one connection open for its
-            # lifetime to keep the cache alive.
-            self._memory_uri = (
-                f"file:rune-mem-{uuid.uuid4().hex}?mode=memory&cache=shared"
-            )
-            self._memory_anchor: sqlite3.Connection | None = sqlite3.connect(
-                self._memory_uri, uri=True, timeout=30, check_same_thread=False
-            )
-        else:
-            self._memory_anchor = None
-            Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
+    def __init__(self, db_url: str) -> None:
+        self._db_url = db_url
+        self._pool = ConnectionPool(
+            conninfo=db_url,
+            min_size=self._pool_min_size(),
+            max_size=self._pool_max_size(),
+            open=True,
+            kwargs={"row_factory": dict_row},
+        )
+        self._pool.wait()
         self._initialize()
 
-    def _connect(self) -> sqlite3.Connection:
-        if self._memory_uri is not None:
-            connection = sqlite3.connect(
-                self._memory_uri, uri=True, timeout=30, check_same_thread=False
-            )
-        else:
-            connection = sqlite3.connect(self._db_path, timeout=30, check_same_thread=False)
-        connection.row_factory = sqlite3.Row
-        return connection
+    @staticmethod
+    def _pool_min_size() -> int:
+        value = int(os.environ.get("RUNE_PG_POOL_MIN", "1"))
+        if value < 1:
+            raise RuntimeError("RUNE_PG_POOL_MIN must be >= 1")
+        return value
+
+    @classmethod
+    def _pool_max_size(cls) -> int:
+        value = int(os.environ.get("RUNE_PG_POOL_MAX", "10"))
+        if value < cls._pool_min_size():
+            raise RuntimeError("RUNE_PG_POOL_MAX must be >= RUNE_PG_POOL_MIN")
+        return value
 
     @contextmanager
-    def connection(self) -> Any:
-        """Yield a raw SQLite connection for internal tooling/tests."""
-        with self._connect() as conn:
+    def connection(self) -> Iterator[Any]:
+        with self._pool.connection() as conn:
             yield conn
 
+    def close(self) -> None:
+        self._pool.close()
+
+    def __del__(self) -> None:  # pragma: no cover - best-effort cleanup
+        try:
+            self.close()
+        except Exception:
+            pass
+
     def _initialize(self) -> None:
-        # Schema creation is delegated to the Migrator so the same set of
-        # versioned ``NNNN_*.sql`` files drives every storage backend (today
-        # SQLite; rune#233 adds Postgres). The Migrator is idempotent, so
-        # reopening an existing database is a no-op.
-        from rune_bench.storage.migrator import Migrator
-
-        with self._connect() as conn:
-            conn.execute("PRAGMA journal_mode=WAL")
-            Migrator().apply_pending(conn)
-
-    # ── Chain state ────────────────────────────────────────────────────────
-    #
-    # Persists the live execution state of a multi-agent chain (DAG) keyed by
-    # job_id. The full state is stored as a single JSON blob (one row per job)
-    # to keep node-status updates atomic and avoid per-node row management.
-    #
-    # Schema of state_json:
-    #   {
-    #     "nodes": [
-    #       {"id": "step-name", "agent_name": "...", "status": "pending|running|success|failed|skipped",
-    #        "started_at": <float|null>, "finished_at": <float|null>, "error": <str|null>}
-    #     ],
-    #     "edges": [{"from": "dep-step-name", "to": "step-name"}]
-    #   }
-
-    _CHAIN_STATUS_PRIORITY = ("failed", "running", "pending", "success", "skipped")
+        with self.connection() as conn:
+            Migrator(dialect="postgres").apply_pending(conn)
 
     @classmethod
     def _compute_overall_chain_status(cls, nodes: list[dict]) -> str:
@@ -108,7 +89,6 @@ class SQLiteStorageAdapter:
             return "running"
         if "pending" in statuses:
             return "pending"
-        # all nodes terminal-non-failed: success unless every node was skipped
         if statuses == {"skipped"}:
             return "skipped"
         return "success"
@@ -120,7 +100,6 @@ class SQLiteStorageAdapter:
         nodes: list[dict],
         edges: list[dict],
     ) -> None:
-        """Initialize chain state for a job. Idempotent — overwrites any prior state."""
         normalized_nodes: list[dict] = []
         for node in nodes:
             normalized_nodes.append(
@@ -137,11 +116,11 @@ class SQLiteStorageAdapter:
         state = {"nodes": normalized_nodes, "edges": normalized_edges}
         overall = self._compute_overall_chain_status(normalized_nodes)
         now = time.time()
-        with self._connect() as conn:
+        with self.connection() as conn:
             conn.execute(
                 """
                 INSERT INTO chain_state(job_id, state_json, overall_status, updated_at)
-                VALUES (?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s)
                 ON CONFLICT(job_id) DO UPDATE SET
                     state_json = excluded.state_json,
                     overall_status = excluded.overall_status,
@@ -160,15 +139,14 @@ class SQLiteStorageAdapter:
         finished_at: float | None = None,
         error: str | None = None,
     ) -> None:
-        """Update one node's fields and recompute overall status. Raises if chain not initialized."""
-        with self._connect() as conn:
+        with self.connection() as conn:
             row = conn.execute(
-                "SELECT state_json FROM chain_state WHERE job_id = ?",
+                "SELECT state_json FROM chain_state WHERE job_id = %s",
                 (job_id,),
             ).fetchone()
             if row is None:
                 raise RuntimeError(f"chain state not initialized for job_id={job_id}")
-            state = json.loads(row["state_json"])
+            state = json.loads(str(row["state_json"]))
             for node in state["nodes"]:
                 if node["id"] == node_id:
                     node["status"] = status
@@ -187,47 +165,26 @@ class SQLiteStorageAdapter:
             conn.execute(
                 """
                 UPDATE chain_state
-                SET state_json = ?, overall_status = ?, updated_at = ?
-                WHERE job_id = ?
+                SET state_json = %s, overall_status = %s, updated_at = %s
+                WHERE job_id = %s
                 """,
                 (json.dumps(state), overall, time.time(), job_id),
             )
 
     def get_chain_state(self, job_id: str) -> dict | None:
-        """Return {nodes, edges, overall_status} for the chain, or None if no state recorded."""
-        with self._connect() as conn:
+        with self.connection() as conn:
             row = conn.execute(
-                "SELECT state_json, overall_status FROM chain_state WHERE job_id = ?",
+                "SELECT state_json, overall_status FROM chain_state WHERE job_id = %s",
                 (job_id,),
             ).fetchone()
             if row is None:
                 return None
-            state = json.loads(row["state_json"])
+            state = json.loads(str(row["state_json"]))
             return {
                 "nodes": state["nodes"],
                 "edges": state["edges"],
                 "overall_status": row["overall_status"],
             }
-
-    # ── Audit artifacts ────────────────────────────────────────────────────
-    #
-    # Persists compliance evidence (SLSA provenance, SBOM, TLA+ verification,
-    # Sigstore bundle, Rekor entry, TPM attestation) collected against a
-    # benchmark run, keyed by ``(job_id, artifact_id)``. Bytes are stored as
-    # SQLite BLOBs because the typical artifact is small (KB to low-MB) and
-    # we want list+download to be transactional and self-contained. A future
-    # migration can move BLOBs out to filesystem/S3 if needed.
-
-    _AUDIT_ARTIFACT_KINDS = frozenset(
-        {
-            "slsa_provenance",
-            "sbom",
-            "tla_report",
-            "sigstore_bundle",
-            "rekor_entry",
-            "tpm_attestation",
-        }
-    )
 
     def record_audit_artifact(
         self,
@@ -237,40 +194,33 @@ class SQLiteStorageAdapter:
         name: str,
         content: bytes,
     ) -> str:
-        """Insert a new audit artifact and return its generated artifact_id.
-
-        Raises ``ValueError`` if ``kind`` is not in the allowed set.
-        """
         if kind not in self._AUDIT_ARTIFACT_KINDS:
             raise ValueError(
                 f"unknown audit artifact kind {kind!r}; expected one of "
                 f"{sorted(self._AUDIT_ARTIFACT_KINDS)}"
             )
-        import hashlib
-
         artifact_id = str(uuid.uuid4())
         sha256 = hashlib.sha256(content).hexdigest()
         size_bytes = len(content)
         now = time.time()
-        with self._connect() as conn:
+        with self.connection() as conn:
             conn.execute(
                 """
                 INSERT INTO audit_artifact(
                     artifact_id, job_id, kind, name, size_bytes, sha256, content, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (artifact_id, job_id, kind, name, size_bytes, sha256, content, now),
             )
         return artifact_id
 
     def list_audit_artifacts(self, job_id: str) -> list[dict]:
-        """Return metadata for all artifacts of a job (no bytes), oldest first."""
-        with self._connect() as conn:
+        with self.connection() as conn:
             rows = conn.execute(
                 """
                 SELECT artifact_id, kind, name, size_bytes, sha256, created_at
                 FROM audit_artifact
-                WHERE job_id = ?
+                WHERE job_id = %s
                 ORDER BY created_at ASC, artifact_id ASC
                 """,
                 (job_id,),
@@ -293,18 +243,12 @@ class SQLiteStorageAdapter:
         job_id: str,
         artifact_id: str,
     ) -> tuple[bytes, str, str] | None:
-        """Return ``(content_bytes, name, kind)`` for one artifact, or ``None`` if missing.
-
-        The ``job_id`` is required (and matched in the WHERE clause) so callers
-        cannot fetch an artifact that doesn't belong to the job they're querying
-        — this is the building block the API endpoint uses for tenant scoping.
-        """
-        with self._connect() as conn:
+        with self.connection() as conn:
             row = conn.execute(
                 """
                 SELECT content, name, kind
                 FROM audit_artifact
-                WHERE job_id = ? AND artifact_id = ?
+                WHERE job_id = %s AND artifact_id = %s
                 """,
                 (job_id, artifact_id),
             ).fetchone()
@@ -312,13 +256,15 @@ class SQLiteStorageAdapter:
             return None
         return bytes(row["content"]), row["name"], row["kind"]
 
-    def mark_incomplete_jobs_failed(self, message: str = "server restarted before job completion") -> None:
+    def mark_incomplete_jobs_failed(
+        self, message: str = "server restarted before job completion"
+    ) -> None:
         now = time.time()
-        with self._connect() as conn:
+        with self.connection() as conn:
             conn.execute(
                 """
                 UPDATE jobs
-                SET status = ?, error = ?, message = ?, updated_at = ?
+                SET status = %s, error = %s, message = %s, updated_at = %s
                 WHERE status IN ('queued', 'running')
                 """,
                 ("failed", message, message, now),
@@ -333,13 +279,13 @@ class SQLiteStorageAdapter:
         idempotency_key: str | None = None,
     ) -> tuple[str, bool]:
         now = time.time()
-        with self._connect() as conn:
+        with self.connection() as conn:
             if idempotency_key:
                 existing = conn.execute(
                     """
                     SELECT job_id
                     FROM idempotency_keys
-                    WHERE tenant_id = ? AND operation = ? AND idempotency_key = ?
+                    WHERE tenant_id = %s AND operation = %s AND idempotency_key = %s
                     """,
                     (tenant_id, kind, idempotency_key),
                 ).fetchone()
@@ -349,8 +295,11 @@ class SQLiteStorageAdapter:
             job_id = str(uuid.uuid4())
             conn.execute(
                 """
-                INSERT INTO jobs(job_id, tenant_id, kind, status, request_json, result_json, error, message, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO jobs(
+                    job_id, tenant_id, kind, status, request_json, result_json,
+                    error, message, created_at, updated_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     job_id,
@@ -368,8 +317,10 @@ class SQLiteStorageAdapter:
             if idempotency_key:
                 conn.execute(
                     """
-                    INSERT INTO idempotency_keys(tenant_id, operation, idempotency_key, job_id, created_at)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO idempotency_keys(
+                        tenant_id, operation, idempotency_key, job_id, created_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s)
                     """,
                     (tenant_id, kind, idempotency_key, job_id, now),
                 )
@@ -388,32 +339,36 @@ class SQLiteStorageAdapter:
         values: list[object] = []
 
         if status is not None:
-            fields.append("status = ?")
+            fields.append("status = %s")
             values.append(status)
         if result_payload is not None:
-            fields.append("result_json = ?")
+            fields.append("result_json = %s")
             values.append(json.dumps(result_payload, sort_keys=True))
         if error is not None:
-            fields.append("error = ?")
+            fields.append("error = %s")
             values.append(error)
         if message is not None:
-            fields.append("message = ?")
+            fields.append("message = %s")
             values.append(message)
 
-        fields.append("updated_at = ?")
+        fields.append("updated_at = %s")
         values.append(time.time())
         values.append(job_id)
 
-        with self._connect() as conn:
-            conn.execute(f"UPDATE jobs SET {', '.join(fields)} WHERE job_id = ?", values)  # nosec B608 — fields are hardcoded column names, values are parameterized
+        with self.connection() as conn:
+            conn.execute(
+                f"UPDATE jobs SET {', '.join(fields)} WHERE job_id = %s",
+                values,
+            )  # nosec B608 - fields are fixed column names
 
     def record_workflow_event(self, event: "MetricsEvent") -> None:
-        """Persist a single workflow lifecycle event."""
-        with self._connect() as conn:
+        with self.connection() as conn:
             conn.execute(
                 """
-                INSERT INTO workflow_events(job_id, event, status, duration_ms, error_type, labels_json, recorded_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO workflow_events(
+                    job_id, event, status, duration_ms, error_type, labels_json, recorded_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     event.job_id,
@@ -427,30 +382,24 @@ class SQLiteStorageAdapter:
             )
 
     def get_events_summary(self, *, job_id: str | None = None) -> list[dict]:
-        """Return per-event aggregate statistics.
-
-        When *job_id* is given, only events for that job are included.
-        Rows are ordered by event name and include count, ok/error split,
-        and avg/min/max duration in milliseconds — suitable for cross-run comparison.
-        """
         query = """
             SELECT
                 event,
-                COUNT(*)                                              AS total,
-                SUM(CASE WHEN status = 'ok'    THEN 1 ELSE 0 END)   AS ok_count,
-                SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END)    AS error_count,
-                ROUND(AVG(duration_ms), 1)                           AS avg_ms,
-                ROUND(MIN(duration_ms), 1)                           AS min_ms,
-                ROUND(MAX(duration_ms), 1)                           AS max_ms
+                COUNT(*) AS total,
+                SUM(CASE WHEN status = 'ok' THEN 1 ELSE 0 END) AS ok_count,
+                SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS error_count,
+                ROUND(AVG(duration_ms)::numeric, 1) AS avg_ms,
+                ROUND(MIN(duration_ms)::numeric, 1) AS min_ms,
+                ROUND(MAX(duration_ms)::numeric, 1) AS max_ms
             FROM workflow_events
         """
         params: list[object] = []
         if job_id is not None:
-            query += " WHERE job_id = ?"
+            query += " WHERE job_id = %s"
             params.append(job_id)
         query += " GROUP BY event ORDER BY event"
 
-        with self._connect() as conn:
+        with self.connection() as conn:
             rows = conn.execute(query, params).fetchall()
 
         return [
@@ -467,13 +416,12 @@ class SQLiteStorageAdapter:
         ]
 
     def get_events_for_job(self, job_id: str) -> list[dict]:
-        """Return all raw workflow events for a single job, ordered by recorded_at."""
-        with self._connect() as conn:
+        with self.connection() as conn:
             rows = conn.execute(
                 """
                 SELECT event, status, duration_ms, error_type, labels_json, recorded_at
                 FROM workflow_events
-                WHERE job_id = ?
+                WHERE job_id = %s
                 ORDER BY recorded_at
                 """,
                 (job_id,),
@@ -492,13 +440,13 @@ class SQLiteStorageAdapter:
         ]
 
     def get_job(self, job_id: str, *, tenant_id: str | None = None) -> JobRecord | None:
-        query = "SELECT * FROM jobs WHERE job_id = ?"
+        query = "SELECT * FROM jobs WHERE job_id = %s"
         params: list[object] = [job_id]
         if tenant_id is not None:
-            query += " AND tenant_id = ?"
+            query += " AND tenant_id = %s"
             params.append(tenant_id)
 
-        with self._connect() as conn:
+        with self.connection() as conn:
             row = conn.execute(query, params).fetchone()
 
         if row is None:

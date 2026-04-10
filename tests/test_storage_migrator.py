@@ -29,9 +29,12 @@ def _migrations_dir() -> pathlib.Path:
 
 
 def _apply_sql_files(conn: sqlite3.Connection, *filenames: str) -> None:
+    migrator = Migrator(dialect="sqlite")
     for name in filenames:
         path = _migrations_dir() / name
-        conn.executescript(path.read_text(encoding="utf-8"))
+        conn.executescript(
+            migrator._render_for_dialect(path.read_text(encoding="utf-8"))
+        )
     conn.commit()
 
 

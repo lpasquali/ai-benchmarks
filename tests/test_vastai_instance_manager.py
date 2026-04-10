@@ -136,6 +136,7 @@ def test_build_connection_details_without_machine_id():
 @pytest.fixture
 def misc_server(tmp_path, monkeypatch):
     monkeypatch.setenv("RUNE_API_AUTH_DISABLED", "1")
+    monkeypatch.delenv("RUNE_DB_URL", raising=False)
     monkeypatch.setenv("RUNE_API_DB_PATH", str(tmp_path / "jobs.db"))
     app = api_server.RuneApiApplication.from_env()
     server = api_server.ThreadingHTTPServer(("127.0.0.1", 0), app.create_handler())
