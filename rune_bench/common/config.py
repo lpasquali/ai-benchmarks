@@ -26,7 +26,7 @@ from typing import Any
 
 import yaml
 
-# Maps YAML config keys → corresponding RUNE_* env var names.
+# Maps flat YAML config keys → corresponding RUNE_* env var names.
 # Intentionally excludes secrets: RUNE_API_TOKEN, VAST_API_KEY.
 _FIELD_ENV_MAP: dict[str, str] = {
     # Global / backend
@@ -54,6 +54,11 @@ _FIELD_ENV_MAP: dict[str, str] = {
     "question": "RUNE_QUESTION",
     "model": "RUNE_MODEL",
     "kubeconfig": "RUNE_KUBECONFIG",
+}
+
+# Nested database section (top-level and/or defaults/profiles).
+_DATABASE_ENV_MAP: dict[str, str] = {
+    "url": "RUNE_DB_URL",
 }
 
 # Maps nested attestation section keys → RUNE_ATTESTATION_* env vars.
@@ -94,6 +99,10 @@ defaults:
 
   # Execution backend (local | http)
   backend: local
+
+  # Database settings (leave unset to use the built-in local SQLite path).
+  # database:
+  #   url: postgresql://rune:change-me@postgres:5432/rune
 
   # LLM Backend settings
   backend_type: ollama
@@ -136,6 +145,10 @@ profiles:
     backend_url: http://localhost:11434
     backend_warmup: false
     model: llama3.1:8b
+
+# Top-level infrastructure fallback (can also live under defaults/profiles):
+# database:
+#   url: postgresql://rune:change-me@postgres:5432/rune
 
 # Attestation settings (TPM 2.0 hardware PCR verification).
 # Can be placed at the top level (infrastructure config) or under
@@ -241,6 +254,16 @@ def load_config(profile: str | None = None) -> dict[str, Any]:
     for key, env_var in _FIELD_ENV_MAP.items():
         if key in effective and env_var not in os.environ:
             os.environ[env_var] = _to_env_str(effective[key])
+
+    # Database config mirrors attestation: a top-level section acts as
+    # infrastructure-wide fallback, while defaults/profiles can override it.
+    database_cfg: dict[str, Any] = _merge(
+        raw.get("database") or {},
+        effective.get("database") or {},
+    )
+    for key, env_var in _DATABASE_ENV_MAP.items():
+        if key in database_cfg and env_var not in os.environ:
+            os.environ[env_var] = _to_env_str(database_cfg[key])
 
     # Handle nested attestation section.  The section may appear at the
     # top level of the YAML (as infrastructure config, separate from per-run

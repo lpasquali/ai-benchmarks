@@ -22,6 +22,22 @@ _EXPECTED_TABLES = {
 _EXPECTED_VERSIONS = [1, 2, 3, 4, 5]
 
 
+def _migrations_dir() -> pathlib.Path:
+    import rune_bench.storage.migrator as migrator_mod
+
+    return pathlib.Path(migrator_mod.__file__).resolve().parent / "migrations"
+
+
+def _apply_sql_files(conn: sqlite3.Connection, *filenames: str) -> None:
+    migrator = Migrator(dialect="sqlite")
+    for name in filenames:
+        path = _migrations_dir() / name
+        conn.executescript(
+            migrator._render_for_dialect(path.read_text(encoding="utf-8"))
+        )
+    conn.commit()
+
+
 def _fresh_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
@@ -29,6 +45,8 @@ def _fresh_conn() -> sqlite3.Connection:
 
 
 def test_migrator_applies_all_on_empty_db() -> None:
+    # Acceptance (rune#241): fresh empty DB → bootstrap is a no-op, all
+    # migrations apply.
     conn = _fresh_conn()
 
     applied = Migrator().apply_pending(conn)
@@ -56,6 +74,8 @@ def test_migrator_idempotent() -> None:
 
 
 def test_migrator_partial_state() -> None:
+    # Acceptance (rune#241): DB already has ``schema_version`` → bootstrap is a
+    # no-op; only pending migrations run.
     conn = _fresh_conn()
     migrator = Migrator()
 
@@ -80,6 +100,52 @@ def test_migrator_partial_state() -> None:
         for row in conn.execute("SELECT version FROM schema_version").fetchall()
     }
     assert versions == {1, 2, 3, 4, 5}
+
+
+def test_migrator_legacy_db_without_schema_version_first_three_tables() -> None:
+    # Acceptance (rune#241): legacy file with 0001–0003 tables only → bootstrap
+    # pre-seeds 1–3, then migrations 4 and 5 run.
+    conn = _fresh_conn()
+    _apply_sql_files(
+        conn,
+        "0001_jobs.sql",
+        "0002_idempotency_keys.sql",
+        "0003_workflow_events.sql",
+    )
+
+    applied = Migrator().apply_pending(conn)
+
+    assert applied == [4, 5]
+    versions = {
+        int(row[0])
+        for row in conn.execute("SELECT version FROM schema_version").fetchall()
+    }
+    assert versions == set(_EXPECTED_VERSIONS)
+    names = {
+        row[0]
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+    }
+    assert _EXPECTED_TABLES.issubset(names)
+
+
+def test_migrator_legacy_db_without_schema_version_all_five_tables() -> None:
+    # Acceptance (rune#241): legacy file with all domain tables but no
+    # ``schema_version`` table → bootstrap pre-seeds 1–5, then apply is a no-op.
+    conn = _fresh_conn()
+    Migrator().apply_pending(conn)
+    conn.execute("DROP TABLE schema_version")
+    conn.commit()
+
+    applied = Migrator().apply_pending(conn)
+
+    assert applied == []
+    versions = {
+        int(row[0])
+        for row in conn.execute("SELECT version FROM schema_version").fetchall()
+    }
+    assert versions == set(_EXPECTED_VERSIONS)
 
 
 def test_migrator_invalid_sql_raises_with_context(tmp_path: pathlib.Path) -> None:
