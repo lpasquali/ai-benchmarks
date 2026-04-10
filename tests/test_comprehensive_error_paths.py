@@ -19,6 +19,9 @@ from rune_bench.resources.vastai import TemplateLoader
 
 _ph = PasswordHasher()
 
+# SR-Q-016: tokens must be >= 32 chars when API auth is enabled.
+_COMPREHENSIVE_API_TOKEN = "t" * 32
+
 
 def test_holmes_runner_remaining_paths(monkeypatch, tmp_path):
     """Test transport delegation and error propagation in HolmesDriverClient."""
@@ -142,7 +145,10 @@ def test_api_server_remaining_paths(monkeypatch, tmp_path):
 
     app = api_server.RuneApiApplication(
         store=store,
-        security=api_server.ApiSecurityConfig(auth_disabled=False, tenant_tokens={"tenant": hashlib.sha256(b"token").hexdigest()}),
+        security=api_server.ApiSecurityConfig(
+            auth_disabled=False,
+            tenant_tokens={"tenant": hashlib.sha256(_COMPREHENSIVE_API_TOKEN.encode("utf-8")).hexdigest()},
+        ),
         backend_functions={"llm-instance": backend_ollama, "ollama-instance": backend_ollama, "benchmark": backend_bench, "agentic-agent": lambda request: (_ for _ in ()).throw(RuntimeError("bad-run"))},
     )
     monkeypatch.setattr(
@@ -157,7 +163,10 @@ def test_api_server_remaining_paths(monkeypatch, tmp_path):
     host, port = server.server_address
     base = f"http://{host}:{port}"
     try:
-        req = Request(f"{base}/v1/ollama/models?backend_url=http://x", headers={"Authorization": "Bearer token", "X-Tenant-ID": "tenant"})
+        req = Request(
+            f"{base}/v1/ollama/models?backend_url=http://x",
+            headers={"Authorization": f"Bearer {_COMPREHENSIVE_API_TOKEN}", "X-Tenant-ID": "tenant"},
+        )
         with urlopen(req) as response:  # nosec  # test request mock/local execution
             assert response.status == 200
 
@@ -165,16 +174,44 @@ def test_api_server_remaining_paths(monkeypatch, tmp_path):
         with pytest.raises(Exception):
             urlopen(bad_auth)  # nosec  # test request mock/local execution
 
-        bad_kind = Request(f"{base}/v1/jobs/whatever", method="POST", data=b"{}", headers={"Authorization": "Bearer token", "X-Tenant-ID": "tenant", "Content-Type": "application/json"})
+        bad_kind = Request(
+            f"{base}/v1/jobs/whatever",
+            method="POST",
+            data=b"{}",
+            headers={
+                "Authorization": f"Bearer {_COMPREHENSIVE_API_TOKEN}",
+                "X-Tenant-ID": "tenant",
+                "Content-Type": "application/json",
+            },
+        )
         with pytest.raises(Exception):
             urlopen(bad_kind)  # nosec  # test request mock/local execution
 
-        req = Request(f"{base}/v1/jobs/ollama-instance", method="POST", data=b'{"vastai": false, "template_hash": "t", "min_dph": 1, "max_dph": 2, "reliability": 0.9, "backend_url": "http://x"}', headers={"Authorization": "Bearer token", "X-Tenant-ID": "tenant", "Content-Type": "application/json"})
+        req = Request(
+            f"{base}/v1/jobs/ollama-instance",
+            method="POST",
+            data=b'{"vastai": false, "template_hash": "t", "min_dph": 1, "max_dph": 2, "reliability": 0.9, "backend_url": "http://x"}',
+            headers={
+                "Authorization": f"Bearer {_COMPREHENSIVE_API_TOKEN}",
+                "X-Tenant-ID": "tenant",
+                "Content-Type": "application/json",
+            },
+        )
         with urlopen(req) as response:  # nosec  # test request mock/local execution
             payload = response.read().decode("utf-8")
             assert "job_id" in payload
 
-        req = Request(f"{base}/v1/jobs/benchmark", method="POST", data=b'{"vastai": false, "template_hash": "t", "min_dph": 1, "max_dph": 2, "reliability": 0.9, "backend_url": null, "question": "q", "model": "m", "backend_warmup": false, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k", "vastai_stop_instance": false}', headers={"Authorization": "Bearer token", "X-Tenant-ID": "tenant", "Content-Type": "application/json", "Idempotency-Key": "id1"})
+        req = Request(
+            f"{base}/v1/jobs/benchmark",
+            method="POST",
+            data=b'{"vastai": false, "template_hash": "t", "min_dph": 1, "max_dph": 2, "reliability": 0.9, "backend_url": null, "question": "q", "model": "m", "backend_warmup": false, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k", "vastai_stop_instance": false}',
+            headers={
+                "Authorization": f"Bearer {_COMPREHENSIVE_API_TOKEN}",
+                "X-Tenant-ID": "tenant",
+                "Content-Type": "application/json",
+                "Idempotency-Key": "id1",
+            },
+        )
         with urlopen(req) as response:  # nosec  # test request mock/local execution
             assert response.status == 202
     finally:
@@ -204,7 +241,10 @@ def test_api_server_error_paths(monkeypatch, tmp_path):
     store = ExplodingStore(tmp_path / "jobs.db")
     app = api_server.RuneApiApplication(
         store=store,
-        security=api_server.ApiSecurityConfig(auth_disabled=False, tenant_tokens={"tenant": hashlib.sha256(b"token").hexdigest()}),
+        security=api_server.ApiSecurityConfig(
+            auth_disabled=False,
+            tenant_tokens={"tenant": hashlib.sha256(_COMPREHENSIVE_API_TOKEN.encode("utf-8")).hexdigest()},
+        ),
         backend_functions={"agentic-agent": lambda request: {"answer": "ok"}},
     )
     server = api_server.ThreadingHTTPServer(("127.0.0.1", 0), app.create_handler())
@@ -218,7 +258,7 @@ def test_api_server_error_paths(monkeypatch, tmp_path):
             f"{base}/v1/jobs/agentic-agent",
             method="POST",
             data=b"{",
-            headers={"X-API-Key": "token", "X-Tenant-ID": "tenant", "Content-Type": "application/json"},
+            headers={"X-API-Key": _COMPREHENSIVE_API_TOKEN, "X-Tenant-ID": "tenant", "Content-Type": "application/json"},
         )
         with pytest.raises(Exception):
             urlopen(req)  # nosec  # test request mock/local execution
@@ -227,12 +267,15 @@ def test_api_server_error_paths(monkeypatch, tmp_path):
             f"{base}/v1/jobs/agentic-agent",
             method="POST",
             data=b"{}",
-            headers={"X-API-Key": "token", "X-Tenant-ID": "tenant", "Content-Type": "application/json"},
+            headers={"X-API-Key": _COMPREHENSIVE_API_TOKEN, "X-Tenant-ID": "tenant", "Content-Type": "application/json"},
         )
         with pytest.raises(Exception):
             urlopen(req)  # nosec  # test request mock/local execution
 
-        req = Request(f"{base}/v1/jobs/missing", headers={"X-API-Key": "token", "X-Tenant-ID": "tenant"})
+        req = Request(
+            f"{base}/v1/jobs/missing",
+            headers={"X-API-Key": _COMPREHENSIVE_API_TOKEN, "X-Tenant-ID": "tenant"},
+        )
         with pytest.raises(Exception):
             urlopen(req)  # nosec  # test request mock/local execution
     finally:
@@ -424,10 +467,14 @@ def test_cost_estimate_backend_and_server_endpoints(monkeypatch, tmp_path):
         )
 
     # --- live server for endpoint coverage ---
+    _cost_api_token = "tok" + ("x" * 29)  # 32 chars (SR-Q-016)
     store = api_server.JobStore(tmp_path / "jobs.db")
     app = api_server.RuneApiApplication(
         store=store,
-        security=api_server.ApiSecurityConfig(auth_disabled=False, tenant_tokens={"t": hashlib.sha256(b"tok").hexdigest()}),
+        security=api_server.ApiSecurityConfig(
+            auth_disabled=False,
+            tenant_tokens={"t": hashlib.sha256(_cost_api_token.encode("utf-8")).hexdigest()},
+        ),
         backend_functions={
             "cost-estimate": lambda req: {"projected_cost_usd": 1.5, "cost_driver": "vastai", "resource_impact": "low", "local_energy_kwh": 0.0, "confidence_score": 1.0, "warning": None},
         },
@@ -440,7 +487,7 @@ def test_cost_estimate_backend_and_server_endpoints(monkeypatch, tmp_path):
     base = f"http://{host}:{port}"
 
     try:
-        auth_headers = {"Authorization": "Bearer tok", "X-Tenant-ID": "t"}
+        auth_headers = {"Authorization": f"Bearer {_cost_api_token}", "X-Tenant-ID": "t"}
 
         # /v1/estimates POST (lines 226-231)
         req = Request(

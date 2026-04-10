@@ -161,9 +161,14 @@ def test_api_security_from_env(monkeypatch):
     assert api_server.ApiSecurityConfig.from_env().auth_disabled is True
 
     monkeypatch.setenv("RUNE_API_AUTH_DISABLED", "0")
-    monkeypatch.setenv("RUNE_API_TOKENS", "tenant-a:token-a,tenant-b:token-b")
+    long_a, long_b = "a" * 32, "b" * 32
+    monkeypatch.setenv("RUNE_API_TOKENS", f"tenant-a:{long_a},tenant-b:{long_b}")
     cfg = api_server.ApiSecurityConfig.from_env()
-    assert cfg.tenant_tokens["tenant-b"] == hashlib.sha256("token-b".encode("utf-8")).hexdigest()
+    assert cfg.tenant_tokens["tenant-b"] == hashlib.sha256(long_b.encode("utf-8")).hexdigest()
+
+    monkeypatch.setenv("RUNE_API_TOKENS", "tenant-a:short")
+    with pytest.raises(RuntimeError, match="SR-Q-016"):
+        api_server.ApiSecurityConfig.from_env()
 
 
 def test_api_server_misc_paths(misc_server):

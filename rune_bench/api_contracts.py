@@ -8,6 +8,20 @@ used by the current CLI and future HTTP API backend.
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+# SR-Q-035 — string length limits (dataclass validation; see also QUANTITATIVE_SECURITY_REQUIREMENTS.md)
+_MAX_MODEL_NAME_LEN = 128
+_MAX_QUESTION_LEN = 100_000
+_MAX_BACKEND_URL_LEN = 2048
+_MAX_TEMPLATE_HASH_LEN = 256
+_MAX_KUBECONFIG_PATH_LEN = 4096
+_MAX_AGENT_NAME_LEN = 64
+_MAX_BACKEND_TYPE_LEN = 64
+
+
+def _check_max_str(field: str, value: str, maxlen: int) -> None:
+    if len(value) > maxlen:
+        raise ValueError(f"{field} exceeds maximum length {maxlen} (SR-Q-035)")
+
 
 @dataclass(frozen=True)
 class RunLLMInstanceRequest:
@@ -18,6 +32,12 @@ class RunLLMInstanceRequest:
     reliability: float
     backend_url: str | None
     backend_type: str = "ollama"
+
+    def __post_init__(self) -> None:
+        _check_max_str("template_hash", self.template_hash, _MAX_TEMPLATE_HASH_LEN)
+        _check_max_str("backend_type", self.backend_type, _MAX_BACKEND_TYPE_LEN)
+        if self.backend_url is not None:
+            _check_max_str("backend_url", self.backend_url, _MAX_BACKEND_URL_LEN)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -33,6 +53,16 @@ class RunAgenticAgentRequest:
     backend_type: str = "ollama"
     kubeconfig: str | None = None
     agent: str = "holmes"
+
+    def __post_init__(self) -> None:
+        _check_max_str("question", self.question, _MAX_QUESTION_LEN)
+        _check_max_str("model", self.model, _MAX_MODEL_NAME_LEN)
+        _check_max_str("backend_type", self.backend_type, _MAX_BACKEND_TYPE_LEN)
+        _check_max_str("agent", self.agent, _MAX_AGENT_NAME_LEN)
+        if self.backend_url is not None:
+            _check_max_str("backend_url", self.backend_url, _MAX_BACKEND_URL_LEN)
+        if self.kubeconfig is not None:
+            _check_max_str("kubeconfig", self.kubeconfig, _MAX_KUBECONFIG_PATH_LEN)
 
     @classmethod
     def from_cli(
@@ -78,6 +108,15 @@ class RunBenchmarkRequest:
     vastai_stop_instance: bool
     attestation_required: bool = False
     backend_type: str = "ollama"
+
+    def __post_init__(self) -> None:
+        _check_max_str("template_hash", self.template_hash, _MAX_TEMPLATE_HASH_LEN)
+        _check_max_str("question", self.question, _MAX_QUESTION_LEN)
+        _check_max_str("model", self.model, _MAX_MODEL_NAME_LEN)
+        _check_max_str("kubeconfig", self.kubeconfig, _MAX_KUBECONFIG_PATH_LEN)
+        _check_max_str("backend_type", self.backend_type, _MAX_BACKEND_TYPE_LEN)
+        if self.backend_url is not None:
+            _check_max_str("backend_url", self.backend_url, _MAX_BACKEND_URL_LEN)
 
     @classmethod
     def from_cli(
@@ -139,6 +178,9 @@ class CostEstimationRequest:
     # Run parameters
     model: str = ""
     estimated_duration_seconds: int = 3600
+
+    def __post_init__(self) -> None:
+        _check_max_str("model", self.model, _MAX_MODEL_NAME_LEN)
 
     def to_dict(self) -> dict:
         return asdict(self)

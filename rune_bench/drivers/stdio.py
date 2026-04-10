@@ -13,6 +13,7 @@ import subprocess
 import uuid
 
 from rune_bench.debug import debug_log
+from rune_bench.drivers.timeouts import driver_invocation_timeout_seconds
 
 
 class StdioTransport:
@@ -31,6 +32,7 @@ class StdioTransport:
         request_json = json.dumps(request)
         debug_log(f"StdioTransport → {self._cmd[0]} action={action!r} id={request_id}")
 
+        timeout_s = driver_invocation_timeout_seconds()
         try:
             result = subprocess.run(  # noqa: S603
                 self._cmd,
@@ -38,7 +40,12 @@ class StdioTransport:
                 capture_output=True,
                 text=True,
                 check=False,
+                timeout=timeout_s,
             )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                f"Driver process {self._cmd[0]!r} exceeded invocation timeout ({timeout_s:.0f}s, SR-Q-011)"
+            ) from exc
         except OSError as exc:
             raise RuntimeError(
                 f"Failed to spawn driver process {self._cmd!r}: {exc}"
@@ -87,7 +94,18 @@ class AsyncStdioTransport:
             stderr=asyncio.subprocess.PIPE,
         )
 
-        stdout, stderr = await proc.communicate(input=request_json.encode() + b"\n")
+        timeout_s = driver_invocation_timeout_seconds()
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(input=request_json.encode() + b"\n"),
+                timeout=timeout_s,
+            )
+        except TimeoutError as exc:
+            proc.kill()
+            await proc.wait()
+            raise RuntimeError(
+                f"Driver process {self._cmd[0]!r} exceeded invocation timeout ({timeout_s:.0f}s, SR-Q-011)"
+            ) from exc
 
         if proc.returncode != 0:
             detail = stderr.decode().strip() or stdout.decode().strip() or f"exit {proc.returncode}"
