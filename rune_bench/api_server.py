@@ -8,12 +8,15 @@ import hmac
 import json
 import logging
 import os
+import sys
 import threading
 import time
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable, TypeAlias
 from urllib.parse import parse_qs, urlparse
+
+import structlog
 
 from rune_bench.api_backend import (
     get_cost_estimate,
@@ -52,6 +55,32 @@ BackendRequest: TypeAlias = (
     RunAgenticAgentRequest | RunBenchmarkRequest | RunLLMInstanceRequest | CostEstimationRequest
 )
 BackendHandler: TypeAlias = Callable[[BackendRequest], dict]
+
+# SR-Q-005: token-bucket — burst 20, sustained 100 requests / 60s
+_REQUEST_RATE_BUCKET_CAPACITY = 20.0
+_REQUEST_RATE_REFILL_PER_SEC = 100.0 / 60.0
+
+_MIN_API_TOKEN_LEN = 32  # SR-Q-016 / SR-001 (256-bit secret as printable string)
+
+# SR-Q-008: bound time waiting for request bytes on each accepted connection
+_HTTP_REQUEST_SOCKET_TIMEOUT_S = float(os.environ.get("RUNE_API_REQUEST_SOCKET_TIMEOUT", "30"))
+
+structlog.configure(
+    processors=[
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso", utc=True),
+        structlog.processors.JSONRenderer(),
+    ],
+    wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
+    logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
+    cache_logger_on_first_use=True,
+)
+
+_audit_log = structlog.get_logger("rune.api.audit")
+
+
+class RequestRateLimited(Exception):
+    """Raised when per-IP API request rate exceeds SR-Q-005 budget."""
 
 
 def _run_agentic_backend(request: BackendRequest) -> dict:
@@ -94,11 +123,17 @@ class ApiSecurityConfig:
                 tenant = tenant.strip()
                 token = token.strip()
                 if tenant and token:
+                    if len(token) < _MIN_API_TOKEN_LEN:
+                        raise RuntimeError(
+                            f"RUNE API token for tenant {tenant!r} must be at least "
+                            f"{_MIN_API_TOKEN_LEN} characters (SR-Q-016)."
+                        )
                     tenant_tokens[tenant] = hashlib.sha256(token.encode("utf-8")).hexdigest()
         if not auth_disabled and not tenant_tokens:
             raise RuntimeError(
                 "RUNE API auth is enabled but no tenants are configured. "
-                "Set RUNE_API_TOKENS='tenant-a:token-a' or RUNE_API_AUTH_DISABLED=1 for development."
+                f"Set RUNE_API_TOKENS='tenant-a:<{_MIN_API_TOKEN_LEN}+-char-secret>' "
+                "or RUNE_API_AUTH_DISABLED=1 for development."
             )
         return cls(auth_disabled=auth_disabled, tenant_tokens=tenant_tokens)
 
@@ -123,6 +158,25 @@ class RuneApiApplication:
         self.store.mark_incomplete_jobs_failed()
         self.auth_failures: dict[str, list[float]] = {}
         self.auth_lock = threading.Lock()
+        self._request_rate_buckets: dict[str, tuple[float, float]] = {}
+
+    def _consume_api_request_budget(self, client_ip: str) -> None:
+        """SR-Q-005: token-bucket per IP (burst 20, refill 100/min)."""
+        now = time.time()
+        with self.auth_lock:
+            if client_ip not in self._request_rate_buckets:
+                self._request_rate_buckets[client_ip] = (_REQUEST_RATE_BUCKET_CAPACITY, now)
+            tokens, last_ts = self._request_rate_buckets[client_ip]
+            elapsed = now - last_ts
+            tokens = min(
+                _REQUEST_RATE_BUCKET_CAPACITY,
+                tokens + elapsed * _REQUEST_RATE_REFILL_PER_SEC,
+            )
+            if tokens < 1.0:
+                self._request_rate_buckets[client_ip] = (tokens, now)
+                raise RequestRateLimited("too many requests")
+            tokens -= 1.0
+            self._request_rate_buckets[client_ip] = (tokens, now)
 
     @classmethod
     def from_env(cls, *, db_url: str | None = None) -> "RuneApiApplication":
@@ -139,6 +193,13 @@ class RuneApiApplication:
             def log_message(self, format, *args):  # noqa: A003
                 return
 
+            def setup(self) -> None:
+                super().setup()
+                try:
+                    self.request.settimeout(_HTTP_REQUEST_SOCKET_TIMEOUT_S)
+                except (AttributeError, OSError):
+                    pass
+
             def _write_json(self, status_code: int, payload: dict) -> None:
                 raw = json.dumps(payload).encode("utf-8")
                 self.send_response(status_code)
@@ -149,6 +210,9 @@ class RuneApiApplication:
 
             def _read_json(self) -> dict:
                 length = int(self.headers.get("Content-Length", "0"))
+                MAX_BODY_SIZE = 10 * 1024 * 1024  # 10 MiB (SR-Q-004)
+                if length > MAX_BODY_SIZE:
+                    raise ValueError(f"request body exceeds maximum size ({MAX_BODY_SIZE // 1024 // 1024} MiB)")
                 raw = self.rfile.read(length) if length else b"{}"
                 try:
                     payload = json.loads(raw.decode("utf-8") or "{}")
@@ -161,13 +225,19 @@ class RuneApiApplication:
             def _authenticate(self) -> str:
                 client_ip = self.client_address[0]
                 now = time.time()
-                
+
                 with app.auth_lock:
                     failures = app.auth_failures.get(client_ip, [])
                     failures = [t for t in failures if now - t < 60]
                     app.auth_failures[client_ip] = failures
                     if len(failures) >= 10:
-                        logging.warning(f"Auth blocked: Rate limit exceeded for IP {client_ip}")
+                        _audit_log.warning(
+                            "auth_rate_limited",
+                            client_ip=client_ip,
+                            reason="too_many_failed_attempts",
+                            threshold=10,
+                            window_seconds=60,
+                        )
                         raise PermissionError("rate limit exceeded")
 
                 tenant_id = self.headers.get("X-Tenant-ID", "").strip() or "default"
@@ -180,24 +250,65 @@ class RuneApiApplication:
                 if auth_header.lower().startswith("bearer "):
                     token = auth_header[7:].strip()
 
+                if len(token) < _MIN_API_TOKEN_LEN:
+                    with app.auth_lock:
+                        app.auth_failures[client_ip].append(now)
+                    _audit_log.warning(
+                        "auth_failure_token_too_short",
+                        client_ip=client_ip,
+                        tenant_id=tenant_id,
+                        endpoint=self.path,
+                        min_length=_MIN_API_TOKEN_LEN,
+                    )
+                    raise PermissionError("invalid tenant/token combination")
+
                 expected_hash = app.security.tenant_tokens.get(tenant_id)
                 if expected_hash:
                     actual_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
                     if hmac.compare_digest(actual_hash, expected_hash):
-                        logging.info(f"Auth success: IP {client_ip} authenticated as tenant '{tenant_id}'")
+                        _audit_log.info(
+                            "auth_success",
+                            client_ip=client_ip,
+                            tenant_id=tenant_id,
+                            endpoint=self.path,
+                            auth_result="success",
+                        )
                         return tenant_id
-                
+
                 with app.auth_lock:
                     app.auth_failures[client_ip].append(now)
-                logging.warning(f"Auth failure: IP {client_ip} failed to authenticate as tenant '{tenant_id}'")
+                _audit_log.warning(
+                    "auth_failure_invalid_credentials",
+                    client_ip=client_ip,
+                    tenant_id=tenant_id,
+                    endpoint=self.path,
+                    auth_result="failure",
+                )
                 raise PermissionError("invalid tenant/token combination")
+
+            def _enforce_request_rate_limit(self, path: str) -> None:
+                if path == "/healthz":
+                    return
+                app._consume_api_request_budget(self.client_address[0])
 
             def do_GET(self) -> None:
                 parsed = urlparse(self.path)
                 path = parsed.path
 
                 if path == "/healthz":
-                    self._write_json(200, {"status": "ok"})
+                    self._write_json(
+                        200,
+                        {
+                            "status": "ok",
+                            "active_threads": threading.active_count(),
+                        },
+                    )
+                    return
+
+                try:
+                    self._enforce_request_rate_limit(path)
+                except RequestRateLimited as exc:
+                    self._write_json(429, {"error": str(exc)})
                     return
 
                 try:
@@ -408,6 +519,12 @@ class RuneApiApplication:
                 parsed = urlparse(self.path)
                 path = parsed.path
                 try:
+                    self._enforce_request_rate_limit(path)
+                except RequestRateLimited as exc:
+                    self._write_json(429, {"error": str(exc)})
+                    return
+
+                try:
                     tenant_id = self._authenticate()
                 except PermissionError as exc:
                     self._write_json(401, {"error": str(exc)})
@@ -416,7 +533,12 @@ class RuneApiApplication:
                 try:
                     payload = self._read_json()
                 except ValueError as exc:
-                    self._write_json(400, {"error": str(exc)})
+                    error_msg = str(exc)
+                    # SR-Q-004: Return 413 for request size violations
+                    if "exceeds maximum size" in error_msg:
+                        self._write_json(413, {"error": error_msg})
+                    else:
+                        self._write_json(400, {"error": error_msg})
                     return
 
                 if path == "/v1/settings/profiles":
@@ -512,6 +634,7 @@ class RuneApiApplication:
 
     def serve(self, host: str = "127.0.0.1", port: int = 8080) -> None:
         server = ThreadingHTTPServer((host, port), self.create_handler())
+        server.timeout = _HTTP_REQUEST_SOCKET_TIMEOUT_S
         try:
             server.serve_forever()
         finally:

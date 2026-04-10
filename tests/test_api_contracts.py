@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+import pytest
 from pathlib import Path
 
 from rune_bench.api_contracts import (
@@ -94,3 +95,32 @@ def test_cost_estimation_request_to_dict():
     assert d["min_dph"] == 2.0
     assert d["max_dph"] == 3.0
     assert d["estimated_duration_seconds"] == 1800
+
+
+def test_sr_q_035_question_max_length() -> None:
+    with pytest.raises(ValueError, match="SR-Q-035"):
+        RunAgenticAgentRequest(
+            question="x" * 100_001,
+            model="m",
+            backend_url=None,
+            backend_warmup=False,
+            backend_warmup_timeout=1,
+        )
+
+
+def test_sr_q_035_model_max_length() -> None:
+    with pytest.raises(ValueError, match="SR-Q-035"):
+        RunBenchmarkRequest(
+            vastai=False,
+            template_hash="t",
+            min_dph=1.0,
+            max_dph=2.0,
+            reliability=0.9,
+            backend_url=None,
+            question="q",
+            model="m" * 129,
+            backend_warmup=False,
+            backend_warmup_timeout=1,
+            kubeconfig="/tmp/k",
+            vastai_stop_instance=False,
+        )

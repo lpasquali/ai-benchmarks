@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-import hashlib
 import json
 import threading
 from http.server import ThreadingHTTPServer
@@ -15,6 +14,14 @@ from rune_bench.job_store import JobStore
 
 _ph = PasswordHasher()
 
+# SR-Q-016: API tokens must be at least 32 characters when auth is enabled.
+_API_TOKEN_A = "a" * 32
+_API_TOKEN_B = "b" * 32
+# Precomputed SHA-256 hex of _API_TOKEN_A / _API_TOKEN_B (matches api_server fingerprint; avoids CodeQL
+# py/weak-sensitive-data-hashing on test-only bearer material).
+_SHA256_HEX_API_TOKEN_A = "3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547"
+_SHA256_HEX_API_TOKEN_B = "bdb339768bc5e4fecbe55a442056919b2b325907d49bcbf3bf8de13781996a83"
+
 
 @pytest.fixture
 def rune_api_server(tmp_path):
@@ -28,11 +35,11 @@ def rune_api_server(tmp_path):
     app = RuneApiApplication(
         store=store,
         security=ApiSecurityConfig(
-            auth_disabled=False, 
+            auth_disabled=False,
             tenant_tokens={
-                "tenant-a": hashlib.sha256(b"token-a").hexdigest(), 
-                "tenant-b": hashlib.sha256(b"token-b").hexdigest()
-            }
+                "tenant-a": _SHA256_HEX_API_TOKEN_A,
+                "tenant-b": _SHA256_HEX_API_TOKEN_B,
+            },
         ),
         backend_functions={
             "agentic-agent": run_agentic,
@@ -61,7 +68,9 @@ def test_healthz_is_public(rune_api_server):
     with urlopen(f"{base_url}/healthz") as response:  # nosec  # test request mock/local execution
         payload = json.loads(response.read().decode("utf-8"))
 
-    assert payload == {"status": "ok"}
+    assert payload["status"] == "ok"
+    assert isinstance(payload.get("active_threads"), int)
+    assert payload["active_threads"] >= 1
 
 
 def test_api_server_requires_auth(rune_api_server):
@@ -76,8 +85,8 @@ def test_api_server_requires_auth(rune_api_server):
 
 def test_api_server_enforces_tenant_scoping_and_idempotency(rune_api_server):
     base_url, state = rune_api_server
-    client_a = RuneApiClient(base_url, api_token="token-a", tenant_id="tenant-a")  # nosec  # test credentials
-    client_b = RuneApiClient(base_url, api_token="token-b", tenant_id="tenant-b")  # nosec  # test credentials
+    client_a = RuneApiClient(base_url, api_token=_API_TOKEN_A, tenant_id="tenant-a")  # nosec  # test credentials
+    client_b = RuneApiClient(base_url, api_token=_API_TOKEN_B, tenant_id="tenant-b")  # nosec  # test credentials
     request_payload = {
         "question": "What is unhealthy?",
         "model": "llama3.1:8b",
@@ -121,6 +130,27 @@ def test_api_server_rate_limiting(rune_api_server):
     assert payload["error"] == "rate limit exceeded"
 
 
+def test_api_request_rate_limit_sr_q_005(rune_api_server):
+    """SR-Q-005: Per-IP request budget returns HTTP 429 after burst (token bucket)."""
+    base_url, _state = rune_api_server
+    # Bucket capacity 20;21st request in a tight loop should be throttled.
+    for i in range(20):
+        request = Request(f"{base_url}/v1/catalog/vastai-models")
+        request.add_header("Authorization", f"Bearer {_API_TOKEN_A}")  # nosec
+        request.add_header("X-Tenant-ID", "tenant-a")
+        with urlopen(request) as response:  # nosec
+            assert response.status == 200
+
+    request = Request(f"{base_url}/v1/catalog/vastai-models")
+    request.add_header("Authorization", f"Bearer {_API_TOKEN_A}")  # nosec
+    request.add_header("X-Tenant-ID", "tenant-a")
+    with pytest.raises(HTTPError) as exc:
+        urlopen(request)  # nosec
+    assert exc.value.code == 429
+    payload = json.loads(exc.value.read().decode("utf-8"))
+    assert payload["error"] == "too many requests"
+
+
 # ── /v1/chains/{run_id}/state ───────────────────────────────────────────────
 
 
@@ -142,7 +172,7 @@ def _get_json(url: str, headers: dict) -> dict:
 def test_chain_state_returns_404_for_unknown_run(rune_api_server):
     base_url, _ = rune_api_server
     request = Request(f"{base_url}/v1/chains/does-not-exist/state")
-    request.add_header("Authorization", "Bearer token-a")  # nosec
+    request.add_header("Authorization", f"Bearer {_API_TOKEN_A}")  # nosec
     request.add_header("X-Tenant-ID", "tenant-a")
     with pytest.raises(HTTPError) as exc:
         urlopen(request)  # nosec
@@ -153,7 +183,7 @@ def test_chain_state_returns_404_for_unknown_run(rune_api_server):
 
 def test_chain_state_returns_404_for_other_tenants_run(rune_api_server):
     base_url, _ = rune_api_server
-    client_a = RuneApiClient(base_url, api_token="token-a", tenant_id="tenant-a")  # nosec
+    client_a = RuneApiClient(base_url, api_token=_API_TOKEN_A, tenant_id="tenant-a")  # nosec
     job_id = client_a.submit_agentic_agent_job(
         {
             "question": "q",
@@ -167,7 +197,7 @@ def test_chain_state_returns_404_for_other_tenants_run(rune_api_server):
     )
 
     request = Request(f"{base_url}/v1/chains/{job_id}/state")
-    request.add_header("Authorization", "Bearer token-b")  # nosec
+    request.add_header("Authorization", f"Bearer {_API_TOKEN_B}")  # nosec
     request.add_header("X-Tenant-ID", "tenant-b")
     with pytest.raises(HTTPError) as exc:
         urlopen(request)  # nosec
@@ -176,7 +206,7 @@ def test_chain_state_returns_404_for_other_tenants_run(rune_api_server):
 
 def test_chain_state_returns_empty_shell_when_job_exists_but_no_chain_state(rune_api_server, tmp_path):
     base_url, _ = rune_api_server
-    client_a = RuneApiClient(base_url, api_token="token-a", tenant_id="tenant-a")  # nosec
+    client_a = RuneApiClient(base_url, api_token=_API_TOKEN_A, tenant_id="tenant-a")  # nosec
     job_id = client_a.submit_agentic_agent_job(
         {
             "question": "q",
@@ -191,7 +221,7 @@ def test_chain_state_returns_empty_shell_when_job_exists_but_no_chain_state(rune
 
     payload = _get_json(
         f"{base_url}/v1/chains/{job_id}/state",
-        _auth_headers("token-a", "tenant-a"),
+        _auth_headers(_API_TOKEN_A, "tenant-a"),
     )
     assert payload == {
         "run_id": job_id,
@@ -209,7 +239,7 @@ def test_chain_state_returns_full_state_shape(rune_api_server):
     the wire format the dashboard will consume.
     """
     base_url, _ = rune_api_server
-    client_a = RuneApiClient(base_url, api_token="token-a", tenant_id="tenant-a")  # nosec
+    client_a = RuneApiClient(base_url, api_token=_API_TOKEN_A, tenant_id="tenant-a")  # nosec
     job_id = client_a.submit_agentic_agent_job(
         {
             "question": "q",
@@ -224,7 +254,7 @@ def test_chain_state_returns_full_state_shape(rune_api_server):
 
     payload = _get_json(
         f"{base_url}/v1/chains/{job_id}/state",
-        _auth_headers("token-a", "tenant-a"),
+        _auth_headers(_API_TOKEN_A, "tenant-a"),
     )
     # Empty-shell shape (no chain state initialized for this job)
     assert payload["run_id"] == job_id
@@ -245,7 +275,7 @@ def test_chain_state_endpoint_rejects_empty_run_id(rune_api_server):
     base_url, _ = rune_api_server
     # /v1/chains//state has empty run_id between the two slashes
     request = Request(f"{base_url}/v1/chains//state")
-    request.add_header("Authorization", "Bearer token-a")  # nosec
+    request.add_header("Authorization", f"Bearer {_API_TOKEN_A}")  # nosec
     request.add_header("X-Tenant-ID", "tenant-a")
     with pytest.raises(HTTPError) as exc:
         urlopen(request)  # nosec
@@ -273,11 +303,11 @@ def _create_throwaway_job(client) -> str:
 
 def test_audit_artifacts_list_empty_for_new_job(rune_api_server):
     base_url, _ = rune_api_server
-    client = RuneApiClient(base_url, api_token="token-a", tenant_id="tenant-a")  # nosec
+    client = RuneApiClient(base_url, api_token=_API_TOKEN_A, tenant_id="tenant-a")  # nosec
     job_id = _create_throwaway_job(client)
     payload = _get_json(
         f"{base_url}/v1/audits/{job_id}/artifacts",
-        _auth_headers("token-a", "tenant-a"),
+        _auth_headers(_API_TOKEN_A, "tenant-a"),
     )
     assert payload == {
         "run_id": job_id,
@@ -289,7 +319,7 @@ def test_audit_artifacts_list_empty_for_new_job(rune_api_server):
 def test_audit_artifacts_list_returns_404_for_unknown_run(rune_api_server):
     base_url, _ = rune_api_server
     request = Request(f"{base_url}/v1/audits/does-not-exist/artifacts")
-    request.add_header("Authorization", "Bearer token-a")  # nosec
+    request.add_header("Authorization", f"Bearer {_API_TOKEN_A}")  # nosec
     request.add_header("X-Tenant-ID", "tenant-a")
     with pytest.raises(HTTPError) as exc:
         urlopen(request)  # nosec
@@ -300,10 +330,10 @@ def test_audit_artifacts_list_returns_404_for_unknown_run(rune_api_server):
 
 def test_audit_artifacts_list_is_tenant_scoped(rune_api_server):
     base_url, _ = rune_api_server
-    client_a = RuneApiClient(base_url, api_token="token-a", tenant_id="tenant-a")  # nosec
+    client_a = RuneApiClient(base_url, api_token=_API_TOKEN_A, tenant_id="tenant-a")  # nosec
     job_id = _create_throwaway_job(client_a)
     request = Request(f"{base_url}/v1/audits/{job_id}/artifacts")
-    request.add_header("Authorization", "Bearer token-b")  # nosec
+    request.add_header("Authorization", f"Bearer {_API_TOKEN_B}")  # nosec
     request.add_header("X-Tenant-ID", "tenant-b")
     with pytest.raises(HTTPError) as exc:
         urlopen(request)  # nosec
@@ -322,7 +352,7 @@ def test_audit_artifacts_endpoints_require_auth(rune_api_server):
 def test_audit_artifacts_list_rejects_empty_run_id(rune_api_server):
     base_url, _ = rune_api_server
     request = Request(f"{base_url}/v1/audits//artifacts")
-    request.add_header("Authorization", "Bearer token-a")  # nosec
+    request.add_header("Authorization", f"Bearer {_API_TOKEN_A}")  # nosec
     request.add_header("X-Tenant-ID", "tenant-a")
     with pytest.raises(HTTPError) as exc:
         urlopen(request)  # nosec
@@ -333,10 +363,10 @@ def test_audit_artifacts_list_rejects_empty_run_id(rune_api_server):
 
 def test_audit_artifact_download_returns_404_for_unknown_artifact(rune_api_server):
     base_url, _ = rune_api_server
-    client = RuneApiClient(base_url, api_token="token-a", tenant_id="tenant-a")  # nosec
+    client = RuneApiClient(base_url, api_token=_API_TOKEN_A, tenant_id="tenant-a")  # nosec
     job_id = _create_throwaway_job(client)
     request = Request(f"{base_url}/v1/audits/{job_id}/artifacts/missing-id")
-    request.add_header("Authorization", "Bearer token-a")  # nosec
+    request.add_header("Authorization", f"Bearer {_API_TOKEN_A}")  # nosec
     request.add_header("X-Tenant-ID", "tenant-a")
     with pytest.raises(HTTPError) as exc:
         urlopen(request)  # nosec
@@ -347,10 +377,10 @@ def test_audit_artifact_download_returns_404_for_unknown_artifact(rune_api_serve
 
 def test_audit_artifact_download_returns_404_for_other_tenants_run(rune_api_server):
     base_url, _ = rune_api_server
-    client_a = RuneApiClient(base_url, api_token="token-a", tenant_id="tenant-a")  # nosec
+    client_a = RuneApiClient(base_url, api_token=_API_TOKEN_A, tenant_id="tenant-a")  # nosec
     job_id = _create_throwaway_job(client_a)
     request = Request(f"{base_url}/v1/audits/{job_id}/artifacts/x")
-    request.add_header("Authorization", "Bearer token-b")  # nosec
+    request.add_header("Authorization", f"Bearer {_API_TOKEN_B}")  # nosec
     request.add_header("X-Tenant-ID", "tenant-b")
     with pytest.raises(HTTPError) as exc:
         urlopen(request)  # nosec
@@ -378,7 +408,7 @@ def test_audit_artifacts_list_returns_populated_artifacts(rune_api_server):
     """Happy path: write artifacts via the JobStore exposed by the fixture, list via the API."""
     base_url, state = rune_api_server
     store = state["store"]
-    client = RuneApiClient(base_url, api_token="token-a", tenant_id="tenant-a")  # nosec
+    client = RuneApiClient(base_url, api_token=_API_TOKEN_A, tenant_id="tenant-a")  # nosec
     job_id = _create_throwaway_job(client)
 
     # Two artifacts of two different kinds
@@ -391,7 +421,7 @@ def test_audit_artifacts_list_returns_populated_artifacts(rune_api_server):
 
     payload = _get_json(
         f"{base_url}/v1/audits/{job_id}/artifacts",
-        _auth_headers("token-a", "tenant-a"),
+        _auth_headers(_API_TOKEN_A, "tenant-a"),
     )
     assert payload["run_id"] == job_id
     assert payload["summary"] == {"total_count": 2, "kinds_present": ["sbom", "slsa_provenance"]}
@@ -411,7 +441,7 @@ def test_audit_artifacts_list_returns_populated_artifacts(rune_api_server):
 def test_audit_artifact_download_streams_bytes_with_correct_headers(rune_api_server):
     base_url, state = rune_api_server
     store = state["store"]
-    client = RuneApiClient(base_url, api_token="token-a", tenant_id="tenant-a")  # nosec
+    client = RuneApiClient(base_url, api_token=_API_TOKEN_A, tenant_id="tenant-a")  # nosec
     job_id = _create_throwaway_job(client)
 
     payload_bytes = b'{"_type":"slsa.provenance","subject":[]}'
@@ -423,7 +453,7 @@ def test_audit_artifact_download_streams_bytes_with_correct_headers(rune_api_ser
     )
 
     request = Request(f"{base_url}/v1/audits/{job_id}/artifacts/{artifact_id}")
-    request.add_header("Authorization", "Bearer token-a")  # nosec
+    request.add_header("Authorization", f"Bearer {_API_TOKEN_A}")  # nosec
     request.add_header("X-Tenant-ID", "tenant-a")
     with urlopen(request) as response:  # nosec
         body = response.read()
@@ -440,14 +470,14 @@ def test_audit_artifact_download_streams_bytes_with_correct_headers(rune_api_ser
 def test_audit_artifact_download_uses_octet_stream_for_binary_kinds(rune_api_server):
     base_url, state = rune_api_server
     store = state["store"]
-    client = RuneApiClient(base_url, api_token="token-a", tenant_id="tenant-a")  # nosec
+    client = RuneApiClient(base_url, api_token=_API_TOKEN_A, tenant_id="tenant-a")  # nosec
     job_id = _create_throwaway_job(client)
 
     artifact_id = store.record_audit_artifact(
         job_id=job_id, kind="sigstore_bundle", name="bundle.sig", content=b"\x00\x01\x02"
     )
     request = Request(f"{base_url}/v1/audits/{job_id}/artifacts/{artifact_id}")
-    request.add_header("Authorization", "Bearer token-a")  # nosec
+    request.add_header("Authorization", f"Bearer {_API_TOKEN_A}")  # nosec
     request.add_header("X-Tenant-ID", "tenant-a")
     with urlopen(request) as response:  # nosec
         body = response.read()
@@ -461,7 +491,7 @@ def test_audit_artifacts_endpoints_unknown_subpath_returns_404(rune_api_server):
     """Edge case: malformed path under /v1/audits/ that doesn't include /artifacts."""
     base_url, _ = rune_api_server
     request = Request(f"{base_url}/v1/audits/malformed/wrong-suffix")
-    request.add_header("Authorization", "Bearer token-a")  # nosec
+    request.add_header("Authorization", f"Bearer {_API_TOKEN_A}")  # nosec
     request.add_header("X-Tenant-ID", "tenant-a")
     with pytest.raises(HTTPError) as exc:
         urlopen(request)  # nosec
@@ -470,11 +500,11 @@ def test_audit_artifacts_endpoints_unknown_subpath_returns_404(rune_api_server):
 
 def test_audit_artifact_download_rejects_empty_artifact_id(rune_api_server):
     base_url, _ = rune_api_server
-    client = RuneApiClient(base_url, api_token="token-a", tenant_id="tenant-a")  # nosec
+    client = RuneApiClient(base_url, api_token=_API_TOKEN_A, tenant_id="tenant-a")  # nosec
     job_id = _create_throwaway_job(client)
     # Trailing slash after /artifacts/ — falls into the download branch with empty id
     request = Request(f"{base_url}/v1/audits/{job_id}/artifacts/")
-    request.add_header("Authorization", "Bearer token-a")  # nosec
+    request.add_header("Authorization", f"Bearer {_API_TOKEN_A}")  # nosec
     request.add_header("X-Tenant-ID", "tenant-a")
     # The endpoint treats this as the list path (tail == "/"), which returns 200
     # with an empty list. That's fine — the empty-artifact-id branch only fires
