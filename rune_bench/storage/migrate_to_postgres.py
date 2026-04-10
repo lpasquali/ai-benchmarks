@@ -160,7 +160,8 @@ def migrate_to_postgres(
 
 def _count_rows(source: SQLiteStorageAdapter, table_name: str) -> int:
     with source.connection() as conn:
-        row = conn.execute(f"SELECT COUNT(*) AS total FROM {table_name}").fetchone()
+        statement = f"SELECT COUNT(*) AS total FROM {table_name}"  # nosec B608
+        row = conn.execute(statement).fetchone()
     return int(row["total"])
 
 
@@ -171,10 +172,9 @@ def _fetch_batch(
     batch_size: int,
     offset: int,
 ) -> list[dict]:
-    query = (
-        f"SELECT {', '.join(spec.columns)} FROM {spec.name} "
-        f"ORDER BY {', '.join(spec.order_by)} LIMIT ? OFFSET ?"
-    )
+    columns = ", ".join(spec.columns)
+    order_by = ", ".join(spec.order_by)
+    query = f"SELECT {columns} FROM {spec.name} ORDER BY {order_by} LIMIT ? OFFSET ?"  # nosec B608
     with source.connection() as conn:
         rows = conn.execute(query, (batch_size, offset)).fetchall()
     return [{column: row[column] for column in spec.columns} for row in rows]
@@ -187,12 +187,10 @@ def _insert_batch(
 ) -> None:
     if not rows:
         return
+    columns = ", ".join(spec.columns)
     placeholders = ", ".join(["%s"] * len(spec.columns))
     conflict = ", ".join(spec.conflict_columns)
-    statement = (
-        f"INSERT INTO {spec.name} ({', '.join(spec.columns)}) "
-        f"VALUES ({placeholders}) ON CONFLICT ({conflict}) DO NOTHING"
-    )
+    statement = f"INSERT INTO {spec.name} ({columns}) VALUES ({placeholders}) ON CONFLICT ({conflict}) DO NOTHING"  # nosec B608
     failing_row: dict | None = None
     with target.connection() as conn:
         try:

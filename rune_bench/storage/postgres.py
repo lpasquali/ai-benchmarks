@@ -354,12 +354,11 @@ class PostgresStorageAdapter:
         fields.append("updated_at = %s")
         values.append(time.time())
         values.append(job_id)
+        assignments = ", ".join(fields)
+        statement = f"UPDATE jobs SET {assignments} WHERE job_id = %s"  # nosec B608
 
         with self.connection() as conn:
-            conn.execute(
-                f"UPDATE jobs SET {', '.join(fields)} WHERE job_id = %s",
-                values,
-            )  # nosec B608 - fields are fixed column names
+            conn.execute(statement, values)
 
     def record_workflow_event(self, event: "MetricsEvent") -> None:
         with self.connection() as conn:

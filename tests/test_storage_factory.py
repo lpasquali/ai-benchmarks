@@ -9,6 +9,7 @@ import rune_bench.storage as storage_module
 from rune_bench.storage import (
     StoragePort,
     SQLiteStorageAdapter,
+    default_storage_url,
     make_storage,
     resolve_storage_url,
 )
@@ -90,6 +91,13 @@ def test_make_storage_postgresql_uses_postgres_adapter(monkeypatch) -> None:
     assert captured["url"] == "postgresql://user:pass@localhost:5432/rune"
 
 
+def test_make_storage_postgresql_requires_pg_extra(monkeypatch) -> None:
+    monkeypatch.setattr(storage_module, "PostgresStorageAdapter", None)
+
+    with pytest.raises(RuntimeError, match="requires psycopg"):
+        make_storage("postgresql://user:pass@localhost:5432/rune")
+
+
 @pytest.mark.parametrize(
     "url",
     [
@@ -116,7 +124,17 @@ def test_resolve_storage_url_prefers_explicit_url(monkeypatch) -> None:
     assert resolved == "postgresql://explicit"
 
 
-def test_resolve_storage_url_legacy_memory_path() -> None:
+def test_resolve_storage_url_uses_env_url(monkeypatch) -> None:
+    monkeypatch.setenv("RUNE_DB_URL", "postgresql://env")
+    monkeypatch.delenv("RUNE_API_DB_PATH", raising=False)
+
+    assert resolve_storage_url() == "postgresql://env"
+
+
+def test_resolve_storage_url_legacy_memory_path(monkeypatch) -> None:
+    monkeypatch.delenv("RUNE_DB_URL", raising=False)
+    monkeypatch.delenv("RUNE_API_DB_PATH", raising=False)
+
     assert resolve_storage_url(None, legacy_db_path=":memory:") == "sqlite:///:memory:"
 
 
@@ -127,6 +145,42 @@ def test_resolve_storage_url_legacy_relative_path(monkeypatch) -> None:
     resolved = resolve_storage_url()
 
     assert resolved == "sqlite:///./.rune-api/jobs.db"
+
+
+def test_resolve_storage_url_falls_back_to_default(monkeypatch, tmp_path) -> None:
+    monkeypatch.delenv("RUNE_DB_URL", raising=False)
+    monkeypatch.delenv("RUNE_API_DB_PATH", raising=False)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+
+    assert resolve_storage_url() == f"sqlite:///{tmp_path.as_posix()}/rune/jobs.db"
+
+
+def test_default_storage_url_uses_xdg_data_home(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+
+    assert default_storage_url() == f"sqlite:///{tmp_path.as_posix()}/rune/jobs.db"
+
+
+def test_default_storage_url_uses_localappdata_on_windows(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(storage_module.sys, "platform", "win32")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    assert default_storage_url() == f"sqlite:///{tmp_path.as_posix()}/rune/jobs.db"
+
+
+def test_make_storage_windows_absolute_path_drops_leading_slash(monkeypatch) -> None:
+    captured: dict[str, str] = {}
+
+    class FakeSQLiteAdapter:
+        def __init__(self, db_path: str) -> None:
+            captured["db_path"] = db_path
+
+    monkeypatch.setattr(storage_module, "SQLiteStorageAdapter", FakeSQLiteAdapter)
+
+    store = make_storage("sqlite:///C:/temp/jobs.db")
+
+    assert isinstance(store, FakeSQLiteAdapter)
+    assert captured["db_path"] == "C:/temp/jobs.db"
 
 
 def test_storage_port_protocol_matches_sqlite_adapter(tmp_path) -> None:
