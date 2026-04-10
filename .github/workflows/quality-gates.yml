@@ -114,6 +114,11 @@ jobs:
           pytest -o addopts='' -m integration_postgres tests/integration/test_postgres_storage.py
           --cov=rune_bench.storage.postgres --cov-report=term-missing --cov-fail-under=0
 
+  # ─── SR-2 quantitative compliance (rune-audit) ─────────────────────────────
+  sr2-compliance:
+    uses: lpasquali/rune-ci/.github/workflows/sr2-compliance.yml@main
+    secrets: inherit
+
   # ─── Shared: Container Build (Multi-arch) ──────────────────────────────────
   container:
     needs: [changes, security]
@@ -125,7 +130,7 @@ jobs:
 
   # ─── Compliance/Merge Gate ──────────────────────────────────────────────────
   compliance:
-    needs: [security, python-quality, integration, postgres-integration, container]
+    needs: [security, python-quality, integration, postgres-integration, container, sr2-compliance]
     if: always()
     uses: lpasquali/rune-ci/.github/workflows/pr-compliance.yml@main
     with:
