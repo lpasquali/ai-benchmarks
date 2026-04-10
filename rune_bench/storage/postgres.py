@@ -438,6 +438,36 @@ class PostgresStorageAdapter:
             for row in rows
         ]
 
+    def list_jobs_for_finops(self, *, tenant_id: str, limit: int = 2000) -> list[dict[str, Any]]:
+        cap = max(1, min(int(limit), 5000))
+        with self.connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT kind, request_json, result_json, created_at, updated_at
+                FROM jobs
+                WHERE tenant_id = %s
+                  AND status = 'succeeded'
+                  AND kind IN ('benchmark', 'agentic-agent')
+                ORDER BY updated_at DESC
+                LIMIT %s
+                """,
+                (tenant_id, cap),
+            ).fetchall()
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            created = float(row["created_at"])
+            updated = float(row["updated_at"])
+            duration = max(updated - created, 1e-3)
+            out.append(
+                {
+                    "kind": str(row["kind"]),
+                    "request_payload": json.loads(row["request_json"]),
+                    "result_payload": json.loads(row["result_json"]) if row["result_json"] else None,
+                    "duration_seconds": duration,
+                }
+            )
+        return out
+
     def get_job(self, job_id: str, *, tenant_id: str | None = None) -> JobRecord | None:
         query = "SELECT * FROM jobs WHERE job_id = %s"
         params: list[object] = [job_id]

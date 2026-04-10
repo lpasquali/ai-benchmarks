@@ -86,6 +86,10 @@ class StoragePort(Protocol):
         """Return all raw workflow events for a single job, ordered by time."""
         ...
 
+    def list_jobs_for_finops(self, *, tenant_id: str, limit: int = 2000) -> list[dict]:
+        """Recent succeeded ``benchmark`` / ``agentic-agent`` jobs for FinOps simulation."""
+        ...
+
     # ── Chain state ────────────────────────────────────────────────────────
 
     def record_chain_initialized(

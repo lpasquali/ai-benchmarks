@@ -228,6 +228,45 @@ def test_record_chain_node_transition_updates_state() -> None:
     assert params[3] == "job-1"
 
 
+def test_record_chain_node_transition_sets_node_error() -> None:
+    conn = _FakeConnection(
+        results=[
+            _Result(
+                one={
+                    "state_json": json.dumps(
+                        {
+                            "nodes": [
+                                {
+                                    "id": "draft",
+                                    "agent_name": "DraftAgent",
+                                    "status": "running",
+                                    "started_at": None,
+                                    "finished_at": None,
+                                    "error": None,
+                                }
+                            ],
+                            "edges": [],
+                        }
+                    )
+                }
+            )
+        ]
+    )
+    adapter = _make_adapter(conn)
+
+    adapter.record_chain_node_transition(
+        job_id="job-1",
+        node_id="draft",
+        status="failed",
+        error="node blew up",
+    )
+
+    _, params = conn.executed[1]
+    state = json.loads(params[0])
+    assert state["nodes"][0]["status"] == "failed"
+    assert state["nodes"][0]["error"] == "node blew up"
+
+
 def test_record_chain_node_transition_rejects_missing_state_or_node() -> None:
     missing_state = _make_adapter(_FakeConnection(results=[_Result(one=None)]))
     with pytest.raises(RuntimeError, match="not initialized"):
@@ -545,6 +584,25 @@ def test_get_job_returns_records_and_filters_tenant() -> None:
     assert adapter.get_job("job-1") is None
     assert conn.executed[0][0] == "SELECT * FROM jobs WHERE job_id = %s AND tenant_id = %s"
     assert conn.executed[1][0] == "SELECT * FROM jobs WHERE job_id = %s"
+
+
+def test_list_jobs_for_finops_maps_rows() -> None:
+    row = {
+        "kind": "benchmark",
+        "request_json": json.dumps({"model": "m"}),
+        "result_json": None,
+        "created_at": 10.0,
+        "updated_at": 13.0,
+    }
+    conn = _FakeConnection(results=[_Result(many=[row])])
+    adapter = _make_adapter(conn)
+    out = adapter.list_jobs_for_finops(tenant_id="t1", limit=100)
+    assert len(out) == 1
+    assert out[0]["kind"] == "benchmark"
+    assert out[0]["request_payload"] == {"model": "m"}
+    assert out[0]["result_payload"] is None
+    assert out[0]["duration_seconds"] == pytest.approx(3.0)
+    assert conn.executed[0][1] == ("t1", 100)
 
 
 def test_close_and_del_are_best_effort() -> None:

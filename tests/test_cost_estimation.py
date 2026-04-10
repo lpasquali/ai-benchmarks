@@ -154,6 +154,15 @@ def test_cost_estimator_vastai_no_max_dph():
     assert result.projected_cost_usd == pytest.approx(2.5, rel=1e-3)
 
 
+def test_cost_estimator_vastai_min_only():
+    """_estimate_vastai branch: min_dph > 0, max_dph == 0 uses min rate."""
+    estimator = CostEstimator()
+    r = _estimator_req(vastai=True, min_dph=2.0, max_dph=0.0, estimated_duration_seconds=3600)
+    result = asyncio.run(estimator.estimate(r))
+    assert result.cost_driver == "vastai"
+    assert result.projected_cost_usd == pytest.approx(2.0, rel=1e-3)
+
+
 def test_cost_estimator_aws():
     estimator = CostEstimator()
     r = _estimator_req(aws=True, estimated_duration_seconds=3600)
