@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for :mod:`rune_bench.metrics.pricing` (issue #214)."""
+"""Tests for :class:`rune_bench.metrics.pricing.PricingSoothSayer` and FinOps HTTP API (#214)."""
 
 from __future__ import annotations
 
