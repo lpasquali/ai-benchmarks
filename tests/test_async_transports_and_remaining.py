@@ -93,6 +93,28 @@ class TestAsyncStdioTransport:
             with pytest.raises(RuntimeError, match="bad input"):
                 asyncio.run(transport.call_async("ask", {}))
 
+    def test_wait_for_timeout_kills_process(self) -> None:
+        from rune_bench.drivers import stdio as stdio_mod
+        from rune_bench.drivers.stdio import AsyncStdioTransport
+
+        transport = AsyncStdioTransport(["python3", "-m", "test_driver"])
+        mock_proc = MagicMock()
+        mock_proc.communicate = AsyncMock()
+        mock_proc.kill = MagicMock()
+        mock_proc.wait = AsyncMock(return_value=0)
+
+        async def timeout_wait_for(_coro, *, timeout=None, **_kwargs):
+            raise TimeoutError()
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            with patch("asyncio.wait_for", side_effect=timeout_wait_for):
+                with patch.object(stdio_mod, "driver_invocation_timeout_seconds", return_value=1.0):
+                    with pytest.raises(RuntimeError, match="SR-Q-011"):
+                        asyncio.run(transport.call_async("ask", {}))
+
+        mock_proc.kill.assert_called_once()
+        mock_proc.wait.assert_awaited_once()
+
 
 # ---------------------------------------------------------------------------
 # AsyncHttpTransport

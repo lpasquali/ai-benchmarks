@@ -5,11 +5,22 @@ from __future__ import annotations
 
 import json
 from http.server import ThreadingHTTPServer
+from unittest.mock import patch
 from urllib.request import Request, urlopen
 
 from rune_bench.api_server import ApiSecurityConfig, RuneApiApplication
 from rune_bench.job_store import JobStore
-from rune_bench.metrics.pricing import PricingSoothSayer, _vast_dph_stats
+from rune_bench.metrics import pricing as pricing_mod
+from rune_bench.metrics.pricing import (
+    PricingSoothSayer,
+    _aggregate,
+    _extract_tokens_from_result,
+    _fallback_dph,
+    _job_matches_filters,
+    _model_llm_rates,
+    _vast_dph_stats,
+    make_pricing_sooth_sayer,
+)
 
 _API_TOKEN = "a" * 32
 _SHA256_HEX = "3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547"
@@ -151,3 +162,148 @@ def test_finops_simulate_http(tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_model_llm_rates_empty_and_named_models():
+    assert _model_llm_rates("") == pricing_mod._DEFAULT_LLM_PER_MILLION
+    assert _model_llm_rates("  GPT-4-TURBO-preview  ")[0] == 10.0
+    assert _model_llm_rates("claude-3-haiku-foo")[0] == 0.25
+
+
+def test_fallback_dph_unknown_uses_default():
+    assert _fallback_dph("unknown-gpu") == 0.50
+    assert _fallback_dph("NVIDIA A100 80GB") == 1.40
+
+
+def test_extract_tokens_invalid_numbers_skipped_openai_nested():
+    assert _extract_tokens_from_result({"prompt_eval_count": "bad", "eval_count": 1}) == (None, None)
+    assert _extract_tokens_from_result(
+        {"prompt_tokens": "bad", "completion_tokens": 20}
+    ) == (None, None)
+    assert _extract_tokens_from_result(
+        {"outer": {"prompt_tokens": 10, "completion_tokens": 20}}
+    ) == (10.0, 20.0)
+    assert _extract_tokens_from_result([{"prompt_eval_count": 3, "eval_count": 4}]) == (3.0, 4.0)
+
+
+def test_job_matches_filters_edge_cases():
+    assert not _job_matches_filters("llm-instance", {"model": "m"}, agent="", suite="", model="")
+    assert not _job_matches_filters(
+        "benchmark",
+        {"agent": "holmes", "model": "m", "template_hash": "t"},
+        agent="holmes",
+        suite="",
+        model="",
+    )
+    assert not _job_matches_filters(
+        "agentic-agent",
+        {"agent": "holmes", "model": "m"},
+        agent="",
+        suite="tpl",
+        model="",
+    )
+    assert not _job_matches_filters(
+        "benchmark",
+        {"model": "a", "template_hash": "t"},
+        agent="",
+        suite="",
+        model="b",
+    )
+
+
+def test_aggregate_empty_rows():
+    agg = _aggregate([])
+    assert agg.n == 0
+
+
+def test_vast_dph_stats_search_raises_uses_fallback():
+    def _boom(**_kwargs):
+        raise OSError("network")
+
+    mid, lo, hi = _vast_dph_stats(_boom, "4090")
+    assert mid == _fallback_dph("4090")
+
+
+def test_vast_dph_stats_non_list_offers():
+    def _bad(**_kwargs):
+        return {"not": "a list"}
+
+    mid, lo, hi = _vast_dph_stats(_bad, "4090")
+    assert mid == _fallback_dph("4090")
+
+
+def test_vast_dph_stats_skips_invalid_dph_and_empty_gpu_filter():
+    offers = [
+        {"gpu_name": "RTX 4090", "dph_total": "x"},
+        {"gpu_name": "RTX 4090", "dph_total": 0.4},
+    ]
+
+    def _search(**_kwargs):
+        return offers
+
+    mid, lo, hi = _vast_dph_stats(_search, "")
+    assert lo == 0.4 and hi == 0.4 and mid == 0.4
+
+
+def test_vast_dph_stats_respects_max_offers():
+    offers = [{"gpu_name": "RTX 4090", "dph_total": float(i) * 0.01} for i in range(1, 120)]
+
+    def _search(**_kwargs):
+        return offers
+
+    _vast_dph_stats(_search, "4090", max_offers=5)
+    # If loop stopped early, median is from first 5 collected positive dphs — still valid floats
+    mid, _, _ = _vast_dph_stats(_search, "4090", max_offers=5)
+    assert mid > 0
+
+
+def test_sooth_sayer_high_confidence_and_live_vast():
+    rows = []
+    for i in range(5):
+        rows.append(
+            {
+                "kind": "agentic-agent",
+                "request_payload": {
+                    "agent": "holmes",
+                    "model": "m",
+                    "question": "q",
+                    "backend_url": None,
+                    "backend_warmup": False,
+                    "backend_warmup_timeout": 1,
+                },
+                "result_payload": {
+                    "metadata": {"prompt_eval_count": 100 + i, "eval_count": 50 + i},
+                },
+                "duration_seconds": 30.0 + i,
+            }
+        )
+    store = _MemStore(rows)
+
+    def _vast(**_kwargs):
+        return [{"gpu_name": "RTX 4090", "dph_total": 0.6}]
+
+    sayer = PricingSoothSayer(store, vast_search_offers=_vast)
+    out = sayer.simulate(tenant_id="t1", agent="holmes", model="m", gpu="4090")
+    assert out["confidence"] == "high"
+    assert out["vast_pricing_source"] == "live"
+
+
+@patch("rune_bench.resources.vastai.sdk.VastAI")
+def test_make_pricing_sooth_sayer_wires_vast_when_env_set(mock_vast, monkeypatch):
+    monkeypatch.setenv("VAST_API_KEY", "k" * 40)
+    inst = mock_vast.return_value
+    inst.search_offers.return_value = [{"gpu_name": "RTX 4090", "dph_total": 0.5}]
+    store = _MemStore([])
+    sayer = make_pricing_sooth_sayer(store)
+    out = sayer.simulate(tenant_id="t", gpu="4090")
+    assert out["vast_pricing_source"] == "live"
+    mock_vast.assert_called_once()
+
+
+@patch("rune_bench.resources.vastai.sdk.VastAI", side_effect=RuntimeError("boom"))
+def test_make_pricing_sooth_sayer_falls_back_when_vast_import_fails(_mock_vast, monkeypatch):
+    monkeypatch.setenv("VAST_API_KEY", "k" * 40)
+    store = _MemStore([])
+    sayer = make_pricing_sooth_sayer(store)
+    out = sayer.simulate(tenant_id="t", gpu="4090")
+    assert out["vast_pricing_source"] == "fallback"

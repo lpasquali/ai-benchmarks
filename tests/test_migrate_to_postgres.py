@@ -268,6 +268,28 @@ def test_migrate_to_postgres_requires_sqlite_source(monkeypatch) -> None:
         )
 
 
+def test_migrate_to_postgres_requires_postgres_target(monkeypatch, tmp_path) -> None:
+    from rune_bench.storage.sqlite import SQLiteStorageAdapter
+
+    db_a = tmp_path / "a.db"
+    db_b = tmp_path / "b.db"
+    adapters = [SQLiteStorageAdapter(db_a), SQLiteStorageAdapter(db_b)]
+    monkeypatch.setattr(migration_mod, "make_storage", lambda _url: adapters.pop(0))
+
+    with pytest.raises(RuntimeError, match="target must be a postgresql:// URL"):
+        migration_mod.migrate_to_postgres(
+            source_url=f"sqlite:///{db_a.as_posix()}",
+            target_url="postgresql://localhost/rune",
+        )
+
+
+def test_insert_batch_no_rows_is_noop() -> None:
+    target = _FakePostgresAdapter()
+    spec = migration_mod._TABLE_SPECS[0]
+    migration_mod._insert_batch(target, spec, [])
+    assert target._conn.tables == {}
+
+
 def test_migrate_to_postgres_rolls_back_failing_batch(monkeypatch) -> None:
     source = _FakeSQLiteAdapter(
         {

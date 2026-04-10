@@ -168,6 +168,38 @@ def test_default_storage_url_uses_localappdata_on_windows(monkeypatch, tmp_path)
     assert default_storage_url() == f"sqlite:///{tmp_path.as_posix()}/rune/jobs.db"
 
 
+def test_default_storage_url_uses_application_support_on_darwin(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(storage_module.sys, "platform", "darwin")
+    fake_home = tmp_path
+    monkeypatch.setattr(storage_module.Path, "home", lambda: fake_home)
+
+    expected = fake_home / "Library" / "Application Support" / "rune" / "jobs.db"
+    assert default_storage_url() == f"sqlite:///{expected.as_posix()}"
+
+
+def test_sqlite_connection_yields_raw_connection() -> None:
+    store = make_storage("sqlite:///:memory:")
+    with store.connection() as conn:
+        row = conn.execute("SELECT 1 AS n").fetchone()
+        assert row["n"] == 1
+
+
+def test_sqlite_list_jobs_for_finops_includes_succeeded_benchmarks() -> None:
+    store = make_storage("sqlite:///:memory:")
+    job_id, _ = store.create_job(
+        tenant_id="tenant-a",
+        kind="benchmark",
+        request_payload={"model": "m"},
+    )
+    store.update_job(job_id, status="succeeded", result_payload={"tokens": 1})
+    rows = store.list_jobs_for_finops(tenant_id="tenant-a", limit=10)
+    assert len(rows) == 1
+    assert rows[0]["kind"] == "benchmark"
+    assert rows[0]["request_payload"] == {"model": "m"}
+    assert rows[0]["result_payload"] == {"tokens": 1}
+    assert rows[0]["duration_seconds"] >= 1e-3
+
+
 def test_make_storage_windows_absolute_path_drops_leading_slash(monkeypatch) -> None:
     captured: dict[str, str] = {}
 
