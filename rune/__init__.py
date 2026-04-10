@@ -66,6 +66,12 @@ warmup_existing_ollama_model = warmup_backend_model
 provision_vastai_ollama = provision_vastai_backend
 
 app = typer.Typer(help="RUNE — Reliability Use-case Numeric Evaluator", add_completion=False)
+db_app = typer.Typer(
+    help="Database maintenance utilities",
+    add_completion=False,
+    no_args_is_help=True,
+)
+app.add_typer(db_app, name="db")
 console = Console()
 
 # Load rune.yaml (project) / ~/.rune/config.yaml (global) before reading env vars.
@@ -535,6 +541,12 @@ def serve_api(
         envvar="RUNE_API_PORT",
         help="Port to bind API server to (default: 8080 in containers, random free port locally)",
     ),
+    db_url: str | None = typer.Option(
+        None,
+        "--db-url",
+        envvar="RUNE_DB_URL",
+        help="Storage URL for the API server (sqlite:// or postgresql://)",
+    ),
     debug: bool = typer.Option(
         False,
         "--debug",
@@ -554,13 +566,79 @@ def serve_api(
     ))
 
     try:
-        app_server = RuneApiApplication.from_env()
+        app_server = RuneApiApplication.from_env(db_url=db_url)
         app_server.serve(host=api_host, port=resolved_port)
     except KeyboardInterrupt:
         console.print("\n[yellow]Server stopped.[/yellow]")
         raise typer.Exit(0)
     except Exception as exc:
         _print_error_and_exit(f"Server error: {exc}")
+
+
+@db_app.command("migrate-to-postgres")
+def migrate_db_to_postgres(
+    source: str = typer.Option(
+        ...,
+        "--source",
+        help="Source storage URL (expected: sqlite://...)",
+    ),
+    target: str = typer.Option(
+        ...,
+        "--target",
+        help="Target storage URL (expected: postgresql://...)",
+    ),
+    batch_size: int = typer.Option(
+        1000,
+        "--batch-size",
+        min=1,
+        help="Rows to migrate per batch",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Show row counts without writing to PostgreSQL",
+    ),
+) -> None:
+    """Copy an existing SQLite database into PostgreSQL."""
+    try:
+        from rune_bench.storage.migrate_to_postgres import migrate_to_postgres
+    except ImportError:
+        _print_error_and_exit(
+            "Postgres migration requires psycopg; install 'rune-bench[pg]'"
+        )
+
+    def _report_progress(table_name: str, copied: int, total: int, is_dry_run: bool) -> None:
+        if is_dry_run:
+            return
+        console.print(f"[cyan]{table_name}[/cyan]: migrated {copied}/{total} rows")
+
+    try:
+        results = migrate_to_postgres(
+            source_url=source,
+            target_url=target,
+            batch_size=batch_size,
+            dry_run=dry_run,
+            reporter=_report_progress,
+        )
+    except Exception as exc:
+        _print_error_and_exit(str(exc))
+
+    summary = Table(
+        title="Database Migration Plan" if dry_run else "Database Migration Summary",
+        show_header=True,
+        header_style="bold magenta",
+    )
+    summary.add_column("Table")
+    summary.add_column("Source Rows", justify="right")
+    summary.add_column("Migrated Rows", justify="right")
+
+    for result in results:
+        migrated = "-" if result.dry_run else str(result.migrated_count)
+        summary.add_row(result.table, str(result.source_count), migrated)
+
+    console.print(summary)
+    if dry_run:
+        console.print("[yellow]Dry run complete: no rows were written.[/yellow]")
 
 
 @app.command("run-llm-instance")

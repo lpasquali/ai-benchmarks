@@ -80,6 +80,7 @@ def test_resolve_backend_type_env_unsupported(monkeypatch):
 def test_serve_api_keyboard_interrupt_and_error(monkeypatch):
     # Avoid unrelated side effects
     monkeypatch.setattr(rune, "_enable_debug_if_requested", lambda _d: None)
+    captured: dict[str, object] = {}
 
     class AppServerInterrupt:
         def serve(self, host, port):
@@ -89,14 +90,27 @@ def test_serve_api_keyboard_interrupt_and_error(monkeypatch):
         def serve(self, host, port):
             raise RuntimeError("boom")
 
-    monkeypatch.setattr("rune_bench.api_server.RuneApiApplication.from_env", lambda: AppServerInterrupt())
-    with pytest.raises(typer.Exit) as exc:
-        rune.serve_api(api_host="127.0.0.1", api_port=9999, debug=False)
-    assert exc.value.exit_code == 0
+    def _from_env_interrupt(*, db_url=None):
+        captured["interrupt_db_url"] = db_url
+        return AppServerInterrupt()
 
-    monkeypatch.setattr("rune_bench.api_server.RuneApiApplication.from_env", lambda: AppServerError())
+    monkeypatch.setattr("rune_bench.api_server.RuneApiApplication.from_env", _from_env_interrupt)
     with pytest.raises(typer.Exit) as exc:
-        rune.serve_api(api_host="127.0.0.1", api_port=9999, debug=False)
+        rune.serve_api(
+            api_host="127.0.0.1",
+            api_port=9999,
+            db_url="postgresql://db/rune",
+            debug=False,
+        )
+    assert exc.value.exit_code == 0
+    assert captured["interrupt_db_url"] == "postgresql://db/rune"
+
+    monkeypatch.setattr(
+        "rune_bench.api_server.RuneApiApplication.from_env",
+        lambda *, db_url=None: AppServerError(),
+    )
+    with pytest.raises(typer.Exit) as exc:
+        rune.serve_api(api_host="127.0.0.1", api_port=9999, db_url=None, debug=False)
     assert exc.value.exit_code == 1
 
 

@@ -12,7 +12,6 @@ import threading
 import time
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 from typing import Callable, TypeAlias
 from urllib.parse import parse_qs, urlparse
 
@@ -31,7 +30,7 @@ from rune_bench.api_contracts import (
     RunLLMInstanceRequest,
 )
 from rune_bench.metrics import SQLiteMetricsCollector, clear_collector, set_collector, set_job_id, span
-from rune_bench.storage import StoragePort
+from rune_bench.storage import StoragePort, make_storage, resolve_storage_url
 from rune_bench.storage.sqlite import JobRecord, SQLiteStorageAdapter
 
 # Back-compat alias: legacy tests and callers still reference
@@ -116,9 +115,12 @@ class RuneApiApplication:
         self.auth_lock = threading.Lock()
 
     @classmethod
-    def from_env(cls) -> "RuneApiApplication":
-        db_path = os.environ.get("RUNE_API_DB_PATH", ".rune-api/jobs.db")
-        return cls(store=SQLiteStorageAdapter(Path(db_path)), security=ApiSecurityConfig.from_env())
+    def from_env(cls, *, db_url: str | None = None) -> "RuneApiApplication":
+        resolved_db_url = resolve_storage_url(db_url)
+        return cls(
+            store=make_storage(resolved_db_url),
+            security=ApiSecurityConfig.from_env(),
+        )
 
     def create_handler(self):
         app = self
