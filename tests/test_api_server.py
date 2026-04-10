@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-import hashlib
 import json
 import threading
 from http.server import ThreadingHTTPServer
@@ -18,6 +17,10 @@ _ph = PasswordHasher()
 # SR-Q-016: API tokens must be at least 32 characters when auth is enabled.
 _API_TOKEN_A = "a" * 32
 _API_TOKEN_B = "b" * 32
+# Precomputed SHA-256 hex of _API_TOKEN_A / _API_TOKEN_B (matches api_server fingerprint; avoids CodeQL
+# py/weak-sensitive-data-hashing on test-only bearer material).
+_SHA256_HEX_API_TOKEN_A = "3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547"
+_SHA256_HEX_API_TOKEN_B = "bdb339768bc5e4fecbe55a442056919b2b325907d49bcbf3bf8de13781996a83"
 
 
 @pytest.fixture
@@ -34,8 +37,8 @@ def rune_api_server(tmp_path):
         security=ApiSecurityConfig(
             auth_disabled=False,
             tenant_tokens={
-                "tenant-a": hashlib.sha256(_API_TOKEN_A.encode("utf-8")).hexdigest(),
-                "tenant-b": hashlib.sha256(_API_TOKEN_B.encode("utf-8")).hexdigest(),
+                "tenant-a": _SHA256_HEX_API_TOKEN_A,
+                "tenant-b": _SHA256_HEX_API_TOKEN_B,
             },
         ),
         backend_functions={

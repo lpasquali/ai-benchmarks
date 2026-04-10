@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-import hashlib
 import json
 import threading
 from unittest.mock import MagicMock
@@ -164,7 +163,7 @@ def test_api_security_from_env(monkeypatch):
     long_a, long_b = "a" * 32, "b" * 32
     monkeypatch.setenv("RUNE_API_TOKENS", f"tenant-a:{long_a},tenant-b:{long_b}")
     cfg = api_server.ApiSecurityConfig.from_env()
-    assert cfg.tenant_tokens["tenant-b"] == hashlib.sha256(long_b.encode("utf-8")).hexdigest()
+    assert cfg.tenant_tokens["tenant-b"] == "bdb339768bc5e4fecbe55a442056919b2b325907d49bcbf3bf8de13781996a83"
 
     monkeypatch.setenv("RUNE_API_TOKENS", "tenant-a:short")
     with pytest.raises(RuntimeError, match="SR-Q-016"):

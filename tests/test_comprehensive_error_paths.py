@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-import hashlib
 from unittest.mock import MagicMock
 from urllib.request import Request, urlopen
 
@@ -21,6 +20,7 @@ _ph = PasswordHasher()
 
 # SR-Q-016: tokens must be >= 32 chars when API auth is enabled.
 _COMPREHENSIVE_API_TOKEN = "t" * 32
+_SHA256_HEX_COMPREHENSIVE_API_TOKEN = "8408c6d2a7b286b16d526315e5e8216cf36a7148cdbbd6e064762cd75ec5ae66"
 
 
 def test_holmes_runner_remaining_paths(monkeypatch, tmp_path):
@@ -147,7 +147,7 @@ def test_api_server_remaining_paths(monkeypatch, tmp_path):
         store=store,
         security=api_server.ApiSecurityConfig(
             auth_disabled=False,
-            tenant_tokens={"tenant": hashlib.sha256(_COMPREHENSIVE_API_TOKEN.encode("utf-8")).hexdigest()},
+            tenant_tokens={"tenant": _SHA256_HEX_COMPREHENSIVE_API_TOKEN},
         ),
         backend_functions={"llm-instance": backend_ollama, "ollama-instance": backend_ollama, "benchmark": backend_bench, "agentic-agent": lambda request: (_ for _ in ()).throw(RuntimeError("bad-run"))},
     )
@@ -243,7 +243,7 @@ def test_api_server_error_paths(monkeypatch, tmp_path):
         store=store,
         security=api_server.ApiSecurityConfig(
             auth_disabled=False,
-            tenant_tokens={"tenant": hashlib.sha256(_COMPREHENSIVE_API_TOKEN.encode("utf-8")).hexdigest()},
+            tenant_tokens={"tenant": _SHA256_HEX_COMPREHENSIVE_API_TOKEN},
         ),
         backend_functions={"agentic-agent": lambda request: {"answer": "ok"}},
     )
@@ -468,12 +468,13 @@ def test_cost_estimate_backend_and_server_endpoints(monkeypatch, tmp_path):
 
     # --- live server for endpoint coverage ---
     _cost_api_token = "tok" + ("x" * 29)  # 32 chars (SR-Q-016)
+    _sha256_hex_cost_api_token = "d2fdd653b4593715bcb1ae534133be8097f123e5d2b729f7529f155e96f2bc31"
     store = api_server.JobStore(tmp_path / "jobs.db")
     app = api_server.RuneApiApplication(
         store=store,
         security=api_server.ApiSecurityConfig(
             auth_disabled=False,
-            tenant_tokens={"t": hashlib.sha256(_cost_api_token.encode("utf-8")).hexdigest()},
+            tenant_tokens={"t": _sha256_hex_cost_api_token},
         ),
         backend_functions={
             "cost-estimate": lambda req: {"projected_cost_usd": 1.5, "cost_driver": "vastai", "resource_impact": "low", "local_energy_kwh": 0.0, "confidence_score": 1.0, "warning": None},
