@@ -25,7 +25,6 @@ try:
 except ImportError:
     VastAI = None  # type: ignore[assignment,misc]
 
-from rune_bench.metrics.cost import calculate_run_cost
 from rune_bench.api_client import RuneApiClient
 from rune_bench.api_contracts import (
     RunAgenticAgentRequest,

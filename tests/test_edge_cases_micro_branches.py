@@ -2,7 +2,6 @@
 import runpy
 import sys
 import threading
-import asyncio
 from pathlib import Path
 from unittest.mock import MagicMock, AsyncMock
 

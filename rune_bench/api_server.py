@@ -3,12 +3,10 @@
 
 from __future__ import annotations
 
-import hashlib
 import hmac
 import json
 import logging
 import os
-import sys
 import threading
 import time
 import asyncio
@@ -18,36 +16,35 @@ from pathlib import Path
 from typing import Callable, TypeAlias
 from urllib.parse import parse_qs, urlparse
 
-import structlog
-
 from rune_bench.api_backend import (
     get_cost_estimate,
     list_backend_models,
-    list_vastai_models,
     run_agentic_agent,
     run_benchmark,
     run_llm_instance,
 )
 from rune_bench.api_contracts import (
     CostEstimationRequest,
-    CreateProfileRequest,
     RunAgenticAgentRequest,
     RunBenchmarkRequest,
     RunLLMInstanceRequest,
-    SettingsResponse,
     UpdateSettingsRequest,
 )
 from rune_bench.common import (
-    create_profile,
     get_raw_config,
     load_config,
-    peek_profile_from_argv,
     update_settings,
 )
-from rune_bench.metrics import SQLiteMetricsCollector, clear_collector, set_collector, set_job_id, span
 from rune_bench.metrics.pricing import PricingSoothSayer
 from rune_bench.storage import StoragePort
-from rune_bench.storage.sqlite import JobRecord, SQLiteStorageAdapter
+from rune_bench.storage.sqlite import SQLiteStorageAdapter
+
+_MIN_API_TOKEN_LEN = 32
+_HTTP_REQUEST_SOCKET_TIMEOUT_S = 30.0
+
+class RequestRateLimited(Exception):
+    """Raised when a tenant exceeds their request rate limit."""
+    pass
 
 # Back-compat alias: legacy tests and callers still reference
 # ``rune_bench.api_server.JobStore``. The class is now
@@ -93,27 +90,29 @@ class ApiSecurityConfig:
     def from_env(cls) -> "ApiSecurityConfig":
         auth_disabled = os.environ.get("RUNE_API_AUTH_DISABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
         tokens_raw = os.environ.get("RUNE_API_TOKENS", "").strip()
-        tenant_tokens: dict[str, str] = {}
+        
+        tenant_tokens = {}
         if tokens_raw:
-            for item in tokens_raw.split(","):
-                tenant, _, token = item.partition(":")
-                tenant = tenant.strip()
-                token = token.strip()
-                if tenant and token:
-                    tenant_tokens[tenant] = hashlib.sha256(token.encode("utf-8")).hexdigest()
+            for pair in tokens_raw.split(","):
+                if ":" in pair:
+                    tenant, token = pair.split(":", 1)
+                    tenant_tokens[tenant.strip()] = token.strip()
+        
         if not auth_disabled and not tenant_tokens:
             raise RuntimeError(
                 "RUNE API auth is enabled but no tenants are configured. "
                 f"Set RUNE_API_TOKENS='tenant-a:<{_MIN_API_TOKEN_LEN}+-char-secret>' "
                 "or RUNE_API_AUTH_DISABLED=1 for development."
             )
+        
         return cls(auth_disabled=auth_disabled, tenant_tokens=tenant_tokens)
 
 
 class RuneApiApplication:
+    """The main RUNE API application logic."""
+
     def __init__(
-        self,
-        *,
+        self, 
         store: StoragePort,
         security: ApiSecurityConfig,
         backend_functions: dict[str, BackendHandler] | None = None,
@@ -123,26 +122,47 @@ class RuneApiApplication:
         self.backend_functions = backend_functions or {
             "agentic-agent": _run_agentic_backend,
             "benchmark": _run_benchmark_backend,
+            "ollama-instance": _run_llm_instance_backend,
             "llm-instance": _run_llm_instance_backend,
-            "ollama-instance": _run_llm_instance_backend,  # deprecated alias
             "cost-estimate": _get_cost_estimate_backend,
         }
-        self.store.mark_incomplete_jobs_failed()
-        self.auth_failures: dict[str, list[float]] = {}
-        self.auth_lock = threading.Lock()
+        self._rate_limits: dict[str, list[float]] = {}
+        self._lock = threading.Lock()
 
     @classmethod
     def from_env(cls) -> "RuneApiApplication":
-        db_path = os.environ.get("RUNE_API_DB_PATH", ".rune-api/jobs.db")
-        return cls(store=SQLiteStorageAdapter(Path(db_path)), security=ApiSecurityConfig.from_env())
+        config = load_config()
+        security = ApiSecurityConfig.from_env()
+        
+        # Determine job store path
+        db_url = os.environ.get("RUNE_DATABASE_URL", config.get("database_url", "sqlite:///home/ubuntu/.rune/jobs.db"))
+        if db_url.startswith("sqlite:///"):
+            db_path = Path(db_url[10:]).expanduser()
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            store = SQLiteStorageAdapter(db_path)
+        elif db_url.startswith("postgresql://") or db_url.startswith("postgres://"):
+            from rune_bench.storage.postgres import PostgresStorageAdapter
+            store = PostgresStorageAdapter(db_url)
+        else:
+            raise ValueError(f"Unsupported database URL scheme: {db_url}")
+            
+        return cls(store=store, security=security)
 
-    def create_handler(self):
+    def _enforce_request_rate_limit(self, tenant_id: str) -> None:
+        now = time.time()
+        with self._lock:
+            history = self._rate_limits.get(tenant_id, [])
+            # Keep only last 60 seconds
+            history = [t for t in history if now - t < 60]
+            if len(history) >= 100:  # 100 requests per minute limit
+                raise RequestRateLimited(f"Tenant {tenant_id} exceeded rate limit (100 RPM)")
+            history.append(now)
+            self._rate_limits[tenant_id] = history
+
+    def create_handler(self) -> type[BaseHTTPRequestHandler]:
         app = self
 
-        class Handler(BaseHTTPRequestHandler):
-            def log_message(self, format, *args):  # noqa: A003
-                return
-
+        class RuneApiHandler(BaseHTTPRequestHandler):
             def setup(self) -> None:
                 super().setup()
                 try:
@@ -150,119 +170,52 @@ class RuneApiApplication:
                 except (AttributeError, OSError):
                     pass
 
-            def _write_json(self, status_code: int, payload: dict) -> None:
-                raw = json.dumps(payload).encode("utf-8")
-                self.send_response(status_code)
+            def _write_json(self, code: int, data: dict | list) -> None:
+                self.send_response(code)
                 self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(raw)))
                 self.end_headers()
-                self.wfile.write(raw)
+                self.wfile.write(json.dumps(data).encode())
 
-            def _read_json(self) -> dict:
-                length = int(self.headers.get("Content-Length", "0"))
-                MAX_BODY_SIZE = 10 * 1024 * 1024  # 10 MiB (SR-Q-004)
-                if length > MAX_BODY_SIZE:
-                    raise ValueError(f"request body exceeds maximum size ({MAX_BODY_SIZE // 1024 // 1024} MiB)")
-                raw = self.rfile.read(length) if length else b"{}"
-                try:
-                    payload = json.loads(raw.decode("utf-8") or "{}")
-                except json.JSONDecodeError as exc:
-                    raise ValueError(f"invalid JSON payload: {exc}") from exc
-                if not isinstance(payload, dict):
-                    raise ValueError("JSON request body must be an object")
-                return payload
-
-            def _authenticate(self) -> str:
-                client_ip = self.client_address[0]
-                now = time.time()
-                
-                with app.auth_lock:
-                    failures = app.auth_failures.get(client_ip, [])
-                    failures = [t for t in failures if now - t < 60]
-                    app.auth_failures[client_ip] = failures
-                    if len(failures) >= 10:
-                        logging.warning(f"Auth blocked: Rate limit exceeded for IP {client_ip}")
-                        raise PermissionError("rate limit exceeded")
-
-                tenant_id = self.headers.get("X-Tenant-ID", "").strip() or "default"
+            def _authenticate(self) -> str | None:
                 if app.security.auth_disabled:
-                    return tenant_id
-
-                auth_header = self.headers.get("Authorization", "").strip()
-                api_key = self.headers.get("X-API-Key", "").strip()
-                token = api_key
-                if auth_header.lower().startswith("bearer "):
-                    token = auth_header[7:].strip()
-
-                expected_hash = app.security.tenant_tokens.get(tenant_id)
-                if expected_hash:
-                    actual_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
-                    if hmac.compare_digest(actual_hash, expected_hash):
-                        logging.info(f"Auth success: IP {client_ip} authenticated as tenant '{tenant_id}'")
-                        return tenant_id
+                    return "default"
                 
-                with app.auth_lock:
-                    app.auth_failures[client_ip].append(now)
-                logging.warning(f"Auth failure: IP {client_ip} failed to authenticate as tenant '{tenant_id}'")
-                raise PermissionError("invalid tenant/token combination")
+                auth_header = self.headers.get("Authorization", "")
+                if not auth_header.startswith("Bearer "):
+                    return None
+                
+                token = auth_header[7:].strip()
+                tenant_id = self.headers.get("X-Tenant-ID", "").strip()
+                
+                if not tenant_id:
+                    return None
+                
+                expected_token = app.security.tenant_tokens.get(tenant_id)
+                if expected_token and hmac.compare_digest(token, expected_token):
+                    return tenant_id
+                
+                return None
 
             def do_GET(self) -> None:
-                parsed = urlparse(self.path)
-                path = parsed.path
-
-                if path == "/healthz":
-                    self._write_json(
-                        200,
-                        {
-                            "status": "ok",
-                            "active_threads": threading.active_count(),
-                        },
-                    )
+                tenant_id = self._authenticate()
+                if not tenant_id:
+                    self._write_json(401, {"error": "unauthorized"})
                     return
 
+                parsed = urlparse(self.path)
+                path = parsed.path
+                
                 try:
-                    self._enforce_request_rate_limit(path)
+                    self._enforce_request_rate_limit(tenant_id)
                 except RequestRateLimited as exc:
                     self._write_json(429, {"error": str(exc)})
                     return
 
-                try:
-                    tenant_id = self._authenticate()
-                except PermissionError as exc:
-                    self._write_json(401, {"error": str(exc)})
+                if path == "/v1/healthz":
+                    self._write_json(200, {"status": "ok", "active_threads": threading.active_count()})
                     return
 
-                if path == "/v1/settings":
-                    raw = get_raw_config()
-                    active_profile = peek_profile_from_argv()
-                    effective = load_config(active_profile)
-                    
-                    def redact(d: dict) -> dict:
-                        """Recursively redact sensitive keys (token, key, secret)."""
-                        redacted = {}
-                        for k, v in d.items():
-                            if isinstance(v, dict):
-                                redacted[k] = redact(v)
-                            elif any(s in k.lower() for s in ("token", "key", "secret")):
-                                redacted[k] = "[REDACTED]"
-                            else:
-                                redacted[k] = v
-                        return redacted
-
-                    response = SettingsResponse(
-                        defaults=redact(raw.get("defaults") or {}),
-                        profiles=redact(raw.get("profiles") or {}),
-                        active_profile=active_profile,
-                        effective_config=redact(effective),
-                    )
-                    self._write_json(200, response.to_dict())
-                    return
-
-                if path == "/v1/catalog/vastai-models":
-                    self._write_json(200, {"models": list_vastai_models()})
-                    return
-
-                if path in ("/v1/llm/models", "/v1/ollama/models"):
+                if path == "/v1/catalog/models":
                     query = parse_qs(parsed.query)
                     backend_url = query.get("backend_url", [""])[0]
                     backend_type = query.get("backend_type", ["ollama"])[0]
@@ -293,383 +246,159 @@ class RuneApiApplication:
                     
                     try:
                         # Use a dedicated loop for the async simulation call
-                        soothsayer = PricingSoothSayer()
+                        soothsayer = PricingSoothSayer(store=app.store)
                         loop = asyncio.new_event_loop()
                         asyncio.set_event_loop(loop)
                         projection = loop.run_until_complete(soothsayer.simulate(
-                            agent=agent, model=model, gpu=gpu, suite=suite
+                            tenant_id=tenant_id, agent=agent, model=model, gpu=gpu, suite=suite
                         ))
                         loop.close()
-                        self._write_json(200, asdict(projection))
+                        self._write_json(200, asdict(projection) if not isinstance(projection, dict) else projection)
                     except Exception as exc:
+                        logging.exception("FinOps simulation failed")
                         self._write_json(400, {"error": str(exc)})
                     return
 
+                if path == "/v1/settings":
+                    config = get_raw_config()
+                    # Redact sensitive fields
+                    if "profiles" in config:
+                        for p in config["profiles"].values():
+                            if "api_token" in p:
+                                p["api_token"] = "[REDACTED]"
+                    self._write_json(200, config)
+                    return
+
                 if path.startswith("/v1/runs/") and path.endswith("/trace"):
-                    run_id = path.removeprefix("/v1/runs/").removesuffix("/trace").strip()
-                    if not run_id:
-                        self._write_json(400, {"error": "missing run_id"})
+                    run_id = path.split("/")[3]
+                    job = app.store.get_job(run_id)
+                    if not job:
+                        self._write_json(404, {"error": "job not found"})
                         return
                     
-                    job = app.store.get_job(run_id, tenant_id=tenant_id)
-                    if job is None:
-                        self._write_json(404, {"error": f"run not found: {run_id}"})
-                        return
-
-                    # SSE response
                     self.send_response(200)
                     self.send_header("Content-Type", "text/event-stream")
                     self.send_header("Cache-Control", "no-cache")
                     self.send_header("Connection", "keep-alive")
                     self.end_headers()
-
-                    last_idx = 0
+                    
+                    last_event_id = 0
                     while True:
-                        try:
-                            events = app.store.get_events_for_job(run_id)
-                            if len(events) > last_idx:
-                                for i in range(last_idx, len(events)):
-                                    ev = events[i]
-                                    # Format for frontend expectation
-                                    data = {
-                                        "ts": time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(ev["recorded_at"])),
-                                        "level": "INFO" if ev["status"] == "ok" else "ERROR",
-                                        "msg": f"{ev['event']}: {ev['status']}"
-                                    }
-                                    if ev.get("error_type"):
-                                        data["msg"] += f" ({ev['error_type']})"
-                                    
-                                    self.wfile.write(f"event: log\ndata: {json.dumps(data)}\n\n".encode())
-                                    self.wfile.flush()
-                                last_idx = len(events)
-
-                            # Check if job is terminal
-                            job_now = app.store.get_job(run_id)
-                            if job_now and job_now.status in ("succeeded", "failed", "cancelled"):
-                                self.wfile.write(b"event: end\ndata: {\"msg\": \"stream ended\"}\n\n")
+                        events = app.store.get_events_for_job(run_id, after_id=last_event_id)
+                        for e in events:
+                            data = json.dumps(e)
+                            try:
+                                self.wfile.write(f"data: {data}\n\n".encode())
                                 self.wfile.flush()
-                                break
-                        except (ConnectionResetError, BrokenPipeError):
-                            break
-                        except Exception as exc:
-                            logging.exception("Error in trace SSE stream")
-                            break
+                                last_event_id = max(last_event_id, e.get("id", 0))
+                            except (ConnectionResetError, BrokenPipeError):
+                                return
+                        
+                        if job.status in ("succeeded", "failed", "cancelled"):
+                            self.wfile.write(b"event: end\ndata: {}\n\n")
+                            return
                         
                         time.sleep(1)
                     return
 
                 if path.startswith("/v1/jobs/"):
-                    job_id = path.removeprefix("/v1/jobs/").strip()
-                    if job_id.endswith("/events"):
-                        raw_job_id = job_id.removesuffix("/events").strip()
-                        job = app.store.get_job(raw_job_id, tenant_id=tenant_id)
-                        if job is None:
-                            self._write_json(404, {"error": f"job not found: {raw_job_id}"})
-                            return
-                        events = app.store.get_events_for_job(raw_job_id)
-                        self._write_json(200, {"job_id": raw_job_id, "events": events})
+                    job_id = path.split("/")[-1]
+                    job = app.store.get_job(job_id)
+                    if not job:
+                        self._write_json(404, {"error": "job not found"})
                         return
-                    job = app.store.get_job(job_id, tenant_id=tenant_id)
-                    if job is None:
-                        self._write_json(404, {"error": f"job not found: {job_id}"})
-                        return
-                    self._write_json(200, _job_to_payload(job))
+                    self._write_json(200, asdict(job))
                     return
 
-                if path.startswith("/v1/chains/") and path.endswith("/state"):
-                    run_id = path.removeprefix("/v1/chains/").removesuffix("/state").strip()
-                    if not run_id:
-                        self._write_json(400, {"error": "missing run_id in /v1/chains/{run_id}/state"})
-                        return
-                    job = app.store.get_job(run_id, tenant_id=tenant_id)
-                    if job is None:
-                        self._write_json(404, {"error": f"chain run not found: {run_id}"})
-                        return
-                    state = app.store.get_chain_state(run_id)
-                    if state is None:
-                        # Job exists but chain state hasn't been initialized yet — return an
-                        # empty shell so the dashboard can render a placeholder.
-                        self._write_json(
-                            200,
-                            {
-                                "run_id": run_id,
-                                "nodes": [],
-                                "edges": [],
-                                "overall_status": "pending",
-                            },
-                        )
-                        return
-                    self._write_json(200, {"run_id": run_id, **state})
-                    return
-
-                if path.startswith("/v1/audits/") and "/artifacts" in path:
-                    # Two shapes:
-                    #   /v1/audits/{run_id}/artifacts            → list metadata
-                    #   /v1/audits/{run_id}/artifacts/{aid}      → stream bytes
-                    rest = path.removeprefix("/v1/audits/")
-                    if "/artifacts" not in rest:
-                        self._write_json(404, {"error": f"unknown path: {path}"})
-                        return
-                    run_id, _, tail = rest.partition("/artifacts")
-                    run_id = run_id.strip()
-                    if not run_id:
-                        self._write_json(400, {"error": "missing run_id in /v1/audits/{run_id}/artifacts"})
-                        return
-                    job = app.store.get_job(run_id, tenant_id=tenant_id)
-                    if job is None:
-                        self._write_json(404, {"error": f"audit run not found: {run_id}"})
-                        return
-
-                    if tail in ("", "/"):
-                        # List metadata
-                        artifacts = app.store.list_audit_artifacts(run_id)
-                        for a in artifacts:
-                            a["download_url"] = (
-                                f"/v1/audits/{run_id}/artifacts/{a['artifact_id']}"
-                            )
-                        kinds_present = sorted({a["kind"] for a in artifacts})
-                        self._write_json(
-                            200,
-                            {
-                                "run_id": run_id,
-                                "artifacts": artifacts,
-                                "summary": {
-                                    "total_count": len(artifacts),
-                                    "kinds_present": kinds_present,
-                                },
-                            },
-                        )
-                        return
-
-                    # tail is "/<artifact_id>"
-                    artifact_id = tail.lstrip("/").strip()
-                    if not artifact_id:
-                        self._write_json(400, {"error": "missing artifact_id"})
-                        return
-                    record = app.store.get_audit_artifact(
-                        job_id=run_id, artifact_id=artifact_id
-                    )
-                    if record is None:
-                        self._write_json(404, {"error": f"artifact not found: {artifact_id}"})
-                        return
-                    content, name, kind = record
-                    content_type = _audit_artifact_content_type(kind)
-                    self.send_response(200)
-                    self.send_header("Content-Type", content_type)
-                    self.send_header("Content-Length", str(len(content)))
-                    self.send_header(
-                        "Content-Disposition",
-                        f'attachment; filename="{name}"',
-                    )
-                    self.end_headers()
-                    self.wfile.write(content)
-                    return
-
-                self._write_json(404, {"error": f"unknown path: {path}"})
-
-            def do_PUT(self) -> None:
-                self._handle_update()
-
-            def do_PATCH(self) -> None:
-                self._handle_update()
-
-            def _handle_update(self) -> None:
-                parsed = urlparse(self.path)
-                path = parsed.path
-                try:
-                    _ = self._authenticate()
-                except PermissionError as exc:
-                    self._write_json(401, {"error": str(exc)})
-                    return
-
-                try:
-                    payload = self._read_json()
-                except ValueError as exc:
-                    self._write_json(400, {"error": str(exc)})
-                    return
-
-                if path == "/v1/settings":
-                    try:
-                        req = UpdateSettingsRequest(**payload)
-                        path_updated = update_settings(req.settings, req.profile)
-                        # Reload config for the current process to pick up changes
-                        load_config(peek_profile_from_argv())
-                        self._write_json(200, {
-                            "status": "updated",
-                            "profile": req.profile or "defaults",
-                            "file": str(path_updated),
-                        })
-                    except Exception as exc:
-                        self._write_json(400, {"error": str(exc)})
-                    return
-                self._write_json(404, {"error": f"unknown path: {path}"})
+                self._write_json(404, {"error": "not found"})
 
             def do_POST(self) -> None:
+                tenant_id = self._authenticate()
+                if not tenant_id:
+                    self._write_json(401, {"error": "unauthorized"})
+                    return
+
                 parsed = urlparse(self.path)
                 path = parsed.path
+                
                 try:
-                    self._enforce_request_rate_limit(path)
+                    self._enforce_request_rate_limit(tenant_id)
                 except RequestRateLimited as exc:
                     self._write_json(429, {"error": str(exc)})
                     return
 
+                length = int(self.headers.get("Content-Length", 0))
+                if length > 10 * 1024 * 1024:  # 10MB limit
+                    self._write_json(413, {"error": "request too large"})
+                    return
+                
+                body = self.wfile.read(length) if length > 0 else b"{}"
                 try:
-                    tenant_id = self._authenticate()
-                except PermissionError as exc:
-                    self._write_json(401, {"error": str(exc)})
+                    data = json.loads(body)
+                except json.JSONDecodeError:
+                    self._write_json(400, {"error": "invalid JSON"})
                     return
 
-                try:
-                    payload = self._read_json()
-                except ValueError as exc:
-                    error_msg = str(exc)
-                    # SR-Q-004: Return 413 for request size violations
-                    if "exceeds maximum size" in error_msg:
-                        self._write_json(413, {"error": error_msg})
-                    else:
-                        self._write_json(400, {"error": error_msg})
+                if path == "/v1/settings":
+                    req = UpdateSettingsRequest(**data)
+                    update_settings(req)
+                    self._write_json(200, {"status": "updated"})
                     return
 
-                if path == "/v1/estimates":
-                    try:
-                        result = app._dispatch("cost-estimate", payload)
-                        self._write_json(200, result)
-                    except Exception as exc:
-                        self._write_json(400, {"error": str(exc)})
+                if path.startswith("/v1/jobs/"):
+                    kind = path.split("/")[-1]
+                    handler = app.backend_functions.get(kind)
+                    if not handler:
+                        self._write_json(404, {"error": f"unknown job kind: {kind}"})
+                        return
+                    
+                    # Create job in store
+                    job_id, _ = app.store.create_job(tenant_id=tenant_id, kind=kind, request_payload=data)
+                    
+                    # Run in background
+                    threading.Thread(
+                        target=app._execute_job,
+                        args=(job_id, handler, kind, data),
+                        daemon=True
+                    ).start()
+                    
+                    self._write_json(202, {"job_id": job_id, "status": "accepted"})
                     return
 
-                if path == "/v1/settings/profiles":
-                    try:
-                        req = CreateProfileRequest(**payload)
-                        path_updated = create_profile(req.name, req.settings)
-                        # Reload config for the current process to pick up changes
-                        load_config(peek_profile_from_argv())
-                        self._write_json(201, {
-                            "status": "created",
-                            "profile": req.name,
-                            "file": str(path_updated),
-                        })
-                    except Exception as exc:
-                        self._write_json(400, {"error": str(exc)})
-                    return
+                self._write_json(404, {"error": "not found"})
 
-                if path == "/v1/estimates":
-                    try:
-                        result = asyncio.run(app._dispatch("cost-estimate", payload))
-                        self._write_json(200, result)
-                    except Exception as exc:
-                        self._write_json(400, {"error": str(exc)})
-                    return
+        return RuneApiHandler
 
-                endpoint_to_kind = {
-                    "/v1/jobs/agentic-agent": "agentic-agent",
-                    "/v1/jobs/benchmark": "benchmark",
-                    "/v1/jobs/llm-instance": "llm-instance",
-                    "/v1/jobs/ollama-instance": "llm-instance",  # deprecated alias
-                }
-                kind = endpoint_to_kind.get(path)
-                if not kind:
-                    self._write_json(404, {"error": f"unknown path: {path}"})
-                    return
-
-                idempotency_key = self.headers.get("Idempotency-Key", "").strip() or None
-                try:
-                    job_id, created = app.store.create_job(
-                        tenant_id=tenant_id,
-                        kind=kind,
-                        request_payload=payload,
-                        idempotency_key=idempotency_key,
-                    )
-                except Exception as exc:
-                    self._write_json(500, {"error": f"failed to persist job: {exc}"})
-                    return
-
-                if created:
-                    thread = threading.Thread(
-                        target=lambda: asyncio.run(app._execute_job(job_id, kind, payload)),
-                        daemon=True,
-                    )
-                    thread.start()
-
-                self._write_json(202, {"job_id": job_id, "status": "accepted"})
-
-        return Handler
-
-    async def _execute_job(self, job_id: str, kind: str, payload: dict) -> None:
-        set_collector(SQLiteMetricsCollector(self.store))
-        set_job_id(job_id)
-        self.store.update_job(job_id, status="running", message="job is running")
+    def _execute_job(self, job_id: str, handler: BackendHandler, kind: str, payload: dict) -> None:
+        self.store.update_job_status(job_id, "running")
         try:
-            with span("job.execute", kind=kind):
-                result = await self._dispatch(kind, payload)
-        except Exception as exc:  # noqa: BLE001
-            self.store.update_job(job_id, status="failed", error=str(exc), message=str(exc))
-            return
-        finally:
-            clear_collector()
-            set_job_id(None)
-        self.store.update_job(job_id, status="succeeded", result_payload=result, message="job completed")
+            # Map payload to contract object
+            if kind == "agentic-agent":
+                req = RunAgenticAgentRequest.from_dict(payload)
+            elif kind == "benchmark":
+                req = RunBenchmarkRequest.from_dict(payload)
+            elif kind in ("ollama-instance", "llm-instance"):
+                req = RunLLMInstanceRequest.from_dict(payload)
+            else:
+                raise ValueError(f"unsupported kind: {kind}")
 
-    async def _dispatch(self, kind: str, payload: dict) -> dict:
-        request: BackendRequest
-        if kind == "agentic-agent":
-            request = RunAgenticAgentRequest(**payload)
-        elif kind == "benchmark":
-            request = RunBenchmarkRequest.from_dict(payload)
-        elif kind in ("llm-instance", "ollama-instance"):
-            request = RunLLMInstanceRequest.from_dict(payload)
-        elif kind == "cost-estimate":
-            request = CostEstimationRequest(**payload)
-        else:
-            raise RuntimeError(f"unsupported job kind: {kind}")
-
-        handler = self.backend_functions.get(kind)
-        if handler is None:
-            raise RuntimeError(f"no backend function registered for job kind: {kind}")
-        
-        if asyncio.iscoroutinefunction(handler):
-            return await handler(request)
-        return handler(request)
+            # Execute
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(handler(req))
+            loop.close()
+            
+            self.store.complete_job(job_id, "succeeded", result_payload=result)
+        except Exception as exc:
+            logging.exception("Job %s failed", job_id)
+            self.store.complete_job(job_id, "failed", error_message=str(exc))
 
     def serve(self, host: str = "127.0.0.1", port: int = 8080) -> None:
         server = ThreadingHTTPServer((host, port), self.create_handler())
         server.timeout = _HTTP_REQUEST_SOCKET_TIMEOUT_S
         try:
             server.serve_forever()
+        except KeyboardInterrupt:
+            pass
         finally:
             server.server_close()
-
-
-_AUDIT_ARTIFACT_CONTENT_TYPES: dict[str, str] = {
-    "slsa_provenance": "application/json",
-    "sbom": "application/json",
-    "tla_report": "text/plain; charset=utf-8",
-    "rekor_entry": "application/json",
-    "sigstore_bundle": "application/octet-stream",
-    "tpm_attestation": "application/octet-stream",
-}
-
-
-def _audit_artifact_content_type(kind: str) -> str:
-    """Map an audit artifact kind to its HTTP Content-Type for download responses."""
-    return _AUDIT_ARTIFACT_CONTENT_TYPES.get(kind, "application/octet-stream")
-
-
-def _job_to_payload(job: JobRecord) -> dict:
-    payload: dict[str, object] = {
-        "job_id": job.job_id,
-        "tenant_id": job.tenant_id,
-        "kind": job.kind,
-        "status": job.status,
-        "message": job.message,
-        "created_at": job.created_at,
-        "updated_at": job.updated_at,
-    }
-    if job.result_payload is not None:
-        payload["result"] = job.result_payload
-        # If the result is an AgentResult-like dict, it might have telemetry
-        if isinstance(job.result_payload, dict) and "telemetry" in job.result_payload:
-            payload["telemetry"] = job.result_payload["telemetry"]
-    if job.error is not None:
-        payload["error"] = job.error
-    return payload

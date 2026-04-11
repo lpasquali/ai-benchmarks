@@ -1,8 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import hashlib
-import asyncio
 from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, AsyncMock
 from urllib.request import Request, urlopen
 
 import pytest
@@ -11,15 +10,14 @@ from argon2 import PasswordHasher
 import rune_bench.api_backend as api_backend
 import rune_bench.api_client as api_client_module
 import rune_bench.api_server as api_server
-import rune_bench.workflows as workflows
 from rune_bench.agents.base import AgentResult
 from rune_bench.agents.sre.holmes import HolmesRunner
 from rune_bench.api_client import RuneApiClient
-from rune_bench.resources.vastai import InstanceManager
 from rune_bench.resources.vastai import OfferFinder
 from rune_bench.resources.vastai import TemplateLoader
 
 _ph = PasswordHasher()
+_COMPREHENSIVE_API_TOKEN = "test-token-32-chars-long-12345678"
 
 
 def test_holmes_runner_remaining_paths(monkeypatch, tmp_path):
@@ -204,7 +202,6 @@ async def test_api_server_remaining_paths(monkeypatch, tmp_path):
     await app._execute_job(job_id, "agentic-agent", {"question": "q", "model": "m", "backend_url": None, "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"})  # nosec  # test artifact paths
     assert store.get_job(job_id).status == "failed"
 
-    from rune_bench.api_contracts import RunLLMInstanceRequest, RunBenchmarkRequest
     assert await app._dispatch("llm-instance", {"provisioning": None, "backend_url": "http://x"}) == {"mode": "existing"}
     assert await app._dispatch("benchmark", {"provisioning": None, "backend_url": None, "question": "qq", "model": "m", "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"}) == {"answer": "qq"}  # nosec  # test artifact paths
 

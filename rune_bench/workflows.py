@@ -1,28 +1,21 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
-import asyncio
-"""Application workflows used by the RUNE CLI.
-
-This module keeps orchestration/business logic out of the CLI layer.
-Generic dispatchers delegate to backend-specific implementations in
-``rune_bench/backends/``.
-"""
 
 import os
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Callable
 
+"""Application workflows used by the RUNE CLI."""
+
 if TYPE_CHECKING:
     from rune_bench.resources.vastai.sdk import VastAI
 
 from .common import ModelSelector
 from .common.backend_utils import (
-    ExistingOllamaServer,
     list_backend_models,
     list_running_backend_models,
     normalize_backend_model_for_api,
-    normalize_backend_url,
     use_existing_backend_server,
     warmup_backend_model,
 )

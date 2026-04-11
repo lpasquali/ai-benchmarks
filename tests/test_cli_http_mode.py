@@ -1,16 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
-import hashlib
-import json
 import threading
 import time
-import sys
-import os
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from http.server import ThreadingHTTPServer
+from unittest.mock import AsyncMock
 
 import pytest
-import typer
 from rich.console import Console
 
 import rune

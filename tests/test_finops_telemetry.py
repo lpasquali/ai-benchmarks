@@ -3,9 +3,7 @@ import pytest
 import asyncio
 import hashlib
 import threading
-import json
 import time
-from pathlib import Path
 from http.server import ThreadingHTTPServer
 from unittest.mock import MagicMock, patch
 from rune_bench.metrics.cost import calculate_run_cost

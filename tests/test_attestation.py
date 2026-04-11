@@ -5,13 +5,11 @@ from __future__ import annotations
 
 import subprocess  # nosec  # tests require subprocess
 from dataclasses import FrozenInstanceError
-from pathlib import Path
 from unittest.mock import MagicMock, patch, AsyncMock
 
 import pytest
 
 from rune_bench.agents.base import AgentResult
-from rune_bench.attestation.factory import get_driver
 from rune_bench.attestation.interface import AttestationDriver, AttestationResult
 from rune_bench.attestation.noop import NoOpDriver
 from rune_bench.attestation.tpm2 import TPM2Driver

@@ -3,14 +3,12 @@
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import MagicMock, patch, AsyncMock
 
 import pytest
 
 import rune as rune_cli
-from rune_bench.api_client import RuneApiClient
-from rune_bench.common.costs import CostEstimator, FailClosedError
+from rune_bench.common.costs import FailClosedError
 from rune_bench.workflows import run_preflight_cost_check, SpendGateAction
 from rune_bench.api_contracts import CostEstimationResponse
 

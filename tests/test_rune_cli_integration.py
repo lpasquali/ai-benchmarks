@@ -1,15 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-import sys
-from pathlib import Path
-import asyncio
 import pytest
 import typer
 from rich.console import Console
 
 import rune
-from rune_bench.workflows import ExistingOllamaServer, VastAIProvisioningResult, TeardownResult, ConnectionDetails
+from rune_bench.workflows import ExistingOllamaServer, VastAIProvisioningResult, ConnectionDetails
 from rune_bench.agents.base import AgentResult
-from rune_bench.api_contracts import RunTelemetry, TokenBreakdown
 
 def _result():
     details = ConnectionDetails(
@@ -34,7 +30,6 @@ def _result():
 
 @pytest.mark.asyncio
 async def test_run_http_job_with_progress_logic(monkeypatch):
-    from rune_bench.api_client import RuneApiClient
     client = rune.RuneApiClient("http://api:8080")
     
     responses = [

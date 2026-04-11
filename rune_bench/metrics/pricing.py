@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Pricing oracle for projected run costs (FinOps simulation)."""
 
-import os
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 

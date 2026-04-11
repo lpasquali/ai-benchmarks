@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 import pytest
-import asyncio
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock
 from rune_bench.backends.ollama import OllamaModelManager
 from rune_bench.resources.base import ProvisioningResult
 from rune_bench.agents.base import AgentResult

@@ -1,22 +1,18 @@
 # SPDX-License-Identifier: Apache-2.0
 import pytest
-import asyncio
 import json
 import os
 import sys
-import hashlib
-import hmac
 import time
 from unittest.mock import MagicMock, AsyncMock, patch
 from urllib.request import Request, urlopen
 from pathlib import Path
-from http.server import ThreadingHTTPServer
 
 import rune
 import rune_bench.api_backend as api_backend
 import rune_bench.api_server as api_server
 from rune_bench.api_server import JobStore
-from rune_bench.api_contracts import RunAgenticAgentRequest, RunBenchmarkRequest, RunLLMInstanceRequest, RunTelemetry, TokenBreakdown, CostEstimationRequest
+from rune_bench.api_contracts import RunAgenticAgentRequest, RunBenchmarkRequest, RunLLMInstanceRequest, RunTelemetry, TokenBreakdown
 from rune_bench.backends.base import ModelCapabilities
 from rune_bench.agents.base import AgentResult
 
@@ -25,8 +21,6 @@ def sqlite_store(tmp_path):
     db_path = tmp_path / "jobs.db"
     store = JobStore(db_path)
     yield store
-    # SQLite connections in SQLiteStorageAdapter are context-managed per call, 
-    # but we ensure the file is cleanup-able.
 
 @pytest.mark.asyncio
 async def test_api_server_sse_errors(sqlite_store):
@@ -78,7 +72,7 @@ def test_sqlite_storage_extra(sqlite_store):
     assert store.get_audit_artifact(job_id="j1", artifact_id="missing") is None
     artifacts = store.list_audit_artifacts("j1")
     assert any(a["name"] == "a1" for a in artifacts)
-    
+
 def test_metrics_extra():
     from rune_bench.metrics import InMemoryCollector, MetricsEvent
     collector = InMemoryCollector()
@@ -156,7 +150,7 @@ async def test_rune_preflight_cost_check_extra(monkeypatch):
                     await rune._run_preflight_cost_check(vastai=True, max_dph=1, min_dph=0, yes=False)
 
 def test_rune_init_misc():
-    from rune_bench.metrics import InMemoryCollector
+    caps = ModelCapabilities(model_name="m", context_window=100, max_output_tokens=50)
     with patch("rune.console"):
         with pytest.raises(rune.typer.Exit):
             rune._print_error_and_exit("test error")
@@ -165,7 +159,6 @@ def test_rune_init_misc():
         server.url = "http://u"
         server.model_name = "m"
         rune._print_existing_ollama(server)
-        caps = ModelCapabilities(model_name="m", context_window=100, max_output_tokens=50)
         rune._print_existing_ollama(server, capabilities=caps)
         
         vast_res = MagicMock()
@@ -205,19 +198,57 @@ def test_rune_init_misc():
             assert rune._fetch_model_capabilities("http://u", "m") == caps
 
 @pytest.mark.asyncio
+async def test_api_server_job_submission(sqlite_store):
+    store = sqlite_store
+    backend_functions = {
+        "benchmark": AsyncMock(return_value={"answer": "ok"}),
+        "ollama-instance": AsyncMock(return_value={"mode": "existing"}),
+        "llm-instance": AsyncMock(return_value={"mode": "existing"}),
+    }
+    app = api_server.RuneApiApplication(
+        store=store, 
+        security=api_server.ApiSecurityConfig(auth_disabled=True, tenant_tokens={}),
+        backend_functions=backend_functions
+    )
+    server = api_server.ThreadingHTTPServer(("127.0.0.1", 0), app.create_handler())
+    import threading
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host, port = server.server_address
+    base = f"http://{host}:{port}"
+    common_headers = {"X-Tenant-ID": "default"}
+    try:
+        req_data = {
+            "provisioning": None,
+            "backend_url": "http://x",
+            "question": "q",
+            "model": "m",
+            "backend_warmup": False,
+            "backend_warmup_timeout": 1,
+            "kubeconfig": "/tmp/k"
+        }
+        with urlopen(Request(f"{base}/v1/jobs/benchmark", method="POST", data=json.dumps(req_data).encode(), headers=common_headers)) as resp:
+            assert resp.status == 202
+        
+        req_llm = {"provisioning": None, "backend_url": "http://x"}
+        with urlopen(Request(f"{base}/v1/jobs/ollama-instance", method="POST", data=json.dumps(req_llm).encode(), headers=common_headers)) as resp:
+            assert resp.status == 202
+
+        mock_raw = {"profiles": {"p1": {"api_token": "secret"}}}
+        with patch("rune_bench.api_server.get_raw_config", return_value=mock_raw):
+            with urlopen(Request(f"{base}/v1/settings", headers=common_headers)) as resp:
+                data = json.loads(resp.read())
+                assert data["profiles"]["p1"]["api_token"] == "[REDACTED]"
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+        server.server_close()
+
+@pytest.mark.asyncio
 async def test_api_server_extra_branches(sqlite_store):
     app = api_server.RuneApiApplication(store=sqlite_store, security=api_server.ApiSecurityConfig(auth_disabled=True, tenant_tokens={}))
-    
-    req_b = RunBenchmarkRequest(
-        provisioning=None, 
-        backend_url="u", question="q", model="m", backend_warmup=False, 
-        backend_warmup_timeout=0, kubeconfig=""
-    )
-    req_a = RunAgenticAgentRequest(
-        question="q", model="m", backend_url="u", backend_warmup=False, 
-        backend_warmup_timeout=0
-    )
-    
+    req_b = RunBenchmarkRequest(provisioning=None, backend_url="u", question="q", model="m", backend_warmup=False, backend_warmup_timeout=0, kubeconfig="")
+    req_a = RunAgenticAgentRequest(question="q", model="m", backend_url="u", backend_warmup=False, backend_warmup_timeout=0)
     with pytest.raises(RuntimeError): api_server._run_agentic_backend(req_b)
     with pytest.raises(RuntimeError): api_server._run_benchmark_backend(req_a)
     with pytest.raises(RuntimeError): api_server._run_llm_instance_backend(req_b)
@@ -227,15 +258,9 @@ async def test_api_server_extra_branches(sqlite_store):
 async def test_api_backend_remaining_branches():
     from rune_bench.metrics.cost import calculate_run_cost
     assert await calculate_run_cost("unknown", "m", 10) >= 0
-    
-    req = RunAgenticAgentRequest(
-        question="q", model="m", backend_url="http://x", 
-        backend_warmup=False, backend_warmup_timeout=0, kubeconfig="/tmp/k"
-    )
+    req = RunAgenticAgentRequest(question="q", model="m", backend_url="http://x", backend_warmup=False, backend_warmup_timeout=0, kubeconfig="/tmp/k")
     mock_runner = AsyncMock()
-    mock_runner.ask_structured.return_value = AgentResult(
-        answer="ans", telemetry=RunTelemetry(tokens=TokenBreakdown(total=100)), result_type="success"
-    )
+    mock_runner.ask_structured.return_value = AgentResult(answer="ans", telemetry=RunTelemetry(tokens=TokenBreakdown(total=100)), result_type="success")
     with patch("rune_bench.api_backend.get_agent", return_value=mock_runner):
         res = await api_backend.run_agentic_agent(req)
         assert res["metadata"]["cost"] >= 0
@@ -245,22 +270,11 @@ async def test_api_backend_remaining_branches():
             api_backend._vastai_sdk()
 
     from rune_bench.api_contracts import Provisioning, VastAIProvisioning
-    req_vast = RunBenchmarkRequest(
-        provisioning=Provisioning(
-            vastai=VastAIProvisioning(template_hash="t", min_dph=1, max_dph=2, reliability=0.9, stop_instance=True)
-        ),
-        backend_url=None, question="q", model="m", backend_warmup=False, backend_warmup_timeout=0, kubeconfig=""
-    )
+    req_vast = RunBenchmarkRequest(provisioning=Provisioning(vastai=VastAIProvisioning(template_hash="t", min_dph=1, max_dph=2, reliability=0.9, stop_instance=True)), backend_url=None, question="q", model="m", backend_warmup=False, backend_warmup_timeout=0, kubeconfig="")
     with patch("rune_bench.api_backend._vastai_sdk"):
         provider = api_backend._make_resource_provider_for_benchmark(req_vast)
         assert provider.__class__.__name__ == "VastAIProvider"
-        
-        req_llm_vast = RunLLMInstanceRequest(
-            provisioning=Provisioning(
-                vastai=VastAIProvisioning(template_hash="t", min_dph=1, max_dph=2, reliability=0.9)
-            ),
-            backend_url=None
-        )
+        req_llm_vast = RunLLMInstanceRequest(provisioning=Provisioning(vastai=VastAIProvisioning(template_hash="t", min_dph=1, max_dph=2, reliability=0.9)), backend_url=None)
         provider_llm = api_backend._make_resource_provider_for_ollama_instance(req_llm_vast)
         assert provider_llm.__class__.__name__ == "VastAIProvider"
 
@@ -275,5 +289,24 @@ async def test_rune_init_extra_coverage(monkeypatch):
         with pytest.raises(rune.typer.Exit):
             await rune._run_preflight_cost_check(vastai=True, max_dph=1, min_dph=0, yes=False)
 
-# @pytest.mark.asyncio
-# async def test_api_server_job_submission(sqlite_store):
+@pytest.mark.asyncio
+async def test_rune_commands_full_coverage(monkeypatch):
+    with patch("rune.console"):
+        with patch("rune._run_preflight_cost_check", AsyncMock()):
+            monkeypatch.setattr(rune, "BACKEND_MODE", "local")
+            monkeypatch.setattr(rune, "use_existing_backend_server", lambda *a, **k: MagicMock(url="u", model_name="m"))
+            monkeypatch.setattr(rune, "_warmup_ollama_model", AsyncMock(return_value=None))
+            monkeypatch.setattr(rune, "get_agent", lambda *a, **k: AsyncMock(ask_structured=AsyncMock(return_value=AgentResult(answer="a"))))
+            monkeypatch.setattr(rune, "calculate_run_cost", AsyncMock(return_value=0.1))
+            
+            await rune.run_agentic_agent(debug=False, question="q", model="m")
+            await rune.run_benchmark(debug=False, question="q", model="m", kubeconfig=Path("/tmp/k"))
+            
+            monkeypatch.setattr(rune, "BACKEND_MODE", "http")
+            mock_client = MagicMock()
+            monkeypatch.setattr(rune, "_http_client", lambda: mock_client)
+            monkeypatch.setattr(rune, "_run_http_job_with_progress", AsyncMock(return_value={"result": {"answer": "a"}}))
+            
+            await rune.run_agentic_agent(debug=False, question="q", model="m")
+            await rune.run_benchmark(debug=False, question="q", model="m", kubeconfig=Path("/tmp/k"))
+            await rune.run_llm_instance(debug=False)
