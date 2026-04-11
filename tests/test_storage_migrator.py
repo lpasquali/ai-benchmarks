@@ -6,7 +6,6 @@ from __future__ import annotations
 import pathlib
 import sqlite3
 import time
-from contextlib import closing
 
 import pytest
 

@@ -1,8 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import os
-import sys
 import pytest
-from pathlib import Path
+import typer
 from unittest.mock import MagicMock, patch, AsyncMock
 from typer.testing import CliRunner
 import rune
@@ -17,7 +16,6 @@ def clean_env():
     for key in ["OVERRIDE_MAX_CONTENT_SIZE", "OVERRIDE_MAX_OUTPUT_TOKEN"]:
         if key in os.environ:
             del os.environ[key]
-    import rune
     rune.BACKEND_MODE = "local"
 
 def test_cli_info():
@@ -459,7 +457,6 @@ def test_normalize_backend_url_error():
 @patch("rune.evaluate_spend_gate")
 def test_run_preflight_cost_check_prompt(mock_gate):
     from rune import _run_preflight_cost_check
-    from rune_bench.workflows import SpendGateAction
     mock_gate.return_value = SpendGateAction.PROMPT
     
     with patch("sys.stdin", MagicMock(fileno=lambda: 0)), \
@@ -489,7 +486,6 @@ def test_run_preflight_cost_check_no_vastai():
 @patch("rune.evaluate_spend_gate")
 def test_run_preflight_cost_check_allow(mock_gate):
     from rune import _run_preflight_cost_check
-    from rune_bench.workflows import SpendGateAction
     mock_gate.return_value = SpendGateAction.ALLOW
     import asyncio
     asyncio.run(_run_preflight_cost_check(vastai=True, max_dph=1.0, min_dph=0.5, yes=False))
@@ -497,7 +493,6 @@ def test_run_preflight_cost_check_allow(mock_gate):
 @patch("rune.evaluate_spend_gate")
 def test_run_preflight_cost_check_block(mock_gate):
     from rune import _run_preflight_cost_check
-    from rune_bench.workflows import SpendGateAction
     mock_gate.return_value = SpendGateAction.BLOCK
     with pytest.raises(typer.Exit) as exc:
         import asyncio
@@ -542,5 +537,3 @@ def test_run_vastai_provisioning_confirm_no(mock_prov):
         _run_vastai_provisioning(template_hash="h", min_dph=0.1, max_dph=1.0, reliability=0.9, yes=False)
         confirm_callback = mock_prov.call_args[1]["confirm_create"]
         assert confirm_callback() is False
-
-import typer

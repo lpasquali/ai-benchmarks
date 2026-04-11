@@ -1,9 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import pytest
-import asyncio
 from unittest.mock import MagicMock, patch, AsyncMock
 from rune_bench.drivers.invokeai import InvokeAIDriverClient
-from rune_bench.api_contracts import RunTelemetry, TokenBreakdown
 
 @pytest.fixture
 def mock_transports():

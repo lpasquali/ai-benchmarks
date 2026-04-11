@@ -12,6 +12,8 @@ import os
 import sys
 import socket
 import asyncio
+import inspect
+from functools import wraps
 from typing import Callable
 
 import typer
@@ -68,8 +70,6 @@ list_running_ollama_models = list_running_backend_models
 warmup_existing_ollama_model = warmup_backend_model
 provision_vastai_ollama = provision_vastai_backend
 
-import inspect
-from functools import wraps
 
 class AsyncTyper(typer.Typer):
     def command(self, *args, **kwargs):

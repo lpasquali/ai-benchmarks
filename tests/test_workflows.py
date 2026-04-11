@@ -1,8 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 import pytest
-import os
 from unittest.mock import MagicMock, patch, AsyncMock
-import rune_bench.workflows as workflows
 from rune_bench.workflows import (
     ExistingOllamaServer,
     SpendGateAction,
@@ -210,9 +208,9 @@ def test_provision_vastai_backend_user_abort():
 def test_provision_vastai_backend_vastai_url_normalization():
     mock_sdk = MagicMock()
     with patch("rune_bench.workflows.InstanceManager") as mock_mgr_cls, \
-         patch("rune_bench.workflows.OfferFinder") as mock_finder_cls, \
-         patch("rune_bench.workflows.TemplateLoader") as mock_tpl_cls, \
-         patch("rune_bench.workflows.ModelSelector") as mock_sel_cls, \
+         patch("rune_bench.workflows.OfferFinder"), \
+         patch("rune_bench.workflows.TemplateLoader"), \
+         patch("rune_bench.workflows.ModelSelector"), \
          patch("rune_bench.workflows.OllamaBackend.extract_service_url", return_value="vast.ai/endpoint"):
         
         mock_mgr = mock_mgr_cls.return_value
@@ -223,7 +221,7 @@ def test_provision_vastai_backend_vastai_url_normalization():
         with patch("rune_bench.workflows.list_running_backend_models", return_value=["m1"]), \
              patch("rune_bench.workflows.normalize_backend_model_for_api", return_value="m1"):
             
-            res = provision_vastai_backend(
+            provision_vastai_backend(
                 mock_sdk, 
                 template_hash="t1", 
                 min_dph=0.0, 

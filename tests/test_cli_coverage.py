@@ -1,8 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 import pytest
-import sys
 import os
-import asyncio
 from typer.testing import CliRunner
 from unittest.mock import MagicMock, patch, AsyncMock
 from rune import app
@@ -37,7 +35,6 @@ def test_cli_info_holmes_missing():
 
 def test_cli_run_http_error_agent():
     payload = {"status": "success", "result": {}} 
-    import rune
     with patch("rune._run_http_job_with_progress", return_value=payload):
         result = runner.invoke(app, ["--backend", "http", "run-agentic-agent", "--question", "q", "--backend-url", "http://u"])
         assert result.exit_code == 1
@@ -45,7 +42,6 @@ def test_cli_run_http_error_agent():
 
 def test_cli_run_http_error_ollama():
     payload = {"status": "success", "result": {"mode": "unknown"}} 
-    import rune
     with patch("rune._run_http_job_with_progress", return_value=payload):
         result = runner.invoke(app, ["--backend", "http", "run-llm-instance", "--backend-url", "http://u"])
         assert result.exit_code == 1
@@ -55,7 +51,7 @@ def test_cli_print_error_and_exit_directly():
     from rune import _print_error_and_exit
     import typer
     with pytest.raises(typer.Exit) as exc:
-        with patch("rune.console.print") as mock_print:
+        with patch("rune.console.print"):
             _print_error_and_exit("err")
     assert exc.value.exit_code == 1
 
@@ -77,7 +73,6 @@ def test_cli_vastai_list_models_local():
     assert "Configured Vast.ai Models" in result.output
 
 def test_cli_vastai_list_models_http():
-    import rune
     payload = [{"name": "m1", "vram_mb": 100, "required_disk_gb": 10}]
     with patch("rune._http_client") as mock_client:
         mock_client.return_value.get_vastai_models.return_value = payload

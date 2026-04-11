@@ -1,12 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 import os
-import sys
 import pytest
 import typer
-import socket
 import importlib.metadata
-import inspect
-import asyncio
 from pathlib import Path
 from unittest.mock import MagicMock, patch, AsyncMock
 
@@ -196,7 +192,6 @@ def test_make_agent_runner_legacy():
 @pytest.mark.asyncio
 async def test_run_agentic_agent_missing_kubeconfig():
     # We need to find where _BUILTIN_AGENTS is. It might be in rune_bench.agents.registry
-    import rune_bench.agents.registry
     req = RunAgenticAgentRequest(question="q", model="m", backend_url="u", kubeconfig=None, backend_warmup=False, backend_warmup_timeout=0)
     with patch("rune_bench.agents.registry._BUILTIN_AGENTS", {"holmes": (None, None, ["kubeconfig"])}):
         with pytest.raises(RuntimeError, match="requires a kubeconfig path"):

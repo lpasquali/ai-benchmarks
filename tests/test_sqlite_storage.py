@@ -1,11 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import pytest
-import os
-import time
-import json
-from pathlib import Path
 from unittest.mock import MagicMock
-from rune_bench.storage.sqlite import SQLiteStorageAdapter, JobRecord
+from rune_bench.storage.sqlite import SQLiteStorageAdapter
 
 @pytest.fixture
 def adapter(tmp_path):

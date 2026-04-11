@@ -1,9 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import pytest
-import subprocess
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from rune_bench.attestation.tpm2 import TPM2Driver
-from rune_bench.attestation.interface import AttestationResult
 
 def test_tpm2_driver_init_tools_missing():
     with patch("shutil.which", return_value=None):

@@ -6,8 +6,8 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 try:
-    import psycopg
-    from psycopg.rows import dict_row
+    import psycopg  # noqa: F401
+    from psycopg.rows import dict_row  # noqa: F401
 except ImportError:
     pytest.skip("psycopg not installed", allow_module_level=True)
 

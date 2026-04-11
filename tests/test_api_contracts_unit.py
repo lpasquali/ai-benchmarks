@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-import pytest
 from rune_bench.api_contracts import RunBenchmarkRequest, RunAgenticAgentRequest, CostEstimationRequest, Provisioning, VastAIProvisioning
 
 def test_benchmark_request_to_dict():

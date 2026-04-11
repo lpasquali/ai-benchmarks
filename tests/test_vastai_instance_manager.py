@@ -8,7 +8,6 @@ from urllib.request import Request, urlopen
 
 import pytest
 from rune_bench.resources.vastai.instance import InstanceManager
-from rune_bench.resources.vastai.contracts import ConnectionDetails
 import rune_bench.api_server as api_server
 from rune_bench.job_store import JobStore
 

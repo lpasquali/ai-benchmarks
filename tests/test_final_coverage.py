@@ -1,15 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 import pytest
-import hashlib
 import os
-import typer
-import json
-import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch
 from rune_bench.api_server import _audit_artifact_content_type, RuneApiApplication, ApiSecurityConfig
 from rune_bench.api_contracts import (
-    TokenBreakdown, LatencyPhase, RunTelemetry, RunStatusResponse,
+    TokenBreakdown, LatencyPhase, RunStatusResponse,
     UpdateSettingsRequest, CreateProfileRequest, _check_max_str,
     RunAgenticAgentRequest, RunBenchmarkRequest, RunLLMInstanceRequest, CostEstimationRequest
 )
@@ -79,7 +75,6 @@ def test_vastai_sdk_none_coverage():
 
 def test_vastai_sdk_instantiation_coverage():
     # Hit line 39-40 in api_backend.py
-    from rune_bench import api_backend
     with patch("rune_bench.api_backend.VastAI") as mock_vast:
         _vastai_sdk()
         assert mock_vast.called
@@ -129,7 +124,6 @@ async def test_run_preflight_cost_check_none():
 
 def test_confirm_vastai_eof_error():
     # Hit line 558-559 in rune/__init__.py
-    from rune import run_llm_instance
     from typer.testing import CliRunner
     runner = CliRunner()
     with patch("rune.provision_vastai_backend") as mock_prov:
@@ -364,7 +358,6 @@ def test_apply_model_limits_coverage():
 
 def test_benchmark_teardown_error_coverage():
     # Hit line 1175-1176 in rune/__init__.py
-    from rune import run_benchmark
     from rune_bench.backends.base import ModelCapabilities
     from typer.testing import CliRunner
     runner = CliRunner()
@@ -383,7 +376,6 @@ def test_benchmark_teardown_error_coverage():
 
 def test_ollama_list_models_error_coverage():
     # Hit line 812 in rune/__init__.py
-    from rune import ollama_list_models
     from typer.testing import CliRunner
     runner = CliRunner()
     with patch("rune.list_backend_models", side_effect=RuntimeError("list fail")):

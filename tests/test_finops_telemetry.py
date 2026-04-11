@@ -8,7 +8,6 @@ from rune_bench.metrics.pricing import PricingSoothSayer
 def rune_api_server(tmp_path):
     from rune_bench.api_server import RuneApiApplication, JobStore, ApiSecurityConfig, ThreadingHTTPServer
     import threading
-    from pathlib import Path
 
     tmp_db = tmp_path / "jobs.db"
     store = JobStore(tmp_db)

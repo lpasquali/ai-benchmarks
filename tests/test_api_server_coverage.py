@@ -1,9 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-import json
 import pytest
-import time
-import asyncio
-import inspect
 from http.server import BaseHTTPRequestHandler
 from unittest.mock import MagicMock, patch
 from rune_bench.api_server import (
@@ -46,7 +42,7 @@ def test_audit_artifact_content_type_fallback():
 
 @pytest.mark.asyncio
 async def test_api_application_unsupported_kind():
-    app = RuneApiApplication(store=MagicMock(), security=ApiSecurityConfig(auth_disabled=True, tenant_tokens={}))
+    RuneApiApplication(store=MagicMock(), security=ApiSecurityConfig(auth_disabled=True, tenant_tokens={}))
     
     # We'll use _execute_job since _dispatch is going to be removed
     # But wait, _execute_job doesn't raise, it updates job status to 'failed'

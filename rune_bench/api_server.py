@@ -34,7 +34,6 @@ from rune_bench.common.backend_utils import (
 from rune_bench.common.config import create_profile, get_raw_config, load_config, update_settings
 from rune_bench.metrics.pricing import PricingSoothSayer
 from rune_bench.storage.sqlite import SQLiteStorageAdapter
-from rune_bench.workflows import use_existing_backend_server
 
 JobStore = SQLiteStorageAdapter
 _HTTP_REQUEST_SOCKET_TIMEOUT_S = 30.0
