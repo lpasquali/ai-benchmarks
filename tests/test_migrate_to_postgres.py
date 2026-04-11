@@ -1,10 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from contextlib import contextmanager
-
 import pytest
+try:
+    import psycopg
+except ImportError:
+    pytest.skip("psycopg not installed", allow_module_level=True)
 
+from contextlib import contextmanager
 import rune_bench.storage.migrate_to_postgres as migration_mod
 
 

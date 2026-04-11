@@ -80,6 +80,10 @@ class RunAgenticAgentRequest:
     agent: str = "holmes"
 
     @classmethod
+    def from_dict(cls, data: dict) -> "RunAgenticAgentRequest":
+        return cls(**data)
+
+    @classmethod
     def from_cli(
         cls,
         *,

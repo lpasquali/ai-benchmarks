@@ -7,8 +7,10 @@ import json
 import sqlite3
 import time
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -60,6 +62,12 @@ class SQLiteStorageAdapter:
             connection = sqlite3.connect(self._db_path, timeout=30, check_same_thread=False)
         connection.row_factory = sqlite3.Row
         return connection
+
+    @contextmanager
+    def connection(self) -> Any:
+        """Yield a raw SQLite connection for internal tooling/tests."""
+        with self._connect() as conn:
+            yield conn
 
     def _initialize(self) -> None:
         # Schema creation is delegated to the Migrator so the same set of
@@ -458,21 +466,22 @@ class SQLiteStorageAdapter:
             for row in rows
         ]
 
-    def get_events_for_job(self, job_id: str) -> list[dict]:
-        """Return all raw workflow events for a single job, ordered by recorded_at."""
+    def get_events_for_job(self, job_id: str, after_id: int = 0) -> list[dict]:
+        """Return all raw workflow events for a single job, ordered by id."""
         with self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT event, status, duration_ms, error_type, labels_json, recorded_at
+                SELECT id, event, status, duration_ms, error_type, labels_json, recorded_at
                 FROM workflow_events
-                WHERE job_id = ?
-                ORDER BY recorded_at
+                WHERE job_id = ? AND id > ?
+                ORDER BY id ASC
                 """,
-                (job_id,),
+                (job_id, after_id),
             ).fetchall()
 
         return [
             {
+                "id": int(row["id"]),
                 "event": str(row["event"]),
                 "status": str(row["status"]),
                 "duration_ms": float(row["duration_ms"] or 0.0),
@@ -482,6 +491,37 @@ class SQLiteStorageAdapter:
             }
             for row in rows
         ]
+
+    def list_jobs_for_finops(self, *, tenant_id: str, limit: int = 2000) -> list[dict[str, Any]]:
+        """Return succeeded benchmark / agentic jobs with wall-clock duration for cost projection."""
+        cap = max(1, min(int(limit), 5000))
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT kind, request_json, result_json, created_at, updated_at
+                FROM jobs
+                WHERE tenant_id = ?
+                  AND status = 'succeeded'
+                  AND kind IN ('benchmark', 'agentic-agent')
+                ORDER BY updated_at DESC
+                LIMIT ?
+                """,
+                (tenant_id, cap),
+            ).fetchall()
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            created = float(row["created_at"])
+            updated = float(row["updated_at"])
+            duration = max(updated - created, 1e-3)
+            out.append(
+                {
+                    "kind": str(row["kind"]),
+                    "request_payload": json.loads(row["request_json"]),
+                    "result_payload": json.loads(row["result_json"]) if row["result_json"] else None,
+                    "duration_seconds": duration,
+                }
+            )
+        return out
 
     def get_job(self, job_id: str, *, tenant_id: str | None = None) -> JobRecord | None:
         query = "SELECT * FROM jobs WHERE job_id = ?"

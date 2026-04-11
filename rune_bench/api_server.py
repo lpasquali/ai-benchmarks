@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import json
 import logging
@@ -10,34 +11,41 @@ import os
 import threading
 import time
 import asyncio
+import inspect
 from dataclasses import dataclass, asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Callable, TypeAlias
+from typing import Callable, TypeAlias, Any
 from urllib.parse import parse_qs, urlparse
 
 from rune_bench.api_backend import (
     get_cost_estimate,
     list_backend_models,
+    list_vastai_models,
     run_agentic_agent,
     run_benchmark,
     run_llm_instance,
 )
 from rune_bench.api_contracts import (
     CostEstimationRequest,
+    CreateProfileRequest,
     RunAgenticAgentRequest,
     RunBenchmarkRequest,
     RunLLMInstanceRequest,
+    SettingsResponse,
     UpdateSettingsRequest,
 )
 from rune_bench.common import (
+    create_profile,
     get_raw_config,
     load_config,
+    peek_profile_from_argv,
     update_settings,
 )
+from rune_bench.metrics import SQLiteMetricsCollector, clear_collector, set_collector, set_job_id, span
 from rune_bench.metrics.pricing import PricingSoothSayer
 from rune_bench.storage import StoragePort
-from rune_bench.storage.sqlite import SQLiteStorageAdapter
+from rune_bench.storage.sqlite import JobRecord, SQLiteStorageAdapter
 
 _MIN_API_TOKEN_LEN = 32
 _HTTP_REQUEST_SOCKET_TIMEOUT_S = 30.0
@@ -57,34 +65,76 @@ BackendRequest: TypeAlias = (
 BackendHandler: TypeAlias = Callable[[BackendRequest], dict]
 
 
-def _run_agentic_backend(request: BackendRequest) -> dict:
+async def _run_agentic_backend(request: BackendRequest) -> dict:
     if not isinstance(request, RunAgenticAgentRequest):
         raise RuntimeError("invalid request type for agentic-agent backend")
-    return run_agentic_agent(request)
+    return await run_agentic_agent(request)
 
 
-def _run_benchmark_backend(request: BackendRequest) -> dict:
+async def _run_benchmark_backend(request: BackendRequest) -> dict:
     if not isinstance(request, RunBenchmarkRequest):
         raise RuntimeError("invalid request type for benchmark backend")
-    return run_benchmark(request)
+    return await run_benchmark(request)
 
 
-def _run_llm_instance_backend(request: BackendRequest) -> dict:
+async def _run_llm_instance_backend(request: BackendRequest) -> dict:
     if not isinstance(request, RunLLMInstanceRequest):
         raise RuntimeError("invalid request type for ollama-instance backend")
-    return run_llm_instance(request)
+    return await run_llm_instance(request)
 
 
-def _get_cost_estimate_backend(request: BackendRequest) -> dict:
+async def _get_cost_estimate_backend(request: BackendRequest) -> dict:
     if not isinstance(request, CostEstimationRequest):
         raise RuntimeError("invalid request type for cost-estimate backend")
-    return get_cost_estimate(request)
+    return await get_cost_estimate(request)
+
+
+def _job_to_payload(job: JobRecord) -> dict:
+    """Helper: converts JobRecord to JSON-serializable dict for API responses."""
+    return {
+        "job_id": job.job_id,
+        "tenant_id": job.tenant_id,
+        "kind": job.kind,
+        "status": job.status,
+        "request_payload": job.request_payload,
+        "result_payload": job.result_payload,
+        "result": job.result_payload,
+        "error": job.error,
+        "message": job.message,
+        "created_at": job.created_at,
+        "updated_at": job.updated_at,
+    }
+
+
+def _audit_artifact_content_type(kind: str) -> str:
+    """Helper: map artifact kind to MIME type."""
+    mapping = {
+        "sbom": "application/json",
+        "slsa_provenance": "application/json",
+        "rekor_entry": "application/json",
+        "tpm_attestation": "application/octet-stream",
+        "logs": "text/plain",
+        "tla_report": "text/plain; charset=utf-8",
+    }
+    return mapping.get(kind, "application/octet-stream")
 
 
 @dataclass(frozen=True)
 class ApiSecurityConfig:
     auth_disabled: bool
     tenant_tokens: dict[str, str]
+
+    def __init__(self, auth_disabled: bool, tenant_tokens: dict[str, str]) -> None:
+        object.__setattr__(self, "auth_disabled", auth_disabled)
+        # Canonicalize: ensure all tokens are stored as SHA256 hex digests
+        hashed_tokens = {}
+        for tenant, token in tenant_tokens.items():
+            if len(token) == 64 and all(c in "0123456789abcdef" for c in token.lower()):
+                # Already a SHA256 hex digest
+                hashed_tokens[tenant] = token.lower()
+            else:
+                hashed_tokens[tenant] = hashlib.sha256(token.encode()).hexdigest()
+        object.__setattr__(self, "tenant_tokens", hashed_tokens)
 
     @classmethod
     def from_env(cls) -> "ApiSecurityConfig":
@@ -134,7 +184,6 @@ class RuneApiApplication:
         config = load_config()
         security = ApiSecurityConfig.from_env()
         
-        # Determine job store path
         db_url = os.environ.get("RUNE_DATABASE_URL", config.get("database_url", "sqlite:///home/ubuntu/.rune/jobs.db"))
         if db_url.startswith("sqlite:///"):
             db_path = Path(db_url[10:]).expanduser()
@@ -152,12 +201,37 @@ class RuneApiApplication:
         now = time.time()
         with self._lock:
             history = self._rate_limits.get(tenant_id, [])
-            # Keep only last 60 seconds
             history = [t for t in history if now - t < 60]
-            if len(history) >= 100:  # 100 requests per minute limit
-                raise RequestRateLimited(f"Tenant {tenant_id} exceeded rate limit (100 RPM)")
+            if len(history) >= 10:
+                raise RequestRateLimited("rate limit exceeded")
             history.append(now)
             self._rate_limits[tenant_id] = history
+
+    def _dispatch(self, kind: str, payload: dict) -> dict:
+        handler = self.backend_functions.get(kind)
+        if not handler:
+            raise RuntimeError(f"unsupported job kind: {kind}")
+        
+        if kind == "agentic-agent":
+            req = RunAgenticAgentRequest.from_dict(payload) if hasattr(RunAgenticAgentRequest, "from_dict") else RunAgenticAgentRequest(**payload)
+        elif kind == "benchmark":
+            req = RunBenchmarkRequest.from_dict(payload) if hasattr(RunBenchmarkRequest, "from_dict") else RunBenchmarkRequest(**payload)
+        elif kind in ("ollama-instance", "llm-instance"):
+            req = RunLLMInstanceRequest.from_dict(payload) if hasattr(RunLLMInstanceRequest, "from_dict") else RunLLMInstanceRequest(**payload)
+        elif kind == "cost-estimate":
+            req = CostEstimationRequest.from_dict(payload) if hasattr(CostEstimationRequest, "from_dict") else CostEstimationRequest(**payload)
+        else:
+            raise ValueError(f"unsupported kind: {kind}")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            res = handler(req)
+            if inspect.isawaitable(res):
+                return loop.run_until_complete(res)
+            return res
+        finally:
+            loop.close()
 
     def create_handler(self) -> type[BaseHTTPRequestHandler]:
         app = self
@@ -186,44 +260,55 @@ class RuneApiApplication:
                 
                 token = auth_header[7:].strip()
                 tenant_id = self.headers.get("X-Tenant-ID", "").strip()
-                
                 if not tenant_id:
                     return None
                 
                 expected_token = app.security.tenant_tokens.get(tenant_id)
-                if expected_token and hmac.compare_digest(token, expected_token):
-                    return tenant_id
-                
+                if expected_token:
+                    hashed = hashlib.sha256(token.encode()).hexdigest()
+                    if hmac.compare_digest(hashed, expected_token):
+                        return tenant_id
+                    else:
+                        logging.error(f"Auth failed for {tenant_id}: hashed={hashed} expected={expected_token}")
+                else:
+                    logging.error(f"Auth failed for {tenant_id}: tenant not found in {list(app.security.tenant_tokens.keys())}")
                 return None
 
             def do_GET(self) -> None:
+                parsed = urlparse(self.path)
+                path = parsed.path
+
+                if path == "/v1/healthz" or path == "/healthz":
+                    self._write_json(200, {"status": "ok", "active_threads": threading.active_count()})
+                    return
+
+                tenant_id_hint = self.headers.get("X-Tenant-ID", "default").strip()
+                try:
+                    app._enforce_request_rate_limit(tenant_id_hint)
+                except RequestRateLimited:
+                    self._write_json(401, {"error": "rate limit exceeded"})
+                    return
+
                 tenant_id = self._authenticate()
                 if not tenant_id:
                     self._write_json(401, {"error": "unauthorized"})
                     return
 
-                parsed = urlparse(self.path)
-                path = parsed.path
-                
-                try:
-                    self._enforce_request_rate_limit(tenant_id)
-                except RequestRateLimited as exc:
-                    self._write_json(429, {"error": str(exc)})
-                    return
-
-                if path == "/v1/healthz":
-                    self._write_json(200, {"status": "ok", "active_threads": threading.active_count()})
-                    return
-
-                if path == "/v1/catalog/models":
+                if path == "/v1/catalog/models" or path == "/v1/catalog/vastai-models":
                     query = parse_qs(parsed.query)
                     backend_url = query.get("backend_url", [""])[0]
                     backend_type = query.get("backend_type", ["ollama"])[0]
-                    if not backend_url:
-                        self._write_json(400, {"error": "missing required query parameter: backend_url"})
-                        return
+                    if path == "/v1/catalog/vastai-models":
+                        backend_type = "vastai"
+                    
                     try:
-                        payload = list_backend_models(backend_url, backend_type=backend_type)
+                        if backend_type == "vastai":
+                            payload = list_vastai_models()
+                        else:
+                            if not backend_url:
+                                self._write_json(400, {"error": "missing required query parameter: backend_url"})
+                                return
+                            payload = list_backend_models(backend_url, backend_type=backend_type)
                     except (RuntimeError, ValueError) as exc:
                         self._write_json(400, {"error": str(exc)})
                         return
@@ -239,13 +324,12 @@ class RuneApiApplication:
 
                 if path == "/v1/finops/simulate":
                     query = parse_qs(parsed.query)
-                    agent = query.get("agent", ["holmes"])[0]
-                    model = query.get("model", ["llama3.1:8b"])[0]
-                    gpu = query.get("gpu", ["rtx4090"])[0]
-                    suite = query.get("suite", ["standard"])[0]
+                    agent = query.get("agent", [""])[0]
+                    model = query.get("model", [""])[0]
+                    gpu = query.get("gpu", ["RTX 4090"])[0]
+                    suite = query.get("suite", [""])[0]
                     
                     try:
-                        # Use a dedicated loop for the async simulation call
                         soothsayer = PricingSoothSayer(store=app.store)
                         loop = asyncio.new_event_loop()
                         asyncio.set_event_loop(loop)
@@ -253,7 +337,7 @@ class RuneApiApplication:
                             tenant_id=tenant_id, agent=agent, model=model, gpu=gpu, suite=suite
                         ))
                         loop.close()
-                        self._write_json(200, asdict(projection) if not isinstance(projection, dict) else projection)
+                        self._write_json(200, projection)
                     except Exception as exc:
                         logging.exception("FinOps simulation failed")
                         self._write_json(400, {"error": str(exc)})
@@ -261,7 +345,6 @@ class RuneApiApplication:
 
                 if path == "/v1/settings":
                     config = get_raw_config()
-                    # Redact sensitive fields
                     if "profiles" in config:
                         for p in config["profiles"].values():
                             if "api_token" in p:
@@ -272,7 +355,7 @@ class RuneApiApplication:
                 if path.startswith("/v1/runs/") and path.endswith("/trace"):
                     run_id = path.split("/")[3]
                     job = app.store.get_job(run_id)
-                    if not job:
+                    if not job or (not app.security.auth_disabled and job.tenant_id != tenant_id):
                         self._write_json(404, {"error": "job not found"})
                         return
                     
@@ -288,7 +371,7 @@ class RuneApiApplication:
                         for e in events:
                             data = json.dumps(e)
                             try:
-                                self.wfile.write(f"data: {data}\n\n".encode())
+                                self.wfile.write(f"event: log\ndata: {data}\n\n".encode())
                                 self.wfile.flush()
                                 last_event_id = max(last_event_id, e.get("id", 0))
                             except (ConnectionResetError, BrokenPipeError):
@@ -301,30 +384,96 @@ class RuneApiApplication:
                         time.sleep(1)
                     return
 
+                if (path.startswith("/v1/runs/") or path.startswith("/v1/audits/")) and "/artifacts" in path:
+                    parts = path.split("/")
+                    if len(parts) < 5:
+                        self._write_json(404, {"error": "not found"})
+                        return
+                    run_id = parts[3]
+                    if not run_id:
+                        self._write_json(400, {"error": "missing run_id"})
+                        return
+                    job = app.store.get_job(run_id)
+                    if not job or (not app.security.auth_disabled and job.tenant_id != tenant_id):
+                        msg = "audit run not found" if path.startswith("/v1/audits/") else "job not found"
+                        self._write_json(404, {"error": msg})
+                        return
+                    
+                    if parts[4] != "artifacts":
+                        self._write_json(404, {"error": "not found"})
+                        return
+
+                    if len(parts) == 5 or (len(parts) == 6 and not parts[5]):
+                        artifacts = app.store.list_audit_artifacts(run_id)
+                        prefix = "/v1/audits" if path.startswith("/v1/audits/") else "/v1/runs"
+                        for a in artifacts:
+                            a["download_url"] = f"{prefix}/{run_id}/artifacts/{a['artifact_id']}"
+                        
+                        self._write_json(200, {
+                            "run_id": run_id,
+                            "artifacts": artifacts,
+                            "summary": {
+                                "total_count": len(artifacts),
+                                "kinds_present": sorted(list(set(a["kind"] for a in artifacts)))
+                            }
+                        })
+                        return
+                    elif len(parts) == 6:
+                        artifact_id = parts[5]
+                        res = app.store.get_audit_artifact(job_id=run_id, artifact_id=artifact_id)
+                        if not res:
+                            self._write_json(404, {"error": "artifact not found"})
+                            return
+                        content, name, kind = res
+                        self.send_response(200)
+                        self.send_header("Content-Type", _audit_artifact_content_type(kind))
+                        self.send_header("Content-Length", str(len(content)))
+                        self.send_header("Content-Disposition", f'attachment; filename="{name}"')
+                        self.end_headers()
+                        self.wfile.write(content)
+                        return
+
+                if path.startswith("/v1/chains/") and path.endswith("/state"):
+                    run_id = path.split("/")[3]
+                    if not run_id:
+                        self._write_json(400, {"error": "missing run_id"})
+                        return
+                    job = app.store.get_job(run_id)
+                    if not job or (not app.security.auth_disabled and job.tenant_id != tenant_id):
+                        self._write_json(404, {"error": "chain run not found"})
+                        return
+                    state = app.store.get_chain_state(run_id)
+                    if state is None:
+                        self._write_json(200, {"run_id": run_id, "overall_status": "pending", "nodes": [], "edges": []})
+                        return
+                    self._write_json(200, state)
+                    return
+
                 if path.startswith("/v1/jobs/"):
                     job_id = path.split("/")[-1]
                     job = app.store.get_job(job_id)
-                    if not job:
+                    if not job or (not app.security.auth_disabled and job.tenant_id != tenant_id):
                         self._write_json(404, {"error": "job not found"})
                         return
-                    self._write_json(200, asdict(job))
+                    self._write_json(200, _job_to_payload(job))
                     return
 
                 self._write_json(404, {"error": "not found"})
 
             def do_POST(self) -> None:
+                parsed = urlparse(self.path)
+                path = parsed.path
+
+                tenant_id_hint = self.headers.get("X-Tenant-ID", "default").strip()
+                try:
+                    app._enforce_request_rate_limit(tenant_id_hint)
+                except RequestRateLimited:
+                    self._write_json(401, {"error": "rate limit exceeded"})
+                    return
+
                 tenant_id = self._authenticate()
                 if not tenant_id:
                     self._write_json(401, {"error": "unauthorized"})
-                    return
-
-                parsed = urlparse(self.path)
-                path = parsed.path
-                
-                try:
-                    self._enforce_request_rate_limit(tenant_id)
-                except RequestRateLimited as exc:
-                    self._write_json(429, {"error": str(exc)})
                     return
 
                 length = int(self.headers.get("Content-Length", 0))
@@ -332,7 +481,7 @@ class RuneApiApplication:
                     self._write_json(413, {"error": "request too large"})
                     return
                 
-                body = self.wfile.read(length) if length > 0 else b"{}"
+                body = self.rfile.read(length) if length > 0 else b"{}"
                 try:
                     data = json.loads(body)
                 except json.JSONDecodeError:
@@ -344,6 +493,12 @@ class RuneApiApplication:
                     update_settings(req)
                     self._write_json(200, {"status": "updated"})
                     return
+                
+                if path == "/v1/settings/profiles":
+                    req = CreateProfileRequest(**data)
+                    create_profile(req)
+                    self._write_json(201, {"status": "created"})
+                    return
 
                 if path.startswith("/v1/jobs/"):
                     kind = path.split("/")[-1]
@@ -352,46 +507,63 @@ class RuneApiApplication:
                         self._write_json(404, {"error": f"unknown job kind: {kind}"})
                         return
                     
-                    # Create job in store
-                    job_id, _ = app.store.create_job(tenant_id=tenant_id, kind=kind, request_payload=data)
+                    idem_key = self.headers.get("Idempotency-Key") or self.headers.get("X-Idempotency-Key")
+                    job_id, created = app.store.create_job(
+                        tenant_id=tenant_id, 
+                        kind=kind, 
+                        request_payload=data,
+                        idempotency_key=idem_key
+                    )
                     
-                    # Run in background
-                    threading.Thread(
-                        target=app._execute_job,
-                        args=(job_id, handler, kind, data),
-                        daemon=True
-                    ).start()
+                    if created:
+                        threading.Thread(
+                            target=app._execute_job,
+                            args=(job_id, handler, kind, data),
+                            daemon=True
+                        ).start()
                     
                     self._write_json(202, {"job_id": job_id, "status": "accepted"})
                     return
 
                 self._write_json(404, {"error": "not found"})
 
+            def do_PATCH(self) -> None:
+                self.do_POST()
+
+            def do_PUT(self) -> None:
+                self.do_POST()
+
         return RuneApiHandler
 
     def _execute_job(self, job_id: str, handler: BackendHandler, kind: str, payload: dict) -> None:
-        self.store.update_job_status(job_id, "running")
+        self.store.update_job(job_id, status="running")
         try:
-            # Map payload to contract object
             if kind == "agentic-agent":
-                req = RunAgenticAgentRequest.from_dict(payload)
+                req = RunAgenticAgentRequest.from_dict(payload) if hasattr(RunAgenticAgentRequest, "from_dict") else RunAgenticAgentRequest(**payload)
             elif kind == "benchmark":
-                req = RunBenchmarkRequest.from_dict(payload)
+                req = RunBenchmarkRequest.from_dict(payload) if hasattr(RunBenchmarkRequest, "from_dict") else RunBenchmarkRequest(**payload)
             elif kind in ("ollama-instance", "llm-instance"):
-                req = RunLLMInstanceRequest.from_dict(payload)
+                req = RunLLMInstanceRequest.from_dict(payload) if hasattr(RunLLMInstanceRequest, "from_dict") else RunLLMInstanceRequest(**payload)
+            elif kind == "cost-estimate":
+                req = CostEstimationRequest.from_dict(payload) if hasattr(CostEstimationRequest, "from_dict") else CostEstimationRequest(**payload)
             else:
                 raise ValueError(f"unsupported kind: {kind}")
 
-            # Execute
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(handler(req))
-            loop.close()
+            try:
+                res = handler(req)
+                if inspect.isawaitable(res):
+                    result = loop.run_until_complete(res)
+                else:
+                    result = res
+            finally:
+                loop.close()
             
-            self.store.complete_job(job_id, "succeeded", result_payload=result)
+            self.store.update_job(job_id, status="succeeded", result_payload=result)
         except Exception as exc:
             logging.exception("Job %s failed", job_id)
-            self.store.complete_job(job_id, "failed", error_message=str(exc))
+            self.store.update_job(job_id, status="failed", error=str(exc))
 
     def serve(self, host: str = "127.0.0.1", port: int = 8080) -> None:
         server = ThreadingHTTPServer((host, port), self.create_handler())

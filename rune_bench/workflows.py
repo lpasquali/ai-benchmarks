@@ -16,6 +16,7 @@ from .common.backend_utils import (
     list_backend_models,
     list_running_backend_models,
     normalize_backend_model_for_api,
+    normalize_backend_url,
     use_existing_backend_server,
     warmup_backend_model,
 )
@@ -64,6 +65,12 @@ def evaluate_spend_gate(
     if os.environ.get("CI", "").strip().lower() in {"1", "true", "yes"}:
         return SpendGateAction.BLOCK
     return SpendGateAction.PROMPT
+
+
+@dataclass(frozen=True)
+class ExistingOllamaServer:
+    url: str
+    model_name: str
 
 
 @dataclass

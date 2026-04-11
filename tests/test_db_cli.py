@@ -1,6 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import pytest
+try:
+    import psycopg
+except ImportError:
+    pytest.skip("psycopg not installed", allow_module_level=True)
+
 from typer.testing import CliRunner
 
 import rune
