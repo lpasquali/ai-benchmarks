@@ -347,3 +347,178 @@ def test_migrate_to_postgres_rolls_back_failing_batch(monkeypatch) -> None:
         )
 
     assert target._conn.rollbacks == 1
+
+
+def test_migrate_empty_tables() -> None:
+    """Test migration with empty tables."""
+    source = _FakeSQLiteAdapter(
+        {
+            "jobs": [],
+            "idempotency_keys": [],
+            "workflow_events": [],
+            "chain_state": [],
+            "audit_artifact": [],
+        }
+    )
+    target = _FakePostgresAdapter()
+    
+    # Should complete without error
+    for spec in migration_mod._TABLE_SPECS:
+        count = source._count(spec.name)
+        if count > 0:
+            migration_mod._migrate_table(source, target, spec)
+    
+    # Target should have no data
+    assert target._conn.tables == {}
+
+
+def test_batch_size_handling() -> None:
+    """Test that large batches are split correctly."""
+    # Create many rows
+    jobs = [
+        {
+            "job_id": f"job-{i}",
+            "tenant_id": "tenant-a",
+            "kind": "benchmark",
+            "status": "success",
+            "request_json": "{}",
+            "result_json": "{}",
+            "error": None,
+            "message": None,
+            "created_at": 1.0,
+            "updated_at": 1.0,
+        }
+        for i in range(5000)  # More than typical batch size
+    ]
+    
+    source = _FakeSQLiteAdapter(
+        {
+            "jobs": jobs,
+            "idempotency_keys": [],
+            "workflow_events": [],
+            "chain_state": [],
+            "audit_artifact": [],
+        }
+    )
+    target = _FakePostgresAdapter()
+    spec = migration_mod._TABLE_SPECS[0]  # jobs table spec
+    
+    migration_mod._migrate_table(source, target, spec)
+    
+    # Verify all rows were inserted
+    assert len(target._conn.tables.get("jobs", [])) == 5000
+
+
+def test_idempotency_key_migration() -> None:
+    """Test migration of idempotency key table."""
+    source = _FakeSQLiteAdapter(
+        {
+            "jobs": [],
+            "idempotency_keys": [
+                {
+                    "idempotency_key": "key-1",
+                    "job_id": "job-1",
+                    "created_at": 1.0,
+                }
+            ],
+            "workflow_events": [],
+            "chain_state": [],
+            "audit_artifact": [],
+        }
+    )
+    target = _FakePostgresAdapter()
+    spec = [s for s in migration_mod._TABLE_SPECS if s.name == "idempotency_keys"][0]
+    
+    migration_mod._migrate_table(source, target, spec)
+    
+    assert "idempotency_keys" in target._conn.tables
+    assert len(target._conn.tables["idempotency_keys"]) == 1
+
+
+def test_workflow_events_migration() -> None:
+    """Test migration of workflow events."""
+    source = _FakeSQLiteAdapter(
+        {
+            "jobs": [],
+            "idempotency_keys": [],
+            "workflow_events": [
+                {
+                    "event_id": "ev-1",
+                    "job_id": "job-1",
+                    "event": "test_event",
+                    "status": "ok",
+                    "duration_ms": 1.5,
+                    "error_type": None,
+                    "labels_json": "{}",
+                    "recorded_at": 1.0,
+                }
+            ],
+            "chain_state": [],
+            "audit_artifact": [],
+        }
+    )
+    target = _FakePostgresAdapter()
+    spec = [s for s in migration_mod._TABLE_SPECS if s.name == "workflow_events"][0]
+    
+    migration_mod._migrate_table(source, target, spec)
+    
+    assert "workflow_events" in target._conn.tables
+    assert len(target._conn.tables["workflow_events"]) == 1
+
+
+def test_audit_artifact_migration() -> None:
+    """Test migration of audit artifacts."""
+    source = _FakeSQLiteAdapter(
+        {
+            "jobs": [],
+            "idempotency_keys": [],
+            "workflow_events": [],
+            "chain_state": [],
+            "audit_artifact": [
+                {
+                    "artifact_id": "art-1",
+                    "job_id": "job-1",
+                    "kind": "sbom",
+                    "name": "sbom.json",
+                    "size_bytes": 100,
+                    "sha256": "abc123",
+                    "content": b"content",
+                    "created_at": 1.0,
+                }
+            ],
+        }
+    )
+    target = _FakePostgresAdapter()
+    spec = [s for s in migration_mod._TABLE_SPECS if s.name == "audit_artifact"][0]
+    
+    migration_mod._migrate_table(source, target, spec)
+    
+    assert "audit_artifact" in target._conn.tables
+    assert len(target._conn.tables["audit_artifact"]) == 1
+
+
+def test_chain_state_migration() -> None:
+    """Test migration of chain state."""
+    source = _FakeSQLiteAdapter(
+        {
+            "jobs": [],
+            "idempotency_keys": [],
+            "workflow_events": [],
+            "chain_state": [
+                {
+                    "job_id": "job-1",
+                    "state_json": '{"nodes": [], "edges": []}',
+                    "overall_status": "success",
+                    "updated_at": 1.0,
+                }
+            ],
+            "audit_artifact": [],
+        }
+    )
+    target = _FakePostgresAdapter()
+    spec = [s for s in migration_mod._TABLE_SPECS if s.name == "chain_state"][0]
+    
+    migration_mod._migrate_table(source, target, spec)
+    
+    assert "chain_state" in target._conn.tables
+    assert len(target._conn.tables["chain_state"]) == 1

@@ -263,3 +263,195 @@ def test_get_job_none(mock_pool):
     storage = PostgresStorageAdapter("postgresql://")
     conn.execute.return_value.fetchone.return_value = None
     assert storage.get_job("j1") is None
+
+
+# ─── Additional coverage for edge cases ──────────────────────────────────
+def test_compute_overall_chain_status_empty():
+    """Test _compute_overall_chain_status with empty nodes."""
+    result = PostgresStorageAdapter._compute_overall_chain_status([])
+    assert result == "pending"
+
+
+def test_compute_overall_chain_status_all_failed():
+    """Test when any node failed."""
+    nodes = [
+        {"id": "n1", "status": "success"},
+        {"id": "n2", "status": "failed"},
+    ]
+    result = PostgresStorageAdapter._compute_overall_chain_status(nodes)
+    assert result == "failed"
+
+
+def test_compute_overall_chain_status_running():
+    """Test when any node is running."""
+    nodes = [
+        {"id": "n1", "status": "success"},
+        {"id": "n2", "status": "running"},
+    ]
+    result = PostgresStorageAdapter._compute_overall_chain_status(nodes)
+    assert result == "running"
+
+
+def test_compute_overall_chain_status_pending():
+    """Test when any node is pending."""
+    nodes = [
+        {"id": "n1", "status": "success"},
+        {"id": "n2", "status": "pending"},
+    ]
+    result = PostgresStorageAdapter._compute_overall_chain_status(nodes)
+    assert result == "pending"
+
+
+def test_compute_overall_chain_status_all_skipped():
+    """Test when all nodes are skipped."""
+    nodes = [
+        {"id": "n1", "status": "skipped"},
+        {"id": "n2", "status": "skipped"},
+    ]
+    result = PostgresStorageAdapter._compute_overall_chain_status(nodes)
+    assert result == "skipped"
+
+
+def test_compute_overall_chain_status_all_success():
+    """Test when all nodes are success."""
+    nodes = [
+        {"id": "n1", "status": "success"},
+        {"id": "n2", "status": "success"},
+    ]
+    result = PostgresStorageAdapter._compute_overall_chain_status(nodes)
+    assert result == "success"
+
+
+def test_compute_overall_chain_status_mixed_with_skipped():
+    """Test when mix of skipped and other statuses."""
+    nodes = [
+        {"id": "n1", "status": "skipped"},
+        {"id": "n2", "status": "success"},
+    ]
+    result = PostgresStorageAdapter._compute_overall_chain_status(nodes)
+    assert result == "success"
+
+
+def test_record_chain_node_transition_with_timestamps(mock_pool):
+    """Test recording transition with all optional parameters."""
+    pool, conn = mock_pool
+    storage = PostgresStorageAdapter("postgresql://")
+    conn.execute.return_value.fetchone.return_value = {
+        "state_json": json.dumps({"nodes": [{"id": "n1", "status": "pending"}]})
+    }
+    
+    storage.record_chain_node_transition(
+        job_id="j1",
+        node_id="n1",
+        status="success",
+        started_at=100.0,
+        finished_at=110.0,
+        error="test error"
+    )
+    assert conn.execute.called
+
+
+def test_record_chain_initialized_normalizes_nodes(mock_pool):
+    """Test that record_chain_initialized normalizes node data."""
+    pool, conn = mock_pool
+    storage = PostgresStorageAdapter("postgresql://")
+    
+    # Nodes without optional fields
+    nodes = [{"id": "n1"}]
+    edges = []
+    
+    storage.record_chain_initialized(job_id="j1", nodes=nodes, edges=edges)
+    assert conn.execute.called
+    
+    # Check that execute was called with proper data structure
+    call_args = conn.execute.call_args
+    assert call_args is not None
+    # The call should have the INSERT statement and the params tuple
+    assert "j1" in call_args[0] or "j1" in call_args[1]
+
+
+def test_get_job(mock_pool):
+    """Test get_job retrieves job record."""
+    pool, conn = mock_pool
+    storage = PostgresStorageAdapter("postgresql://")
+    conn.execute.return_value.fetchone.return_value = {
+        "job_id": "j1",
+        "tenant_id": "t1",
+        "kind": "benchmark",
+        "status": "success",
+        "request_json": "{}",
+        "result_json": "{}",
+        "error": None,
+        "message": None,
+        "created_at": 1.0,
+        "updated_at": 2.0,
+    }
+    result = storage.get_job("j1")
+    assert result is not None
+    assert result.job_id == "j1"
+
+
+def test_get_job_not_found(mock_pool):
+    """Test get_job returns None when not found."""
+    pool, conn = mock_pool
+    storage = PostgresStorageAdapter("postgresql://")
+    conn.execute.return_value.fetchone.return_value = None
+    result = storage.get_job("j1")
+    assert result is None
+
+
+def test_get_job_with_tenant_filter(mock_pool):
+    """Test get_job with tenant_id filter."""
+    pool, conn = mock_pool
+    storage = PostgresStorageAdapter("postgresql://")
+    conn.execute.return_value.fetchone.return_value = {
+        "job_id": "j1",
+        "tenant_id": "t1",
+        "kind": "benchmark",
+        "status": "success",
+        "request_json": "{}",
+        "result_json": "{}",
+        "error": None,
+        "message": None,
+        "created_at": 1.0,
+        "updated_at": 2.0,
+    }
+    result = storage.get_job("j1", tenant_id="t1")
+    assert result is not None
+    assert result.tenant_id == "t1"
+
+
+def test_list_jobs_for_finops_with_limit(mock_pool):
+    """Test list_jobs_for_finops with custom limit."""
+    pool, conn = mock_pool
+    storage = PostgresStorageAdapter("postgresql://")
+    conn.execute.return_value.fetchall.return_value = [
+        {"kind": "benchmark", "request_json": "{}", "result_json": "{}", "created_at": 1.0, "updated_at": 2.0}
+    ]
+    result = storage.list_jobs_for_finops(tenant_id="t1", limit=100)
+    assert len(result) == 1
+    assert conn.execute.called
+    # Verify that the query was called with the limit parameter
+    call_args = conn.execute.call_args
+    assert 100 in call_args[0] or 100 in call_args[1]
+
+
+def test_get_events_summary_without_job_filter(mock_pool):
+    """Test get_events_summary without job_id filter."""
+    pool, conn = mock_pool
+    storage = PostgresStorageAdapter("postgresql://")
+    conn.execute.return_value.fetchall.return_value = [
+        {"event": "test_event", "total": 5, "ok_count": 4, "error_count": 1, "avg_ms": 1.5, "min_ms": 1.0, "max_ms": 2.0}
+    ]
+    result = storage.get_events_summary()
+    assert len(result) == 1
+    assert result[0]["event"] == "test_event"
+    assert result[0]["total"] == 5
+
+
+def test_pool_context_manager(mock_pool):
+    """Test connection context manager."""
+    pool, conn = mock_pool
+    storage = PostgresStorageAdapter("postgresql://")
+    with storage.connection() as c:
+        assert c is not None
