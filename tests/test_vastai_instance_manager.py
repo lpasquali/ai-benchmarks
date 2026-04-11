@@ -198,7 +198,8 @@ def test_api_server_misc_paths(misc_server):
     assert payload["job_id"] == job
 
 
-def test_api_server_internal_dispatch_and_failures(tmp_path):
+@pytest.mark.asyncio
+async def test_api_server_internal_dispatch_and_failures(tmp_path):
     store = JobStore(tmp_path / "jobs.db")
     app = api_server.RuneApiApplication(
         store=store,
@@ -207,10 +208,10 @@ def test_api_server_internal_dispatch_and_failures(tmp_path):
     )
 
     with pytest.raises(RuntimeError, match="unsupported job kind"):
-        app._dispatch("nope", {})
+        await app._dispatch("nope", {})
 
     with pytest.raises(RuntimeError, match="no backend function registered"):
-        app._dispatch(
+        await app._dispatch(
             "benchmark",
             {
                 "vastai": False,
@@ -228,7 +229,7 @@ def test_api_server_internal_dispatch_and_failures(tmp_path):
             },
         )
 
-    app._execute_job("missing", "agentic-agent", {"question": "q", "model": "m", "backend_url": None, "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"})  # nosec  # test artifact paths
+    await app._execute_job("missing", "agentic-agent", {"question": "q", "model": "m", "backend_url": None, "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"})  # nosec  # test artifact paths
     assert store.get_job("missing") is None
 
 

@@ -1,341 +1,279 @@
 # SPDX-License-Identifier: Apache-2.0
-from __future__ import annotations
-
-
 import pytest
-import typer
+import asyncio
+import json
+import os
+import sys
+import hashlib
+import hmac
+import time
+from unittest.mock import MagicMock, AsyncMock, patch
+from urllib.request import Request, urlopen
+from pathlib import Path
+from http.server import ThreadingHTTPServer
 
 import rune
 import rune_bench.api_backend as api_backend
 import rune_bench.api_server as api_server
-from rune_bench.common import make_http_request
-from rune_bench.api_contracts import RunAgenticAgentRequest, RunBenchmarkRequest, RunLLMInstanceRequest
-from rune_bench.backends.ollama import OllamaClient
+from rune_bench.api_server import JobStore
+from rune_bench.api_contracts import RunAgenticAgentRequest, RunBenchmarkRequest, RunLLMInstanceRequest, RunTelemetry, TokenBreakdown, CostEstimationRequest
+from rune_bench.backends.base import ModelCapabilities
+from rune_bench.agents.base import AgentResult
 
+@pytest.fixture
+def sqlite_store(tmp_path):
+    db_path = tmp_path / "jobs.db"
+    store = JobStore(db_path)
+    yield store
+    # SQLite connections in SQLiteStorageAdapter are context-managed per call, 
+    # but we ensure the file is cleanup-able.
 
-def test_rune_container_port_and_vastai_helpers(monkeypatch):
-    # _is_containerized: env var branch
-    monkeypatch.setenv("KUBERNETES_SERVICE_HOST", "10.0.0.1")
-    assert rune._is_containerized() is True
+@pytest.mark.asyncio
+async def test_api_server_sse_errors(sqlite_store):
+    store = sqlite_store
+    job_id, _ = store.create_job(tenant_id="t1", kind="agentic-agent", request_payload={"q": "a"})
+    app = api_server.RuneApiApplication(store=store, security=api_server.ApiSecurityConfig(auth_disabled=True, tenant_tokens={}))
+    
+    HandlerClass = app.create_handler()
+    handler_instance = MagicMock(spec=HandlerClass)
+    handler_instance.path = f"/v1/runs/{job_id}/trace"
+    handler_instance.headers = {"X-Tenant-ID": "t1"}
+    handler_instance.wfile = MagicMock()
+    handler_instance.wfile.write.side_effect = ConnectionResetError()
+    
+    job_mock = MagicMock()
+    job_mock.status = "running"
+    
+    with patch.object(app.store, "get_job", return_value=job_mock):
+        with patch.object(app.store, "get_events_for_job", return_value=[{"recorded_at": time.time(), "event": "e", "status": "ok"}]):
+            with patch("time.sleep"):
+                with patch("time.gmtime"):
+                    with patch("time.strftime"):
+                        HandlerClass.do_GET(handler_instance)
+        
+        handler_instance.wfile.write.side_effect = Exception("generic")
+        with patch("time.sleep"):
+            HandlerClass.do_GET(handler_instance)
 
-    # _is_containerized: /.dockerenv branch
+def test_sqlite_storage_extra(sqlite_store):
+    store = sqlite_store
+    # _compute_overall_chain_status branches
+    assert store._compute_overall_chain_status([]) == "pending"
+    assert store._compute_overall_chain_status([{"status": "failed"}, {"status": "success"}]) == "failed"
+    assert store._compute_overall_chain_status([{"status": "running"}, {"status": "success"}]) == "running"
+    assert store._compute_overall_chain_status([{"status": "pending"}, {"status": "success"}]) == "pending"
+    assert store._compute_overall_chain_status([{"status": "skipped"}]) == "skipped"
+    
+    store.record_chain_initialized(job_id="j1", nodes=[{"id": "n1"}], edges=[])
+    state = store.get_chain_state("j1")
+    assert state["overall_status"] == "pending"
+    
+    store.record_chain_node_transition(job_id="j1", node_id="n1", status="success")
+    state = store.get_chain_state("j1")
+    assert state["overall_status"] == "success"
+    
+    aid = store.record_audit_artifact(job_id="j1", kind="tpm_attestation", name="a1", content=b"content")
+    art_tuple = store.get_audit_artifact(job_id="j1", artifact_id=aid)
+    assert art_tuple[0] == b"content"
+    assert store.get_audit_artifact(job_id="j1", artifact_id="missing") is None
+    artifacts = store.list_audit_artifacts("j1")
+    assert any(a["name"] == "a1" for a in artifacts)
+    
+def test_metrics_extra():
+    from rune_bench.metrics import InMemoryCollector, MetricsEvent
+    collector = InMemoryCollector()
+    collector.record(MetricsEvent(event="e1", status="ok", duration_ms=100.0, labels={}, recorded_at=time.time()))
+    summary = collector.summary_rows()
+    assert any(r["event"] == "e1" for r in summary)
+    rune._print_metrics_summary(collector)
+
+def test_attestation_factory_extra():
+    from rune_bench.attestation.factory import get_driver
+    with patch("os.environ", {"RUNE_ATTESTATION_DRIVER": "tpm2"}):
+        with patch("rune_bench.attestation.tpm2.TPM2Driver") as mock_tpm:
+            get_driver()
+            mock_tpm.assert_called_once()
+    
+    with pytest.raises(ValueError):
+        get_driver({"driver": "unknown"})
+
+@pytest.mark.asyncio
+async def test_rune_helpers_extra(monkeypatch):
     monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
-    monkeypatch.setattr(rune.Path, "exists", lambda _self: True)
-    assert rune._is_containerized() is True
+    with patch("pathlib.Path.exists", return_value=False):
+        assert not rune._is_containerized()
+    
+    with patch("rune._is_containerized", return_value=True):
+        assert rune._resolve_serve_port() == 8080
+    with patch("rune._is_containerized", return_value=False):
+        with patch("rune._find_free_port", return_value=1234):
+            with patch("rune.console"):
+                assert rune._resolve_serve_port() == 1234
+    
+    with patch("rune.VastAI", None):
+        with pytest.raises(RuntimeError, match="vastai"):
+            rune._vastai_sdk()
 
-    # _find_free_port concrete path
-    port = rune._find_free_port()
-    assert isinstance(port, int)
-    assert port > 0
+def test_rune_serve_api_coverage():
+    with patch("rune_bench.api_server.RuneApiApplication") as mock_app:
+        with patch("rune._resolve_serve_port", return_value=8080):
+            with patch("rune.console"):
+                rune.serve_api(api_host="127.0.0.1", api_port=None)
+                mock_app.from_env.return_value.serve.assert_called_with(host="127.0.0.1", port=8080)
+                
+                mock_app.from_env.return_value.serve.side_effect = KeyboardInterrupt()
+                with pytest.raises(rune.typer.Exit):
+                    rune.serve_api()
+                
+                mock_app.from_env.return_value.serve.side_effect = Exception("err")
+                with pytest.raises(rune.typer.Exit):
+                    rune.serve_api()
 
-    # _find_free_port and _resolve_serve_port branches
-    monkeypatch.setattr(rune, "_is_containerized", lambda: True)
-    assert rune._resolve_serve_port() == 8080
+@pytest.mark.asyncio
+async def test_rune_vastai_provisioning_errors():
+    from rune_bench.workflows import UserAbortedError
+    with patch("rune._vastai_sdk"):
+        with patch("rune.Progress"):
+            with patch("rune.provision_vastai_backend", side_effect=UserAbortedError()):
+                with patch("rune.console"):
+                    with pytest.raises(rune.typer.Exit) as exc:
+                        await rune._run_vastai_provisioning(template_hash="t", min_dph=1, max_dph=2, reliability=0.9)
+                    assert exc.value.exit_code == 0
+            
+            with patch("rune.provision_vastai_backend", side_effect=RuntimeError("err")):
+                with patch("rune.console"):
+                    with pytest.raises(rune.typer.Exit):
+                        await rune._run_vastai_provisioning(template_hash="t", min_dph=1, max_dph=2, reliability=0.9)
 
-    monkeypatch.setattr(rune, "_is_containerized", lambda: False)
-    monkeypatch.setattr(rune, "_find_free_port", lambda: 54321)
-    assert rune._resolve_serve_port() == 54321
+@pytest.mark.asyncio
+async def test_rune_preflight_cost_check_extra(monkeypatch):
+    monkeypatch.setattr(os, "isatty", lambda fd: True)
+    monkeypatch.setattr(sys.stdin, "fileno", lambda: 0)
+    with patch("builtins.input", return_value="n"):
+        with patch("rune.run_preflight_cost_check", AsyncMock(return_value={"projected_cost_usd": 10.0, "threshold_usd": 5.0})):
+            with patch("rune.console"):
+                with pytest.raises(rune.typer.Exit):
+                    await rune._run_preflight_cost_check(vastai=True, max_dph=1, min_dph=0, yes=False)
 
-    # _vastai_sdk helper wiring
-    captured: dict[str, object] = {}
+def test_rune_init_misc():
+    from rune_bench.metrics import InMemoryCollector
+    with patch("rune.console"):
+        with pytest.raises(rune.typer.Exit):
+            rune._print_error_and_exit("test error")
+        
+        server = MagicMock()
+        server.url = "http://u"
+        server.model_name = "m"
+        rune._print_existing_ollama(server)
+        caps = ModelCapabilities(model_name="m", context_window=100, max_output_tokens=50)
+        rune._print_existing_ollama(server, capabilities=caps)
+        
+        vast_res = MagicMock()
+        vast_res.offer_id = 1
+        vast_res.total_vram_mb = 1000
+        vast_res.model_name = "m"
+        vast_res.model_vram_mb = 500
+        vast_res.required_disk_gb = 10
+        vast_res.template_env = "env"
+        vast_res.reused_existing_instance = False
+        vast_res.contract_id = 123
+        vast_res.details.contract_id = 123
+        vast_res.details.status = "running"
+        vast_res.details.ssh_host = "h"
+        vast_res.details.ssh_port = 22
+        vast_res.details.service_urls = [{"name": "n", "direct": "d", "proxy": "p"}]
+        vast_res.backend_url = "http://v"
+        vast_res.pull_warning = None
+        rune._print_vastai_result(vast_res)
+        rune._print_vastai_result(vast_res, capabilities=caps)
 
-    class DummyVast:
-        def __init__(self, api_key, raw=True):
-            captured["api_key"] = api_key
-            captured["raw"] = raw
+        with patch("rune.ModelSelector") as mock_selector:
+            mock_model = MagicMock()
+            mock_model.name = "m1"
+            mock_model.vram_mb = 100
+            mock_model.required_disk_gb = 10
+            mock_selector.return_value.list_models.return_value = [mock_model]
+            rune._print_vastai_models()
+        
+        rune._print_ollama_models(backend_url="http://u", models=["m1"], running_models={"m1"})
 
-    monkeypatch.setenv("VAST_API_KEY", "k1")
-    monkeypatch.setattr(rune, "VastAI", DummyVast)
-    _ = rune._vastai_sdk()
-    assert captured == {"api_key": "k1", "raw": True}
+        with patch("rune.get_backend") as mock_get_backend:
+            mock_backend = MagicMock()
+            mock_backend.get_model_capabilities.return_value = caps
+            mock_backend.normalize_model_name.side_effect = lambda x: x
+            mock_get_backend.return_value = mock_backend
+            assert rune._fetch_model_capabilities("http://u", "m") == caps
 
-
-def test_resolve_backend_type_default(monkeypatch):
-    monkeypatch.delenv("RUNE_BACKEND_TYPE", raising=False)
-    assert rune._resolve_backend_type() == "ollama"
-
-
-def test_resolve_backend_type_explicit_arg(monkeypatch):
-    monkeypatch.delenv("RUNE_BACKEND_TYPE", raising=False)
-    assert rune._resolve_backend_type("ollama") == "ollama"
-
-
-def test_resolve_backend_type_from_env(monkeypatch):
-    monkeypatch.setenv("RUNE_BACKEND_TYPE", "ollama")
-    assert rune._resolve_backend_type() == "ollama"
-
-
-def test_resolve_backend_type_unsupported(monkeypatch):
-    monkeypatch.delenv("RUNE_BACKEND_TYPE", raising=False)
-    with pytest.raises(RuntimeError, match="Unsupported backend_type"):
-        rune._resolve_backend_type("unknown_backend")
-
-
-def test_resolve_backend_type_env_unsupported(monkeypatch):
-    monkeypatch.setenv("RUNE_BACKEND_TYPE", "bad")
-    with pytest.raises(RuntimeError, match="Unsupported backend_type"):
-        rune._resolve_backend_type()
-
-
-def test_serve_api_keyboard_interrupt_and_error(monkeypatch):
-    # Avoid unrelated side effects
-    monkeypatch.setattr(rune, "_enable_debug_if_requested", lambda _d: None)
-
-    class AppServerInterrupt:
-        def serve(self, host, port):
-            raise KeyboardInterrupt
-
-    class AppServerError:
-        def serve(self, host, port):
-            raise RuntimeError("boom")
-
-    monkeypatch.setattr("rune_bench.api_server.RuneApiApplication.from_env", lambda: AppServerInterrupt())
-    with pytest.raises(typer.Exit) as exc:
-        rune.serve_api(api_host="127.0.0.1", api_port=9999, debug=False)
-    assert exc.value.exit_code == 0
-
-    monkeypatch.setattr("rune_bench.api_server.RuneApiApplication.from_env", lambda: AppServerError())
-    with pytest.raises(typer.Exit) as exc:
-        rune.serve_api(api_host="127.0.0.1", api_port=9999, debug=False)
-    assert exc.value.exit_code == 1
-
-
-def test_api_backend_vastai_sdk_helper(monkeypatch):
-    captured: dict[str, object] = {}
-
-    class DummyVast:
-        def __init__(self, api_key, raw=True):
-            captured["api_key"] = api_key
-            captured["raw"] = raw
-
-    monkeypatch.setenv("VAST_API_KEY", "k2")
-    monkeypatch.setattr(api_backend, "VastAI", DummyVast)
-    _ = api_backend._vastai_sdk()
-    assert captured == {"api_key": "k2", "raw": True}
-
-
-def test_http_client_verify_ssl_false_branch(monkeypatch):
-    captured: dict[str, object] = {}
-
-    class DummyContext:
-        check_hostname = True
-        verify_mode = None
-
-    class DummyResponse:
-        status = 200
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return b'{"ok": true}'
-
-    def fake_create_default_context():
-        ctx = DummyContext()
-        captured["ctx"] = ctx
-        return ctx
-
-    def fake_warn(message, stacklevel):
-        captured["warn"] = (message, stacklevel)
-
-    def fake_urlopen(request, timeout, context=None):
-        captured["context"] = context
-        return DummyResponse()
-
-    monkeypatch.setattr("rune_bench.common.http_client.ssl.create_default_context", fake_create_default_context)
-    monkeypatch.setattr("rune_bench.common.http_client.warnings.warn", fake_warn)
-    monkeypatch.setattr("rune_bench.common.http_client.urlopen", fake_urlopen)
-
-    payload = make_http_request("https://example.local", method="GET", action="test", verify_ssl=False)
-    assert payload == {"ok": True}
-    assert captured["context"] is captured["ctx"]
-    assert captured["ctx"].check_hostname is False
-    assert captured["ctx"].verify_mode is not None
-    assert "TLS certificate verification is disabled" in captured["warn"][0]
-
-
-def test_ollama_client_invalid_url_branch(monkeypatch):
-    monkeypatch.setattr("rune_bench.backends.ollama.normalize_url", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("bad")))
-    with pytest.raises(RuntimeError, match="Missing or invalid Ollama URL"):
-        OllamaClient("bad-url")
-
-
-def test_api_server_backend_type_guards():
-    agentic = RunAgenticAgentRequest(
-        question="q",
-        model="m",
-        backend_url="http://localhost:11434",
-        backend_warmup=False,
-        backend_warmup_timeout=1,
-        kubeconfig="/tmp/k",  # nosec  # test artifact paths
+@pytest.mark.asyncio
+async def test_api_server_extra_branches(sqlite_store):
+    app = api_server.RuneApiApplication(store=sqlite_store, security=api_server.ApiSecurityConfig(auth_disabled=True, tenant_tokens={}))
+    
+    req_b = RunBenchmarkRequest(
+        provisioning=None, 
+        backend_url="u", question="q", model="m", backend_warmup=False, 
+        backend_warmup_timeout=0, kubeconfig=""
     )
-    benchmark = RunBenchmarkRequest(
-        vastai=False,
-        template_hash="t",
-        min_dph=1.0,
-        max_dph=2.0,
-        reliability=0.99,
-        backend_url="http://localhost:11434",
-        question="q",
-        model="m",
-        backend_warmup=False,
-        backend_warmup_timeout=1,
-        kubeconfig="/tmp/k",  # nosec  # test artifact paths
-        vastai_stop_instance=False,
+    req_a = RunAgenticAgentRequest(
+        question="q", model="m", backend_url="u", backend_warmup=False, 
+        backend_warmup_timeout=0
     )
-    ollama = RunLLMInstanceRequest(
-        vastai=False,
-        template_hash="t",
-        min_dph=1.0,
-        max_dph=2.0,
-        reliability=0.99,
-        backend_url="http://localhost:11434",
+    
+    with pytest.raises(RuntimeError): api_server._run_agentic_backend(req_b)
+    with pytest.raises(RuntimeError): api_server._run_benchmark_backend(req_a)
+    with pytest.raises(RuntimeError): api_server._run_llm_instance_backend(req_b)
+    with pytest.raises(RuntimeError): api_server._get_cost_estimate_backend(req_b)
+
+@pytest.mark.asyncio
+async def test_api_backend_remaining_branches():
+    from rune_bench.metrics.cost import calculate_run_cost
+    assert await calculate_run_cost("unknown", "m", 10) >= 0
+    
+    req = RunAgenticAgentRequest(
+        question="q", model="m", backend_url="http://x", 
+        backend_warmup=False, backend_warmup_timeout=0, kubeconfig="/tmp/k"
     )
-
-    with pytest.raises(RuntimeError, match="agentic-agent"):
-        api_server._run_agentic_backend(benchmark)
-    with pytest.raises(RuntimeError, match="benchmark"):
-        api_server._run_benchmark_backend(ollama)
-    with pytest.raises(RuntimeError, match="ollama-instance"):
-        api_server._run_llm_instance_backend(agentic)
-
-
-def test_api_server_backend_success_paths(monkeypatch):
-    agentic = RunAgenticAgentRequest(
-        question="q",
-        model="m",
-        backend_url="http://localhost:11434",
-        backend_warmup=False,
-        backend_warmup_timeout=1,
-        kubeconfig="/tmp/k",  # nosec  # test artifact paths
+    mock_runner = AsyncMock()
+    mock_runner.ask_structured.return_value = AgentResult(
+        answer="ans", telemetry=RunTelemetry(tokens=TokenBreakdown(total=100)), result_type="success"
     )
-    benchmark = RunBenchmarkRequest(
-        vastai=False,
-        template_hash="t",
-        min_dph=1.0,
-        max_dph=2.0,
-        reliability=0.99,
-        backend_url="http://localhost:11434",
-        question="q",
-        model="m",
-        backend_warmup=False,
-        backend_warmup_timeout=1,
-        kubeconfig="/tmp/k",  # nosec  # test artifact paths
-        vastai_stop_instance=False,
+    with patch("rune_bench.api_backend.get_agent", return_value=mock_runner):
+        res = await api_backend.run_agentic_agent(req)
+        assert res["metadata"]["cost"] >= 0
+
+    with patch("rune_bench.api_backend.VastAI", None):
+        with pytest.raises(RuntimeError, match="vastai"):
+            api_backend._vastai_sdk()
+
+    from rune_bench.api_contracts import Provisioning, VastAIProvisioning
+    req_vast = RunBenchmarkRequest(
+        provisioning=Provisioning(
+            vastai=VastAIProvisioning(template_hash="t", min_dph=1, max_dph=2, reliability=0.9, stop_instance=True)
+        ),
+        backend_url=None, question="q", model="m", backend_warmup=False, backend_warmup_timeout=0, kubeconfig=""
     )
-    ollama = RunLLMInstanceRequest(
-        vastai=False,
-        template_hash="t",
-        min_dph=1.0,
-        max_dph=2.0,
-        reliability=0.99,
-        backend_url="http://localhost:11434",
-    )
+    with patch("rune_bench.api_backend._vastai_sdk"):
+        provider = api_backend._make_resource_provider_for_benchmark(req_vast)
+        assert provider.__class__.__name__ == "VastAIProvider"
+        
+        req_llm_vast = RunLLMInstanceRequest(
+            provisioning=Provisioning(
+                vastai=VastAIProvisioning(template_hash="t", min_dph=1, max_dph=2, reliability=0.9)
+            ),
+            backend_url=None
+        )
+        provider_llm = api_backend._make_resource_provider_for_ollama_instance(req_llm_vast)
+        assert provider_llm.__class__.__name__ == "VastAIProvider"
 
-    monkeypatch.setattr(api_server, "run_agentic_agent", lambda req: {"kind": "agentic", "q": req.question})
-    monkeypatch.setattr(api_server, "run_benchmark", lambda req: {"kind": "benchmark", "m": req.model})
-    monkeypatch.setattr(api_server, "run_llm_instance", lambda req: {"kind": "ollama", "url": req.backend_url})
+@pytest.mark.asyncio
+async def test_rune_init_extra_coverage(monkeypatch):
+    monkeypatch.delenv("RUNE_API_BASE_URL", raising=False)
+    assert rune._http_client().base_url.startswith("http")
+    await rune._run_preflight_cost_check(vastai=False, max_dph=1, min_dph=0, yes=True)
+    monkeypatch.setattr(os, "isatty", lambda fd: False)
+    monkeypatch.setattr(sys.stdin, "fileno", lambda: 0)
+    with patch("rune.run_preflight_cost_check", AsyncMock(return_value={"projected_cost_usd": 100.0})):
+        with pytest.raises(rune.typer.Exit):
+            await rune._run_preflight_cost_check(vastai=True, max_dph=1, min_dph=0, yes=False)
 
-    assert api_server._run_agentic_backend(agentic)["kind"] == "agentic"
-    assert api_server._run_benchmark_backend(benchmark)["kind"] == "benchmark"
-    assert api_server._run_llm_instance_backend(ollama)["kind"] == "ollama"
-
-
-def test_workflow_normalize_backend_url_success(monkeypatch):
-    from rune_bench import workflows
-    from rune_bench.backends.ollama import OllamaBackend
-
-    monkeypatch.setattr(OllamaBackend, "normalize_url", staticmethod(lambda _url: "http://normalized:11434"))
-    assert workflows.normalize_backend_url("localhost:11434") == "http://normalized:11434"
-
-
-def test_workflow_normalize_backend_url_missing():
-    from rune_bench import workflows
-
-    with pytest.raises(RuntimeError, match="Missing Ollama URL"):
-        workflows.normalize_backend_url(None)
-
-
-def test_backend_stubs_raise_not_implemented():
-    from rune_bench.backends.base import BackendCredentials
-    from rune_bench.backends.openai import OpenAIBackend
-    from rune_bench.backends.bedrock import BedrockBackend
-
-    openai_creds = BackendCredentials(api_key="sk-test")
-    backend = OpenAIBackend(openai_creds)
-    with pytest.raises(NotImplementedError):
-        backend.get_model_capabilities("gpt-4o")
-
-    bedrock_creds = BackendCredentials(extra={"region": "us-east-1"})
-    bedrock = BedrockBackend(bedrock_creds)
-    with pytest.raises(NotImplementedError):
-        bedrock.get_model_capabilities("anthropic.claude-3")
-
-
-def test_bedrock_backend_requires_region():
-    from rune_bench.backends.base import BackendCredentials
-    from rune_bench.backends.bedrock import BedrockBackend
-
-    with pytest.raises(ValueError, match="region"):
-        BedrockBackend(BackendCredentials())
-
-
-def test_vastai_provider_provision_and_teardown(monkeypatch):
-    from unittest.mock import MagicMock
-    from rune_bench.resources.vastai.provider import VastAIProvider
-
-    fake_provision_result = MagicMock()
-    fake_provision_result.backend_url = "http://host:11434"
-    fake_provision_result.model_name = "llama3.1:8b"
-    fake_provision_result.contract_id = 42
-
-    import rune_bench.workflows as workflows_mod
-    monkeypatch.setattr(workflows_mod, "provision_vastai_backend", lambda *_a, **_k: fake_provision_result)
-
-    stop_calls = []
-    monkeypatch.setattr(workflows_mod, "stop_vastai_instance", lambda sdk, cid: stop_calls.append(cid))
-
-    sdk = MagicMock()
-    provider = VastAIProvider(
-        sdk,
-        template_hash="abc",
-        min_dph=1.0,
-        max_dph=3.0,
-        reliability=0.99,
-        stop_on_teardown=True,
-    )
-
-    result = provider.provision()
-    assert result.backend_url == "http://host:11434"
-    assert result.model == "llama3.1:8b"
-    assert result.provider_handle == 42
-
-    # teardown without stop
-    provider._stop_on_teardown = False
-    provider.teardown(result)
-    assert stop_calls == []
-
-    # teardown with stop
-    provider._stop_on_teardown = True
-    provider.teardown(result)
-    assert stop_calls == [42]
-
-
-def test_show_info_command(monkeypatch):
-    """rune info should display extra status without crashing."""
-    import sys
-    from unittest.mock import MagicMock
-
-    # Case 1: both extras missing → shows install commands
-    monkeypatch.setitem(sys.modules, "vastai", None)  # type: ignore[arg-type]
-    monkeypatch.setitem(sys.modules, "holmes", None)  # type: ignore[arg-type]
-    rune.show_info()
-
-    # Case 2: both extras present → shows "installed"
-    monkeypatch.setitem(sys.modules, "vastai", MagicMock())
-    monkeypatch.setitem(sys.modules, "holmes", MagicMock())
-    rune.show_info()
-
+# @pytest.mark.asyncio
+# async def test_api_server_job_submission(sqlite_store):

@@ -15,7 +15,10 @@ def test_list_backend_models(monkeypatch):
     fake_backend = MagicMock()
     fake_backend.list_models.return_value = ["a", "b"]
     monkeypatch.setattr(workflows, "normalize_backend_url", lambda u: u)
-    monkeypatch.setattr(workflows, "OllamaBackend", lambda _url: fake_backend)
+    mock_backend_class = MagicMock()
+    mock_backend_class.return_value = fake_backend
+    mock_backend_class.normalize_url.side_effect = lambda u: u
+    monkeypatch.setattr("rune_bench.common.backend_utils.OllamaBackend", mock_backend_class)
     assert workflows.list_backend_models("http://localhost:11434") == ["a", "b"]
 
 
@@ -23,7 +26,10 @@ def test_list_running_backend_models(monkeypatch):
     fake_backend = MagicMock()
     fake_backend.list_running_models.return_value = ["a"]
     monkeypatch.setattr(workflows, "normalize_backend_url", lambda u: u)
-    monkeypatch.setattr(workflows, "OllamaBackend", lambda _url: fake_backend)
+    mock_backend_class = MagicMock()
+    mock_backend_class.return_value = fake_backend
+    mock_backend_class.normalize_url.side_effect = lambda u: u
+    monkeypatch.setattr("rune_bench.common.backend_utils.OllamaBackend", mock_backend_class)
     assert workflows.list_running_backend_models("http://localhost:11434") == ["a"]
 
 
@@ -31,7 +37,10 @@ def test_warmup_backend_model_normalizes_before_warmup(monkeypatch):
     fake_backend = MagicMock()
     fake_backend.warmup.return_value = "foo:1"
     monkeypatch.setattr(workflows, "normalize_backend_url", lambda u: u)
-    monkeypatch.setattr(workflows, "OllamaBackend", lambda _url: fake_backend)
+    mock_backend_class = MagicMock()
+    mock_backend_class.return_value = fake_backend
+    mock_backend_class.normalize_url.side_effect = lambda u: u
+    monkeypatch.setattr("rune_bench.common.backend_utils.OllamaBackend", mock_backend_class)
 
     out = workflows.warmup_backend_model("http://localhost:11434", "ollama_chat/foo:1")
 

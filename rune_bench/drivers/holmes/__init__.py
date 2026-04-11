@@ -13,6 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from rune_bench.agents.base import AgentResult
+from rune_bench.api_contracts import LatencyPhase, RunTelemetry, TokenBreakdown
 from rune_bench.backends import get_backend
 from rune_bench.debug import debug_log
 from rune_bench.drivers import DriverTransport, AsyncDriverTransport, make_driver_transport, make_async_driver_transport
@@ -94,8 +95,8 @@ class HolmesDriverClient:
             result_type=result.get("result_type", "text"),
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
+            telemetry=self._parse_telemetry(result.get("telemetry")),
         )
-
 
     async def ask_async(
         self,
@@ -104,7 +105,7 @@ class HolmesDriverClient:
         backend_url: str | None = None,
         backend_type: str = "ollama",
     ) -> AgentResult:
-        """Dispatch a question to the driver asynchronously."""
+        """Dispatch a question to the holmes driver asynchronously."""
         resolved_model = model.strip()
         params: dict = {
             "question": question,
@@ -113,33 +114,59 @@ class HolmesDriverClient:
         }
         if backend_url:
             params["backend_url"] = backend_url
-            if hasattr(self, "_fetch_model_limits"):
-                params.update(self._fetch_model_limits(
-                    model=resolved_model, backend_url=backend_url, backend_type=backend_type,
-                ))
+            params.update(self._fetch_model_limits(
+                model=resolved_model, backend_url=backend_url, backend_type=backend_type,
+            ))
 
         debug_log(
-            f"{self.__class__.__name__}.ask_async: question={question!r} model={resolved_model!r} "
+            f"HolmesDriverClient.ask_async: question={question!r} model={resolved_model!r} "
             f"backend_url={backend_url or '<none>'}"
         )
         result = await self._async_transport.call_async("ask", params)
 
         if "answer" not in result:
-            raise RuntimeError("Driver response did not include an answer.")
+            raise RuntimeError("Holmes driver response did not include an answer.")
 
         answer = result["answer"]
         if answer is None:
-            raise RuntimeError("Driver returned an empty answer.")
+            raise RuntimeError("Holmes driver returned an empty answer.")
 
         answer_text = str(answer)
         if not answer_text:
-            raise RuntimeError("Driver returned an empty answer.")
+            raise RuntimeError("Holmes driver returned an empty answer.")
 
         return AgentResult(
             answer=answer_text,
             result_type=result.get("result_type", "text"),
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
+            telemetry=self._parse_telemetry(result.get("telemetry")),
+        )
+
+    def _parse_telemetry(self, raw: dict | None) -> RunTelemetry | None:
+        """Parse raw telemetry dict into a RunTelemetry object."""
+        if not raw:
+            return None
+
+        tokens_raw = raw.get("tokens", {})
+        tokens = TokenBreakdown(
+            system_prompt=tokens_raw.get("system_prompt", 0),
+            tool_calls=tokens_raw.get("tool_calls", 0),
+            agent_reasoning=tokens_raw.get("agent_reasoning", 0),
+            output=tokens_raw.get("output", 0),
+            total=tokens_raw.get("total", 0),
+        )
+
+        latency_raw = raw.get("latency", [])
+        latency = [
+            LatencyPhase(phase=p.get("phase", "unknown"), ms=p.get("ms", 0))
+            for p in latency_raw if isinstance(p, dict)
+        ]
+
+        return RunTelemetry(
+            tokens=tokens,
+            latency=latency,
+            cost_estimate_usd=raw.get("cost_estimate_usd"),
         )
 
     def _fetch_model_limits(

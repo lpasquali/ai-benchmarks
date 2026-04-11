@@ -14,31 +14,9 @@ from rune_bench.resources.vastai.sdk import VastAI
 from rune_bench.common import SelectedModel
 from rune_bench.debug import debug_log
 from rune_bench.backends import get_backend
+from typing import Any, Callable, TYPE_CHECKING
+from .contracts import ConnectionDetails, TeardownResult
 
-from .template import Template
-
-_POLL_INTERVAL_S = 10
-_POLL_MAX_ATTEMPTS = 36  # ~6 minutes
-
-
-@dataclass
-class ConnectionDetails:
-    contract_id: int | str
-    status: str
-    ssh_host: str | None
-    ssh_port: int | None
-    machine_id: str | None
-    service_urls: list[dict] = field(default_factory=list)
-    # Each entry: {"name": str, "direct": str, "proxy": str | None}
-
-
-@dataclass
-class TeardownResult:
-    contract_id: int | str
-    destroyed_instance: bool
-    destroyed_volume_ids: list[str] = field(default_factory=list)
-    verification_ok: bool = False
-    verification_message: str = ""
 
 
 class InstanceManager:

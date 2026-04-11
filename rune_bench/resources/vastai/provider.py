@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Vast.ai LLM resource provider."""
 
+import asyncio
 from rune_bench.resources.vastai.sdk import VastAI
-
 from rune_bench.resources.base import ProvisioningResult
 
 
@@ -30,9 +30,10 @@ class VastAIProvider:
         self._reliability = reliability
         self._stop_on_teardown = stop_on_teardown
 
-    def provision(self) -> ProvisioningResult:
+    async def provision(self) -> ProvisioningResult:
         from rune_bench.workflows import provision_vastai_backend
-        result = provision_vastai_backend(
+        result = await asyncio.to_thread(
+            provision_vastai_backend,
             self._sdk,
             template_hash=self._template_hash,
             min_dph=self._min_dph,
@@ -46,7 +47,11 @@ class VastAIProvider:
             provider_handle=result.contract_id,
         )
 
-    def teardown(self, result: ProvisioningResult) -> None:
+    async def teardown(self, result: ProvisioningResult) -> None:
         if self._stop_on_teardown and result.provider_handle is not None:
             from rune_bench.workflows import stop_vastai_instance
-            stop_vastai_instance(self._sdk, result.provider_handle)
+            await asyncio.to_thread(
+                stop_vastai_instance,
+                self._sdk,
+                result.provider_handle,
+            )

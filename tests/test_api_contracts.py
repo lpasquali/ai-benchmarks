@@ -10,18 +10,21 @@ from rune_bench.api_contracts import (
 
 
 def test_run_llm_instance_request_to_dict():
+    from rune_bench.api_contracts import Provisioning, VastAIProvisioning
     request = RunLLMInstanceRequest(
-        vastai=True,
-        template_hash="tmpl",
-        min_dph=2.0,
-        max_dph=3.0,
-        reliability=0.99,
+        provisioning=Provisioning(
+            vastai=VastAIProvisioning(
+                template_hash="tmpl",
+                min_dph=2.0,
+                max_dph=3.0,
+                reliability=0.99,
+            )
+        ),
         backend_url=None,
     )
 
     payload = request.to_dict()
-    assert payload["vastai"] is True
-    assert payload["template_hash"] == "tmpl"
+    assert payload["provisioning"]["vastai"]["template_hash"] == "tmpl"
 
 
 def test_agentic_request_from_cli_converts_kubeconfig_to_string():
@@ -84,7 +87,26 @@ def test_benchmark_request_from_cli_converts_kubeconfig_to_string():
 
     payload = request.to_dict()
     assert payload["kubeconfig"] == "/home/user/.kube/config"
-    assert payload["vastai_stop_instance"] is True
+    assert payload["provisioning"] is None
+
+
+def test_benchmark_request_from_cli_vastai():
+    request = RunBenchmarkRequest.from_cli(
+        vastai=True,
+        template_hash="hash",
+        min_dph=2.3,
+        max_dph=3.0,
+        reliability=0.99,
+        backend_url=None,
+        question="q",
+        model="m",
+        backend_warmup=True,
+        backend_warmup_timeout=90,
+        kubeconfig=Path("/k"),
+        vastai_stop_instance=True,
+    )
+    payload = request.to_dict()
+    assert payload["provisioning"]["vastai"]["stop_instance"] is True
 
 
 def test_cost_estimation_request_to_dict():

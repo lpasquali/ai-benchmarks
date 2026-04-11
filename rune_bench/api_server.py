@@ -10,7 +10,8 @@ import logging
 import os
 import threading
 import time
-from dataclasses import dataclass
+import asyncio
+from dataclasses import dataclass, asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable, TypeAlias
@@ -41,6 +42,7 @@ from rune_bench.common import (
     update_settings,
 )
 from rune_bench.metrics import SQLiteMetricsCollector, clear_collector, set_collector, set_job_id, span
+from rune_bench.metrics.pricing import PricingSoothSayer
 from rune_bench.storage import StoragePort
 from rune_bench.storage.sqlite import JobRecord, SQLiteStorageAdapter
 
@@ -256,6 +258,80 @@ class RuneApiApplication:
                     self._write_json(200, {"events": summary})
                     return
 
+                if path == "/v1/finops/simulate":
+                    query = parse_qs(parsed.query)
+                    agent = query.get("agent", ["holmes"])[0]
+                    model = query.get("model", ["llama3.1:8b"])[0]
+                    gpu = query.get("gpu", ["rtx4090"])[0]
+                    suite = query.get("suite", ["standard"])[0]
+                    
+                    try:
+                        # Use a dedicated loop for the async simulation call
+                        soothsayer = PricingSoothSayer()
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        projection = loop.run_until_complete(soothsayer.simulate(
+                            agent=agent, model=model, gpu=gpu, suite=suite
+                        ))
+                        loop.close()
+                        self._write_json(200, asdict(projection))
+                    except Exception as exc:
+                        self._write_json(400, {"error": str(exc)})
+                    return
+
+                if path.startswith("/v1/runs/") and path.endswith("/trace"):
+                    run_id = path.removeprefix("/v1/runs/").removesuffix("/trace").strip()
+                    if not run_id:
+                        self._write_json(400, {"error": "missing run_id"})
+                        return
+                    
+                    job = app.store.get_job(run_id, tenant_id=tenant_id)
+                    if job is None:
+                        self._write_json(404, {"error": f"run not found: {run_id}"})
+                        return
+
+                    # SSE response
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/event-stream")
+                    self.send_header("Cache-Control", "no-cache")
+                    self.send_header("Connection", "keep-alive")
+                    self.end_headers()
+
+                    last_idx = 0
+                    while True:
+                        try:
+                            events = app.store.get_events_for_job(run_id)
+                            if len(events) > last_idx:
+                                for i in range(last_idx, len(events)):
+                                    ev = events[i]
+                                    # Format for frontend expectation
+                                    data = {
+                                        "ts": time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(ev["recorded_at"])),
+                                        "level": "INFO" if ev["status"] == "ok" else "ERROR",
+                                        "msg": f"{ev['event']}: {ev['status']}"
+                                    }
+                                    if ev.get("error_type"):
+                                        data["msg"] += f" ({ev['error_type']})"
+                                    
+                                    self.wfile.write(f"event: log\ndata: {json.dumps(data)}\n\n".encode())
+                                    self.wfile.flush()
+                                last_idx = len(events)
+
+                            # Check if job is terminal
+                            job_now = app.store.get_job(run_id)
+                            if job_now and job_now.status in ("succeeded", "failed", "cancelled"):
+                                self.wfile.write(b"event: end\ndata: {\"msg\": \"stream ended\"}\n\n")
+                                self.wfile.flush()
+                                break
+                        except (ConnectionResetError, BrokenPipeError):
+                            break
+                        except Exception as exc:
+                            logging.exception("Error in trace SSE stream")
+                            break
+                        
+                        time.sleep(1)
+                    return
+
                 if path.startswith("/v1/jobs/"):
                     job_id = path.removeprefix("/v1/jobs/").strip()
                     if job_id.endswith("/events"):
@@ -434,7 +510,7 @@ class RuneApiApplication:
 
                 if path == "/v1/estimates":
                     try:
-                        result = app._dispatch("cost-estimate", payload)
+                        result = asyncio.run(app._dispatch("cost-estimate", payload))
                         self._write_json(200, result)
                     except Exception as exc:
                         self._write_json(400, {"error": str(exc)})
@@ -465,8 +541,7 @@ class RuneApiApplication:
 
                 if created:
                     thread = threading.Thread(
-                        target=app._execute_job,
-                        args=(job_id, kind, payload),
+                        target=lambda: asyncio.run(app._execute_job(job_id, kind, payload)),
                         daemon=True,
                     )
                     thread.start()
@@ -475,13 +550,13 @@ class RuneApiApplication:
 
         return Handler
 
-    def _execute_job(self, job_id: str, kind: str, payload: dict) -> None:
+    async def _execute_job(self, job_id: str, kind: str, payload: dict) -> None:
         set_collector(SQLiteMetricsCollector(self.store))
         set_job_id(job_id)
         self.store.update_job(job_id, status="running", message="job is running")
         try:
             with span("job.execute", kind=kind):
-                result = self._dispatch(kind, payload)
+                result = await self._dispatch(kind, payload)
         except Exception as exc:  # noqa: BLE001
             self.store.update_job(job_id, status="failed", error=str(exc), message=str(exc))
             return
@@ -490,14 +565,14 @@ class RuneApiApplication:
             set_job_id(None)
         self.store.update_job(job_id, status="succeeded", result_payload=result, message="job completed")
 
-    def _dispatch(self, kind: str, payload: dict) -> dict:
+    async def _dispatch(self, kind: str, payload: dict) -> dict:
         request: BackendRequest
         if kind == "agentic-agent":
             request = RunAgenticAgentRequest(**payload)
         elif kind == "benchmark":
-            request = RunBenchmarkRequest(**payload)
+            request = RunBenchmarkRequest.from_dict(payload)
         elif kind in ("llm-instance", "ollama-instance"):
-            request = RunLLMInstanceRequest(**payload)
+            request = RunLLMInstanceRequest.from_dict(payload)
         elif kind == "cost-estimate":
             request = CostEstimationRequest(**payload)
         else:
@@ -506,6 +581,9 @@ class RuneApiApplication:
         handler = self.backend_functions.get(kind)
         if handler is None:
             raise RuntimeError(f"no backend function registered for job kind: {kind}")
+        
+        if asyncio.iscoroutinefunction(handler):
+            return await handler(request)
         return handler(request)
 
     def serve(self, host: str = "127.0.0.1", port: int = 8080) -> None:
@@ -543,6 +621,9 @@ def _job_to_payload(job: JobRecord) -> dict:
     }
     if job.result_payload is not None:
         payload["result"] = job.result_payload
+        # If the result is an AgentResult-like dict, it might have telemetry
+        if isinstance(job.result_payload, dict) and "telemetry" in job.result_payload:
+            payload["telemetry"] = job.result_payload["telemetry"]
     if job.error is not None:
         payload["error"] = job.error
     return payload

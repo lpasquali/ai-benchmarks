@@ -9,7 +9,9 @@ This file only handles CLI argument parsing, Rich output, and orchestration.
 
 from pathlib import Path
 import os
+import sys
 import socket
+import asyncio
 from typing import Callable
 
 import typer
@@ -23,6 +25,7 @@ try:
 except ImportError:
     VastAI = None  # type: ignore[assignment,misc]
 
+from rune_bench.metrics.cost import calculate_run_cost
 from rune_bench.api_client import RuneApiClient
 from rune_bench.api_contracts import (
     RunAgenticAgentRequest,
@@ -337,10 +340,13 @@ def _print_ollama_models(backend_url: str, models: list[str], running_models: se
 
 
 def _http_client() -> RuneApiClient:
-    return RuneApiClient(API_BASE_URL, api_token=API_TOKEN, tenant_id=API_TENANT, verify_ssl=VERIFY_SSL)
+    base_url = os.environ.get("RUNE_API_BASE_URL", API_BASE_URL)
+    token = os.environ.get("RUNE_API_TOKEN", API_TOKEN)
+    tenant = os.environ.get("RUNE_API_TENANT", API_TENANT)
+    return RuneApiClient(base_url, api_token=token, tenant_id=tenant, verify_ssl=VERIFY_SSL)
 
 
-def _run_preflight_cost_check(
+async def _run_preflight_cost_check(
     *,
     vastai: bool,
     max_dph: float,
@@ -354,8 +360,11 @@ def _run_preflight_cost_check(
     or if the user declines to proceed.
     Does nothing when no cloud cost driver is active (local/existing Ollama server).
     """
+    if not vastai:
+        return
+
     try:
-        result = run_preflight_cost_check(
+        result = await run_preflight_cost_check(
             vastai=vastai,
             max_dph=max_dph,
             min_dph=min_dph,
@@ -415,13 +424,21 @@ def _run_preflight_cost_check(
         )
         raise typer.Exit(1)
 
-    ack = console.input("\n[bold magenta]Proceed with benchmark? [y/N]: [/bold magenta]").strip().lower()
-    if ack not in {"y", "yes"}:
-        console.print("Aborted.")
-        raise typer.Exit(1)
+    if action is SpendGateAction.PROMPT:
+        if not os.isatty(sys.stdin.fileno()):
+            console.print(
+                "[red]Confirm-to-spend prompt required, but environment is non-interactive. "
+                "Use --yes / -y to proceed.[/red]"
+            )
+            raise typer.Exit(1)
+
+        ack = console.input("\n[bold magenta]Proceed with benchmark? [y/N]: [/bold magenta]").strip().lower()
+        if ack not in {"y", "yes"}:
+            console.print("Aborted.")
+            raise typer.Exit(1)
 
 
-def _run_http_job_with_progress(
+async def _run_http_job_with_progress(
     *,
     submit_description: str,
     wait_description: str,
@@ -439,7 +456,8 @@ def _run_http_job_with_progress(
             detail = f": {message}" if message else ""
             progress.update(task, description=f"{wait_description} [{status}]{detail}")
 
-        return client.wait_for_job(
+        return await asyncio.to_thread(
+            client.wait_for_job,
             job_id,
             timeout_seconds=timeout_seconds,
             poll_interval_seconds=poll_interval_seconds,
@@ -564,7 +582,7 @@ def serve_api(
 
 
 @app.command("run-llm-instance")
-def run_llm_instance(
+async def run_llm_instance(
     debug: bool = typer.Option(
         False,
         "--debug",
@@ -608,17 +626,25 @@ def run_llm_instance(
 ) -> None:
     """Provision an Ollama instance on Vast.ai, or use an existing server."""
     _enable_debug_if_requested(debug)
+    provisioning = None
+    if vastai:
+        from rune_bench.api_contracts import Provisioning, VastAIProvisioning
+        provisioning = Provisioning(
+            vastai=VastAIProvisioning(
+                template_hash=template_hash,
+                min_dph=min_dph,
+                max_dph=max_dph,
+                reliability=reliability,
+                stop_instance=False,
+            )
+        )
     _request = RunLLMInstanceRequest(
-        vastai=vastai,
-        template_hash=template_hash,
-        min_dph=min_dph,
-        max_dph=max_dph,
-        reliability=reliability,
+        provisioning=provisioning,
         backend_url=backend_url,
     )
     console.print(Panel.fit("[bold blue]RUNE — Reliability Use-case Numeric Evaluator[/bold blue]"))
 
-    _run_preflight_cost_check(
+    await _run_preflight_cost_check(
         vastai=vastai,
         max_dph=max_dph,
         min_dph=min_dph,
@@ -628,7 +654,7 @@ def run_llm_instance(
     if BACKEND_MODE == "http":
         try:
             client = _http_client()
-            payload = _run_http_job_with_progress(
+            payload = await _run_http_job_with_progress(
                 submit_description="Submitting ollama-instance job to HTTP backend...",
                 wait_description="Waiting for ollama-instance job",
                 submit_job=lambda: client.submit_ollama_instance_job(
@@ -751,7 +777,7 @@ def ollama_list_models(
 
 
 @app.command("run-agentic-agent")
-def run_agentic_agent(
+async def run_agentic_agent(
     debug: bool = typer.Option(
         False,
         "--debug",
@@ -819,7 +845,7 @@ def run_agentic_agent(
     if BACKEND_MODE == "http":
         try:
             client = _http_client()
-            payload = _run_http_job_with_progress(
+            payload = await _run_http_job_with_progress(
                 submit_description="Submitting agentic-agent job to HTTP backend...",
                 wait_description="Waiting for agentic-agent job",
                 submit_job=lambda: client.submit_agentic_agent_job(
@@ -862,7 +888,7 @@ def run_agentic_agent(
         from rune_bench.metrics import span as _span
         runner = get_agent(_request.agent, kubeconfig=kubeconfig)
         with _span("agent.ask", model=model, backend="existing"):
-            result = runner.ask_structured(
+            result = await runner.ask_structured(
                 question=question,
                 model=model,
                 backend_url=backend_url,
@@ -882,7 +908,7 @@ def run_agentic_agent(
 
 
 @app.command("run-benchmark")
-def run_benchmark(
+async def run_benchmark(
     debug: bool = typer.Option(
         False,
         "--debug",
@@ -981,7 +1007,7 @@ def run_benchmark(
     )
     console.print(Panel.fit("[bold blue]RUNE — Full Benchmark Workflow[/bold blue]"))
 
-    _run_preflight_cost_check(
+    await _run_preflight_cost_check(
         vastai=vastai,
         max_dph=max_dph,
         min_dph=min_dph,
@@ -991,7 +1017,7 @@ def run_benchmark(
     if BACKEND_MODE == "http":
         try:
             client = _http_client()
-            payload = _run_http_job_with_progress(
+            payload = await _run_http_job_with_progress(
                 submit_description="Submitting benchmark job to HTTP backend...",
                 wait_description="Waiting for benchmark job",
                 submit_job=lambda: client.submit_benchmark_job(
@@ -1086,7 +1112,7 @@ def run_benchmark(
     # Block 10 — Run agentic agent
     try:
         runner = get_agent("holmes", kubeconfig=kubeconfig)
-        result = runner.ask_structured(
+        result = await runner.ask_structured(
             question=question,
             model=selected_model_name,
             backend_url=selected_backend_url,

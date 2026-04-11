@@ -8,6 +8,7 @@ InvokeAI runs as a local server (Python) or via Docker.
 from __future__ import annotations
 
 from rune_bench.agents.base import AgentResult
+from rune_bench.api_contracts import LatencyPhase, RunTelemetry, TokenBreakdown
 from rune_bench.debug import debug_log
 from rune_bench.drivers import DriverTransport, AsyncDriverTransport, make_driver_transport, make_async_driver_transport
 
@@ -64,6 +65,7 @@ class InvokeAIDriverClient:
             result_type="image",
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
+            telemetry=self._parse_telemetry(result.get("telemetry")),
         )
 
     async def ask_async(
@@ -90,4 +92,31 @@ class InvokeAIDriverClient:
             result_type="image",
             artifacts=result.get("artifacts"),
             metadata=result.get("metadata"),
+            telemetry=self._parse_telemetry(result.get("telemetry")),
+        )
+
+    def _parse_telemetry(self, raw: dict | None) -> RunTelemetry | None:
+        """Parse raw telemetry dict into a RunTelemetry object."""
+        if not raw:
+            return None
+
+        tokens_raw = raw.get("tokens", {})
+        tokens = TokenBreakdown(
+            system_prompt=tokens_raw.get("system_prompt", 0),
+            tool_calls=tokens_raw.get("tool_calls", 0),
+            agent_reasoning=tokens_raw.get("agent_reasoning", 0),
+            output=tokens_raw.get("output", 0),
+            total=tokens_raw.get("total", 0),
+        )
+
+        latency_raw = raw.get("latency", [])
+        latency = [
+            LatencyPhase(phase=p.get("phase", "unknown"), ms=p.get("ms", 0))
+            for p in latency_raw if isinstance(p, dict)
+        ]
+
+        return RunTelemetry(
+            tokens=tokens,
+            latency=latency,
+            cost_estimate_usd=raw.get("cost_estimate_usd"),
         )
