@@ -27,10 +27,10 @@ class LLMResourceProvider(Protocol):
     alongside the existing Vast.ai and existing-Ollama providers.
     """
 
-    def provision(self) -> ProvisioningResult:
+    async def provision(self) -> ProvisioningResult:
         """Provision an LLM resource and return connection details."""
         ...
 
-    def teardown(self, result: ProvisioningResult) -> None:
+    async def teardown(self, result: ProvisioningResult) -> None:
         """Release the provisioned resource. May be a no-op."""
         ...

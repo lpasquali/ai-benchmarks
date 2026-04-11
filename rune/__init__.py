@@ -9,7 +9,11 @@ This file only handles CLI argument parsing, Rich output, and orchestration.
 
 from pathlib import Path
 import os
+import sys
 import socket
+import asyncio
+import inspect
+from functools import wraps
 from typing import Callable
 
 import typer
@@ -39,6 +43,7 @@ from rune_bench.common import (
 )
 from rune_bench.debug import set_debug
 from rune_bench.metrics import InMemoryCollector, set_collector, clear_collector
+from rune_bench.metrics.cost import calculate_run_cost as calculate_run_cost
 from rune_bench.backends import get_backend
 from rune_bench.backends.base import ModelCapabilities
 from rune_bench.agents.registry import get_agent
@@ -65,8 +70,25 @@ list_running_ollama_models = list_running_backend_models
 warmup_existing_ollama_model = warmup_backend_model
 provision_vastai_ollama = provision_vastai_backend
 
-app = typer.Typer(help="RUNE — Reliability Use-case Numeric Evaluator", add_completion=False)
-db_app = typer.Typer(
+
+class AsyncTyper(typer.Typer):
+    def command(self, *args, **kwargs):
+        base_decorator = super().command(*args, **kwargs)
+        def decorator(f):
+            if inspect.iscoroutinefunction(f):
+                @wraps(f)
+                def runner(*f_args, **f_kwargs):
+                    try:
+                        asyncio.get_running_loop()
+                        return f(*f_args, **f_kwargs)
+                    except RuntimeError:
+                        return asyncio.run(f(*f_args, **f_kwargs))
+                return base_decorator(runner)
+            return base_decorator(f)
+        return decorator
+
+app = AsyncTyper(help="RUNE — Reliability Use-case Numeric Evaluator", add_completion=False)
+db_app = AsyncTyper(
     help="Database maintenance utilities",
     add_completion=False,
     no_args_is_help=True,
@@ -343,10 +365,13 @@ def _print_ollama_models(backend_url: str, models: list[str], running_models: se
 
 
 def _http_client() -> RuneApiClient:
-    return RuneApiClient(API_BASE_URL, api_token=API_TOKEN, tenant_id=API_TENANT, verify_ssl=VERIFY_SSL)
+    base_url = os.environ.get("RUNE_API_BASE_URL", API_BASE_URL)
+    token = os.environ.get("RUNE_API_TOKEN", API_TOKEN)
+    tenant = os.environ.get("RUNE_API_TENANT", API_TENANT)
+    return RuneApiClient(base_url, api_token=token, tenant_id=tenant, verify_ssl=VERIFY_SSL)
 
 
-def _run_preflight_cost_check(
+async def _run_preflight_cost_check(
     *,
     vastai: bool,
     max_dph: float,
@@ -360,8 +385,11 @@ def _run_preflight_cost_check(
     or if the user declines to proceed.
     Does nothing when no cloud cost driver is active (local/existing Ollama server).
     """
+    if not vastai:
+        return
+
     try:
-        result = run_preflight_cost_check(
+        result = await run_preflight_cost_check(
             vastai=vastai,
             max_dph=max_dph,
             min_dph=min_dph,
@@ -421,13 +449,21 @@ def _run_preflight_cost_check(
         )
         raise typer.Exit(1)
 
-    ack = console.input("\n[bold magenta]Proceed with benchmark? [y/N]: [/bold magenta]").strip().lower()
-    if ack not in {"y", "yes"}:
-        console.print("Aborted.")
-        raise typer.Exit(1)
+    if action is SpendGateAction.PROMPT:
+        if not os.isatty(sys.stdin.fileno()):
+            console.print(
+                "[red]Confirm-to-spend prompt required, but environment is non-interactive. "
+                "Use --yes / -y to proceed.[/red]"
+            )
+            raise typer.Exit(1)
+
+        ack = console.input("\n[bold magenta]Proceed with benchmark? [y/N]: [/bold magenta]").strip().lower()
+        if ack not in {"y", "yes"}:
+            console.print("Aborted.")
+            raise typer.Exit(1)
 
 
-def _run_http_job_with_progress(
+async def _run_http_job_with_progress(
     *,
     submit_description: str,
     wait_description: str,
@@ -445,7 +481,8 @@ def _run_http_job_with_progress(
             detail = f": {message}" if message else ""
             progress.update(task, description=f"{wait_description} [{status}]{detail}")
 
-        return client.wait_for_job(
+        return await asyncio.to_thread(
+            client.wait_for_job,
             job_id,
             timeout_seconds=timeout_seconds,
             poll_interval_seconds=poll_interval_seconds,
@@ -500,6 +537,7 @@ def _run_vastai_provisioning(
     min_dph: float,
     max_dph: float,
     reliability: float,
+    yes: bool = False,
 ) -> VastAIProvisioningResult:
     sdk = _vastai_sdk()
 
@@ -508,6 +546,17 @@ def _run_vastai_provisioning(
 
         def on_poll(status: str) -> None:
             p.update(task, description=f"Waiting for running status: {status}")
+
+        def _confirm_instance_creation() -> bool:
+            if yes:
+                return True
+            console.print("\n[bold yellow]Interactive Spend Confirmation[/bold yellow]")
+            console.print("This action will provision a new instance on Vast.ai.")
+            try:
+                answer = input("Do you want to proceed? [y/N]: ").strip().lower()
+                return answer in {"y", "yes"}
+            except EOFError:
+                return False
 
         try:
             return provision_vastai_backend(
@@ -541,12 +590,6 @@ def serve_api(
         envvar="RUNE_API_PORT",
         help="Port to bind API server to (default: 8080 in containers, random free port locally)",
     ),
-    db_url: str | None = typer.Option(
-        None,
-        "--db-url",
-        envvar="RUNE_DB_URL",
-        help="Storage URL for the API server (sqlite:// or postgresql://)",
-    ),
     debug: bool = typer.Option(
         False,
         "--debug",
@@ -566,7 +609,7 @@ def serve_api(
     ))
 
     try:
-        app_server = RuneApiApplication.from_env(db_url=db_url)
+        app_server = RuneApiApplication.from_env()
         app_server.serve(host=api_host, port=resolved_port)
     except KeyboardInterrupt:
         console.print("\n[yellow]Server stopped.[/yellow]")
@@ -575,74 +618,8 @@ def serve_api(
         _print_error_and_exit(f"Server error: {exc}")
 
 
-@db_app.command("migrate-to-postgres")
-def migrate_db_to_postgres(
-    source: str = typer.Option(
-        ...,
-        "--source",
-        help="Source storage URL (expected: sqlite://...)",
-    ),
-    target: str = typer.Option(
-        ...,
-        "--target",
-        help="Target storage URL (expected: postgresql://...)",
-    ),
-    batch_size: int = typer.Option(
-        1000,
-        "--batch-size",
-        min=1,
-        help="Rows to migrate per batch",
-    ),
-    dry_run: bool = typer.Option(
-        False,
-        "--dry-run",
-        help="Show row counts without writing to PostgreSQL",
-    ),
-) -> None:
-    """Copy an existing SQLite database into PostgreSQL."""
-    try:
-        from rune_bench.storage.migrate_to_postgres import migrate_to_postgres
-    except ImportError:
-        _print_error_and_exit(
-            "Postgres migration requires psycopg; install 'rune-bench[pg]'"
-        )
-
-    def _report_progress(table_name: str, copied: int, total: int, is_dry_run: bool) -> None:
-        if is_dry_run:
-            return
-        console.print(f"[cyan]{table_name}[/cyan]: migrated {copied}/{total} rows")
-
-    try:
-        results = migrate_to_postgres(
-            source_url=source,
-            target_url=target,
-            batch_size=batch_size,
-            dry_run=dry_run,
-            reporter=_report_progress,
-        )
-    except Exception as exc:
-        _print_error_and_exit(str(exc))
-
-    summary = Table(
-        title="Database Migration Plan" if dry_run else "Database Migration Summary",
-        show_header=True,
-        header_style="bold magenta",
-    )
-    summary.add_column("Table")
-    summary.add_column("Source Rows", justify="right")
-    summary.add_column("Migrated Rows", justify="right")
-
-    for result in results:
-        migrated = "-" if result.dry_run else str(result.migrated_count)
-        summary.add_row(result.table, str(result.source_count), migrated)
-
-    console.print(summary)
-    if dry_run:
-        console.print("[yellow]Dry run complete: no rows were written.[/yellow]")
-
-
 @app.command("run-llm-instance")
-def run_llm_instance(
+async def run_llm_instance(
     debug: bool = typer.Option(
         False,
         "--debug",
@@ -686,17 +663,25 @@ def run_llm_instance(
 ) -> None:
     """Provision an Ollama instance on Vast.ai, or use an existing server."""
     _enable_debug_if_requested(debug)
+    provisioning = None
+    if vastai:
+        from rune_bench.api_contracts import Provisioning, VastAIProvisioning
+        provisioning = Provisioning(
+            vastai=VastAIProvisioning(
+                template_hash=template_hash,
+                min_dph=min_dph,
+                max_dph=max_dph,
+                reliability=reliability,
+                stop_instance=False,
+            )
+        )
     _request = RunLLMInstanceRequest(
-        vastai=vastai,
-        template_hash=template_hash,
-        min_dph=min_dph,
-        max_dph=max_dph,
-        reliability=reliability,
+        provisioning=provisioning,
         backend_url=backend_url,
     )
     console.print(Panel.fit("[bold blue]RUNE — Reliability Use-case Numeric Evaluator[/bold blue]"))
 
-    _run_preflight_cost_check(
+    await _run_preflight_cost_check(
         vastai=vastai,
         max_dph=max_dph,
         min_dph=min_dph,
@@ -706,7 +691,7 @@ def run_llm_instance(
     if BACKEND_MODE == "http":
         try:
             client = _http_client()
-            payload = _run_http_job_with_progress(
+            payload = await _run_http_job_with_progress(
                 submit_description="Submitting ollama-instance job to HTTP backend...",
                 wait_description="Waiting for ollama-instance job",
                 submit_job=lambda: client.submit_ollama_instance_job(
@@ -752,6 +737,7 @@ def run_llm_instance(
         min_dph=min_dph,
         max_dph=max_dph,
         reliability=reliability,
+        yes=yes,
     )
     _print_vastai_result(result)
     _print_metrics_summary(_cli_metrics)
@@ -829,7 +815,7 @@ def ollama_list_models(
 
 
 @app.command("run-agentic-agent")
-def run_agentic_agent(
+async def run_agentic_agent(
     debug: bool = typer.Option(
         False,
         "--debug",
@@ -897,7 +883,7 @@ def run_agentic_agent(
     if BACKEND_MODE == "http":
         try:
             client = _http_client()
-            payload = _run_http_job_with_progress(
+            payload = await _run_http_job_with_progress(
                 submit_description="Submitting agentic-agent job to HTTP backend...",
                 wait_description="Waiting for agentic-agent job",
                 submit_job=lambda: client.submit_agentic_agent_job(
@@ -940,7 +926,7 @@ def run_agentic_agent(
         from rune_bench.metrics import span as _span
         runner = get_agent(_request.agent, kubeconfig=kubeconfig)
         with _span("agent.ask", model=model, backend="existing"):
-            result = runner.ask_structured(
+            result = await runner.ask_structured(
                 question=question,
                 model=model,
                 backend_url=backend_url,
@@ -960,7 +946,7 @@ def run_agentic_agent(
 
 
 @app.command("run-benchmark")
-def run_benchmark(
+async def run_benchmark(
     debug: bool = typer.Option(
         False,
         "--debug",
@@ -1059,7 +1045,7 @@ def run_benchmark(
     )
     console.print(Panel.fit("[bold blue]RUNE — Full Benchmark Workflow[/bold blue]"))
 
-    _run_preflight_cost_check(
+    await _run_preflight_cost_check(
         vastai=vastai,
         max_dph=max_dph,
         min_dph=min_dph,
@@ -1069,7 +1055,7 @@ def run_benchmark(
     if BACKEND_MODE == "http":
         try:
             client = _http_client()
-            payload = _run_http_job_with_progress(
+            payload = await _run_http_job_with_progress(
                 submit_description="Submitting benchmark job to HTTP backend...",
                 wait_description="Waiting for benchmark job",
                 submit_job=lambda: client.submit_benchmark_job(
@@ -1110,6 +1096,7 @@ def run_benchmark(
             min_dph=min_dph,
             max_dph=max_dph,
             reliability=reliability,
+            yes=yes,
         )
         selected_model_name = result.model_name
         selected_backend_url = result.backend_url
@@ -1164,7 +1151,7 @@ def run_benchmark(
     # Block 10 — Run agentic agent
     try:
         runner = get_agent("holmes", kubeconfig=kubeconfig)
-        result = runner.ask_structured(
+        result = await runner.ask_structured(
             question=question,
             model=selected_model_name,
             backend_url=selected_backend_url,
@@ -1313,3 +1300,33 @@ def show_config() -> None:
         "\n[dim]Secrets (RUNE_API_TOKEN, VAST_API_KEY) are never shown here — "
         "check your environment directly.[/dim]"
     )
+
+@db_app.command("migrate-to-postgres")
+def db_migrate_to_postgres(
+    source: str = typer.Option("sqlite:///home/ubuntu/.rune/jobs.db", "--source", help="Source SQLite URL"),
+    target: str = typer.Option(..., "--target", help="Target Postgres URL"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be migrated without writing"),
+) -> None:
+    """Migrate jobs and events from SQLite to PostgreSQL."""
+    from rune_bench.storage.migrate_to_postgres import migrate_to_postgres
+    
+    console.print(f"[bold blue]Migrating from {source} to PostgreSQL...[/bold blue]")
+    try:
+        results = migrate_to_postgres(source_url=source, target_url=target, dry_run=dry_run)
+        
+        table = Table(title="Migration Results")
+        table.add_column("Table")
+        table.add_column("Source Count")
+        table.add_column("Migrated Count")
+        
+        for r in results:
+            table.add_row(r.table, str(r.source_count), str(r.migrated_count))
+        
+        console.print(table)
+        if dry_run:
+            console.print("[yellow]Dry run: no data was written to target.[/yellow]")
+        else:
+            console.print("[green]Migration complete.[/green]")
+    except Exception as exc:
+        console.print(f"[red]Migration failed:[/red] {exc}")
+        raise typer.Exit(1)

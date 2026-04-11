@@ -98,18 +98,6 @@ defaults:
         load_config()
         assert os.environ["RUNE_VASTAI_MAX_DPH"] == "3.5"
 
-    def test_database_url_is_injected_from_defaults(self, tmp_path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
-        monkeypatch.delenv("RUNE_DB_URL", raising=False)
-        _write_yaml(tmp_path / "rune.yaml", """\
-version: "1"
-defaults:
-  database:
-    url: postgresql://rune:test@postgres:5432/rune
-""")
-        load_config()
-        assert os.environ["RUNE_DB_URL"] == "postgresql://rune:test@postgres:5432/rune"
-
 
 # ---------------------------------------------------------------------------
 # load_config — profile activation
@@ -159,21 +147,6 @@ profiles:
         result = load_config(None)
         assert result["model"] == "llama3.1:8b"
         assert os.environ["RUNE_MODEL"] == "llama3.1:8b"
-
-    def test_profile_can_override_database_url(self, tmp_path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
-        monkeypatch.delenv("RUNE_DB_URL", raising=False)
-        _write_yaml(tmp_path / "rune.yaml", """\
-version: "1"
-database:
-  url: postgresql://root:root@db:5432/base
-profiles:
-  production:
-    database:
-      url: postgresql://root:root@db:5432/prod
-""")
-        load_config("production")
-        assert os.environ["RUNE_DB_URL"] == "postgresql://root:root@db:5432/prod"
 
 
 # ---------------------------------------------------------------------------

@@ -26,7 +26,7 @@ from typing import Any
 
 import yaml
 
-# Maps flat YAML config keys → corresponding RUNE_* env var names.
+# Maps YAML config keys → corresponding RUNE_* env var names.
 # Intentionally excludes secrets: RUNE_API_TOKEN, VAST_API_KEY.
 _FIELD_ENV_MAP: dict[str, str] = {
     # Global / backend
@@ -54,11 +54,6 @@ _FIELD_ENV_MAP: dict[str, str] = {
     "question": "RUNE_QUESTION",
     "model": "RUNE_MODEL",
     "kubeconfig": "RUNE_KUBECONFIG",
-}
-
-# Nested database section (top-level and/or defaults/profiles).
-_DATABASE_ENV_MAP: dict[str, str] = {
-    "url": "RUNE_DB_URL",
 }
 
 # Maps nested attestation section keys → RUNE_ATTESTATION_* env vars.
@@ -99,10 +94,6 @@ defaults:
 
   # Execution backend (local | http)
   backend: local
-
-  # Database settings (leave unset to use the built-in local SQLite path).
-  # database:
-  #   url: postgresql://rune:change-me@postgres:5432/rune
 
   # LLM Backend settings
   backend_type: ollama
@@ -145,10 +136,6 @@ profiles:
     backend_url: http://localhost:11434
     backend_warmup: false
     model: llama3.1:8b
-
-# Top-level infrastructure fallback (can also live under defaults/profiles):
-# database:
-#   url: postgresql://rune:change-me@postgres:5432/rune
 
 # Attestation settings (TPM 2.0 hardware PCR verification).
 # Can be placed at the top level (infrastructure config) or under
@@ -255,16 +242,6 @@ def load_config(profile: str | None = None) -> dict[str, Any]:
         if key in effective and env_var not in os.environ:
             os.environ[env_var] = _to_env_str(effective[key])
 
-    # Database config mirrors attestation: a top-level section acts as
-    # infrastructure-wide fallback, while defaults/profiles can override it.
-    database_cfg: dict[str, Any] = _merge(
-        raw.get("database") or {},
-        effective.get("database") or {},
-    )
-    for key, env_var in _DATABASE_ENV_MAP.items():
-        if key in database_cfg and env_var not in os.environ:
-            os.environ[env_var] = _to_env_str(database_cfg[key])
-
     # Handle nested attestation section.  The section may appear at the
     # top level of the YAML (as infrastructure config, separate from per-run
     # defaults) or under defaults/profiles.  Effective (defaults+profile)
@@ -304,3 +281,83 @@ def get_loaded_config_files() -> list[Path]:
     if f := _find_config_file(_PROJECT_CANDIDATES):
         files.append(f)
     return files
+
+
+def get_raw_config() -> dict[str, Any]:
+    """Return the raw merged configuration from all files without env injection."""
+    global_file = _find_config_file(_GLOBAL_CANDIDATES)
+    project_file = _find_config_file(_PROJECT_CANDIDATES)
+
+    raw: dict[str, Any] = {}
+    if global_file:
+        raw = _merge(raw, _parse_yaml(global_file))
+    if project_file:
+        raw = _merge(raw, _parse_yaml(project_file))
+    return raw
+
+
+def save_config(data: dict[str, Any], global_config: bool = False) -> Path:
+    """Save the configuration dict back to the preferred YAML file.
+
+    Args:
+        data: The configuration dictionary to save.
+        global_config: If True, save to ~/.rune/config.yaml. If False,
+                      prefer project-level rune.yaml.
+
+    Returns:
+        The Path to the saved file.
+    """
+    if global_config:
+        path = _find_config_file(_GLOBAL_CANDIDATES) or _GLOBAL_CANDIDATES[0]
+    else:
+        path = _find_config_file(_PROJECT_CANDIDATES) or _PROJECT_CANDIDATES[0]
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w") as fh:
+        yaml.safe_dump(data, fh, sort_keys=False, default_flow_style=False)
+    return path
+
+
+def update_settings(updates: dict[str, Any], profile: str | None = None) -> Path:
+    """Update specific settings in the configuration and save to disk.
+
+    Args:
+        updates: Key-value pairs of settings to update.
+        profile: Profile name to update. If None, updates 'defaults'.
+
+    Returns:
+        The Path to the saved file.
+    """
+    raw = get_raw_config()
+    section = "profiles" if profile else "defaults"
+    
+    if section not in raw:
+        raw[section] = {}
+    
+    if profile:
+        if profile not in raw["profiles"]:
+            raw["profiles"][profile] = {}
+        raw["profiles"][profile] = _merge(raw["profiles"][profile], updates)
+    else:
+        raw["defaults"] = _merge(raw.get("defaults") or {}, updates)
+
+    # Determine which file to write to. If a project file exists, update it.
+    # Otherwise, if a global file exists, update it.
+    project_file = _find_config_file(_PROJECT_CANDIDATES)
+    global_config = project_file is None and _find_config_file(_GLOBAL_CANDIDATES) is not None
+    
+    return save_config(raw, global_config=global_config)
+
+
+def create_profile(name: str, settings: dict[str, Any]) -> Path:
+    """Create a new profile with the given settings and save to disk."""
+    raw = get_raw_config()
+    if "profiles" not in raw:
+        raw["profiles"] = {}
+    
+    raw["profiles"][name] = settings
+    
+    project_file = _find_config_file(_PROJECT_CANDIDATES)
+    global_config = project_file is None and _find_config_file(_GLOBAL_CANDIDATES) is not None
+    
+    return save_config(raw, global_config=global_config)

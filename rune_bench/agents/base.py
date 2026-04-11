@@ -4,6 +4,8 @@
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
+from rune_bench.api_contracts import RunTelemetry
+
 
 @dataclass
 class AgentConfig:
@@ -29,6 +31,7 @@ class AgentResult:
     result_type: str = "text"  # "text" | "image" | "structured" | "report"
     artifacts: list[dict] | None = None
     metadata: dict | None = None
+    telemetry: RunTelemetry | None = None
     error: str | None = None
 
 

@@ -1,6 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import pytest
+try:
+    import psycopg  # noqa: F401
+except ImportError:
+    pytest.skip("psycopg not installed", allow_module_level=True)
+
 from typer.testing import CliRunner
 
 import rune
@@ -38,8 +44,8 @@ def test_db_migrate_to_postgres_cli_dry_run(monkeypatch) -> None:
     )
 
     assert result.exit_code == 0, result.output
-    assert "Database Migration Plan" in result.output
-    assert "Dry run complete" in result.output
+    assert "Migration Results" in result.output
+    assert "Dry run:" in result.output
     assert "jobs" in result.output
 
 

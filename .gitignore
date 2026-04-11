@@ -31,5 +31,6 @@ pyvenv.cfg
 .DS_Store
 Thumbs.db
 
-# Claude Code per-project agent state
-.claude/
+#debug/testing
+home
+sqlite*

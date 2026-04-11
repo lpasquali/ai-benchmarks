@@ -26,6 +26,10 @@ class StoragePort(Protocol):
 
     # ── Lifecycle ──────────────────────────────────────────────────────────
 
+    def close(self) -> None:
+        """Close any persistent connections or resources held by the store."""
+        ...
+
     def mark_incomplete_jobs_failed(
         self, message: str = "server restarted before job completion"
     ) -> None:
@@ -84,10 +88,6 @@ class StoragePort(Protocol):
 
     def get_events_for_job(self, job_id: str) -> list[dict]:
         """Return all raw workflow events for a single job, ordered by time."""
-        ...
-
-    def list_jobs_for_finops(self, *, tenant_id: str, limit: int = 2000) -> list[dict]:
-        """Recent succeeded ``benchmark`` / ``agentic-agent`` jobs for FinOps simulation."""
         ...
 
     # ── Chain state ────────────────────────────────────────────────────────

@@ -1,14 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Application workflows used by the RUNE CLI.
-
-This module keeps orchestration/business logic out of the CLI layer.
-Generic dispatchers delegate to backend-specific implementations in
-``rune_bench/backends/``.
-"""
-
+"""Application workflows used by the RUNE CLI."""
 from __future__ import annotations
 
-import asyncio
 import os
 from dataclasses import dataclass
 from enum import Enum
@@ -18,17 +11,26 @@ if TYPE_CHECKING:
     from rune_bench.resources.vastai.sdk import VastAI
 
 from .common import ModelSelector
+from .common.backend_utils import (
+    list_backend_models,
+    list_running_backend_models,
+    normalize_backend_model_for_api,
+    normalize_backend_url as normalize_backend_url,
+    use_existing_backend_server,
+    warmup_backend_model,
+)
 from .debug import debug_log
 from .metrics import span  # noqa: F401
 from rune_bench.backends.ollama import OllamaBackend
+from rune_bench.resources.vastai.contracts import ConnectionDetails, TeardownResult
 
 try:
-    from rune_bench.resources.vastai import ConnectionDetails, InstanceManager, OfferFinder, TeardownResult, TemplateLoader
-except ImportError:  # vastai extra not installed
-    ConnectionDetails = None  # type: ignore[assignment,misc]
+    from rune_bench.resources.vastai.instance import InstanceManager
+    from rune_bench.resources.vastai.offer import OfferFinder
+    from rune_bench.resources.vastai.template import TemplateLoader
+except ImportError:
     InstanceManager = None  # type: ignore[assignment,misc]
     OfferFinder = None  # type: ignore[assignment,misc]
-    TeardownResult = None  # type: ignore[assignment,misc]
     TemplateLoader = None  # type: ignore[assignment,misc]
 
 
@@ -64,7 +66,7 @@ def evaluate_spend_gate(
     return SpendGateAction.PROMPT
 
 
-@dataclass
+@dataclass(frozen=True)
 class ExistingOllamaServer:
     url: str
     model_name: str
@@ -83,62 +85,6 @@ class VastAIProvisioningResult:
     backend_url: str | None = None
     reused_existing_instance: bool = False
     pull_warning: str | None = None
-
-
-# ---------------------------------------------------------------------------
-# Generic backend dispatchers
-# ---------------------------------------------------------------------------
-
-def normalize_backend_url(backend_url: str | None) -> str:
-    """Validate and normalize a backend base URL.
-
-    Delegates to :meth:`OllamaBackend.normalize_url`.
-    """
-    return OllamaBackend.normalize_url(backend_url)
-
-
-def use_existing_backend_server(backend_url: str | None, model_name: str) -> ExistingOllamaServer:
-    """Resolve an existing backend server target."""
-    return ExistingOllamaServer(url=normalize_backend_url(backend_url), model_name=model_name)
-
-
-def list_backend_models(backend_url: str | None) -> list[str]:
-    """Return available model names from an existing backend server."""
-    url = normalize_backend_url(backend_url)
-    backend = OllamaBackend(url)
-    return backend.list_models()
-
-
-def list_running_backend_models(backend_url: str | None) -> list[str]:
-    """Return model names currently loaded in memory on an existing backend server."""
-    url = normalize_backend_url(backend_url)
-    backend = OllamaBackend(url)
-    return backend.list_running_models()
-
-
-def normalize_backend_model_for_api(model_name: str) -> str:
-    """Convert provider-prefixed model identifiers into plain backend model names."""
-    backend = OllamaBackend("http://localhost:11434")  # URL not used for normalization
-    return backend.normalize_model_name(model_name)
-
-
-def warmup_backend_model(
-    backend_url: str | None,
-    model_name: str,
-    *,
-    timeout_seconds: int = 120,
-    poll_interval_seconds: float = 2.0,
-    keep_alive: str = "30m",
-) -> str:
-    """Load a model into an existing backend server and wait until it is running."""
-    url = normalize_backend_url(backend_url)
-    backend = OllamaBackend(url)
-    return backend.warmup(
-        model_name,
-        timeout_seconds=timeout_seconds,
-        poll_interval_seconds=poll_interval_seconds,
-        keep_alive=keep_alive,
-    )
 
 
 # -- Backward-compatible aliases -------------------------------------------
@@ -276,7 +222,7 @@ def stop_vastai_instance(sdk: VastAI, contract_id: int | str) -> TeardownResult:
     return InstanceManager(sdk).destroy_instance_and_related_storage(contract_id)
 
 
-def run_preflight_cost_check(
+async def run_preflight_cost_check(
     *,
     vastai: bool,
     max_dph: float,
@@ -310,7 +256,7 @@ def run_preflight_cost_check(
         return http_client.get_cost_estimate(cost_req.to_dict())
 
     estimator = CostEstimator()
-    response = asyncio.run(estimator.estimate(cost_req))
+    response = await estimator.estimate(cost_req)
     return response.to_dict()
 
 

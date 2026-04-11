@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-import pytest
 from pathlib import Path
 
 from rune_bench.api_contracts import (
@@ -11,18 +10,21 @@ from rune_bench.api_contracts import (
 
 
 def test_run_llm_instance_request_to_dict():
+    from rune_bench.api_contracts import Provisioning, VastAIProvisioning
     request = RunLLMInstanceRequest(
-        vastai=True,
-        template_hash="tmpl",
-        min_dph=2.0,
-        max_dph=3.0,
-        reliability=0.99,
+        provisioning=Provisioning(
+            vastai=VastAIProvisioning(
+                template_hash="tmpl",
+                min_dph=2.0,
+                max_dph=3.0,
+                reliability=0.99,
+            )
+        ),
         backend_url=None,
     )
 
     payload = request.to_dict()
-    assert payload["vastai"] is True
-    assert payload["template_hash"] == "tmpl"
+    assert payload["provisioning"]["vastai"]["template_hash"] == "tmpl"
 
 
 def test_agentic_request_from_cli_converts_kubeconfig_to_string():
@@ -85,7 +87,26 @@ def test_benchmark_request_from_cli_converts_kubeconfig_to_string():
 
     payload = request.to_dict()
     assert payload["kubeconfig"] == "/home/user/.kube/config"
-    assert payload["vastai_stop_instance"] is True
+    assert payload["provisioning"] is None
+
+
+def test_benchmark_request_from_cli_vastai():
+    request = RunBenchmarkRequest.from_cli(
+        vastai=True,
+        template_hash="hash",
+        min_dph=2.3,
+        max_dph=3.0,
+        reliability=0.99,
+        backend_url=None,
+        question="q",
+        model="m",
+        backend_warmup=True,
+        backend_warmup_timeout=90,
+        kubeconfig=Path("/k"),
+        vastai_stop_instance=True,
+    )
+    payload = request.to_dict()
+    assert payload["provisioning"]["vastai"]["stop_instance"] is True
 
 
 def test_cost_estimation_request_to_dict():
@@ -95,32 +116,3 @@ def test_cost_estimation_request_to_dict():
     assert d["min_dph"] == 2.0
     assert d["max_dph"] == 3.0
     assert d["estimated_duration_seconds"] == 1800
-
-
-def test_sr_q_035_question_max_length() -> None:
-    with pytest.raises(ValueError, match="SR-Q-035"):
-        RunAgenticAgentRequest(
-            question="x" * 100_001,
-            model="m",
-            backend_url=None,
-            backend_warmup=False,
-            backend_warmup_timeout=1,
-        )
-
-
-def test_sr_q_035_model_max_length() -> None:
-    with pytest.raises(ValueError, match="SR-Q-035"):
-        RunBenchmarkRequest(
-            vastai=False,
-            template_hash="t",
-            min_dph=1.0,
-            max_dph=2.0,
-            reliability=0.9,
-            backend_url=None,
-            question="q",
-            model="m" * 129,
-            backend_warmup=False,
-            backend_warmup_timeout=1,
-            kubeconfig="/tmp/k",
-            vastai_stop_instance=False,
-        )

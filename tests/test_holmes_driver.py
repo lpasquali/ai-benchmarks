@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import subprocess  # nosec  # tests require subprocess
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -17,6 +18,19 @@ from unittest.mock import MagicMock
 import pytest
 
 import rune_bench.drivers.holmes.__main__ as holmes_main
+
+
+@pytest.fixture(autouse=True)
+def clean_env():
+    # Save original env
+    original_env = os.environ.copy()
+    # Explicitly clear variables that might have leaked from other tests
+    os.environ.pop("OVERRIDE_MAX_CONTENT_SIZE", None)
+    os.environ.pop("OVERRIDE_MAX_OUTPUT_TOKEN", None)
+    yield
+    # Restore original env
+    os.environ.clear()
+    os.environ.update(original_env)
 
 
 # ---------------------------------------------------------------------------

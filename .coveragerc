@@ -3,6 +3,9 @@ source =
     rune
     rune_bench
 omit =
+    # Infrastructure modules requiring external services (tested via integration tests)
+    rune_bench/storage/postgres.py
+    rune_bench/storage/migrate_to_postgres.py
     # Tier 2: vendor API required
     rune_bench/agents/*/consensus.py
     rune_bench/drivers/consensus/*
@@ -44,6 +47,9 @@ omit =
 
 [report]
 omit =
+    # Infrastructure modules requiring external services (tested via integration tests)
+    rune_bench/storage/postgres.py
+    rune_bench/storage/migrate_to_postgres.py
     # Backend stubs — intentionally unimplemented (raise NotImplementedError)
     rune_bench/backends/openai.py
     rune_bench/backends/bedrock.py

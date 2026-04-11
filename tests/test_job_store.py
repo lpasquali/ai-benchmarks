@@ -1,12 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
 import pytest
-
 from rune_bench.job_store import JobStore
 
+@pytest.fixture
+def store(tmp_path):
+    storage = JobStore(tmp_path / "jobs.db")
+    yield storage
+    storage.close()
 
-def test_job_store_idempotency_is_tenant_scoped(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
-
+def test_job_store_idempotency_is_tenant_scoped(store):
     job_id_1, created_1 = store.create_job(
         tenant_id="tenant-a",
         kind="benchmark",
@@ -33,8 +35,7 @@ def test_job_store_idempotency_is_tenant_scoped(tmp_path):
     assert job_id_3 != job_id_1
 
 
-def test_job_store_marks_incomplete_jobs_failed(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+def test_job_store_marks_incomplete_jobs_failed(store):
     job_id, _ = store.create_job(
         tenant_id="tenant-a",
         kind="agentic-agent",
@@ -63,13 +64,11 @@ def _two_node_chain():
     return nodes, edges
 
 
-def test_chain_state_returns_none_when_uninitialized(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+def test_chain_state_returns_none_when_uninitialized(store):
     assert store.get_chain_state("missing") is None
 
 
-def test_chain_state_initialize_normalizes_and_round_trips(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+def test_chain_state_initialize_normalizes_and_round_trips(store):
     nodes, edges = _two_node_chain()
     store.record_chain_initialized(job_id="job-1", nodes=nodes, edges=edges)
 
@@ -86,8 +85,7 @@ def test_chain_state_initialize_normalizes_and_round_trips(tmp_path):
     assert state["edges"] == [{"from": "draft", "to": "review"}]
 
 
-def test_chain_state_initialize_is_idempotent(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+def test_chain_state_initialize_is_idempotent(store):
     nodes, edges = _two_node_chain()
     store.record_chain_initialized(job_id="job-1", nodes=nodes, edges=edges)
     # Re-initialize with a different node set; latest write wins.
@@ -99,8 +97,7 @@ def test_chain_state_initialize_is_idempotent(tmp_path):
     assert state["edges"] == []
 
 
-def test_chain_state_transition_marks_running_then_success(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+def test_chain_state_transition_marks_running_then_success(store):
     nodes, edges = _two_node_chain()
     store.record_chain_initialized(job_id="job-1", nodes=nodes, edges=edges)
 
@@ -126,8 +123,7 @@ def test_chain_state_transition_marks_running_then_success(tmp_path):
     assert draft["finished_at"] == 11.5
 
 
-def test_chain_state_transition_propagates_failure_to_overall(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+def test_chain_state_transition_propagates_failure_to_overall(store):
     nodes, edges = _two_node_chain()
     store.record_chain_initialized(job_id="job-1", nodes=nodes, edges=edges)
     store.record_chain_node_transition(
@@ -141,8 +137,7 @@ def test_chain_state_transition_propagates_failure_to_overall(tmp_path):
     assert review["error"] == "boom"
 
 
-def test_chain_state_transition_all_success_overall_success(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+def test_chain_state_transition_all_success_overall_success(store):
     nodes, edges = _two_node_chain()
     store.record_chain_initialized(job_id="job-1", nodes=nodes, edges=edges)
     store.record_chain_node_transition(job_id="job-1", node_id="draft", status="success")
@@ -152,8 +147,7 @@ def test_chain_state_transition_all_success_overall_success(tmp_path):
     assert state["overall_status"] == "success"
 
 
-def test_chain_state_transition_all_skipped_overall_skipped(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+def test_chain_state_transition_all_skipped_overall_skipped(store):
     nodes, edges = _two_node_chain()
     store.record_chain_initialized(job_id="job-1", nodes=nodes, edges=edges)
     store.record_chain_node_transition(job_id="job-1", node_id="draft", status="skipped")
@@ -163,16 +157,14 @@ def test_chain_state_transition_all_skipped_overall_skipped(tmp_path):
     assert state["overall_status"] == "skipped"
 
 
-def test_chain_state_transition_unknown_job_raises(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+def test_chain_state_transition_unknown_job_raises(store):
     with pytest.raises(RuntimeError, match="not initialized"):
         store.record_chain_node_transition(
             job_id="missing", node_id="x", status="running"
         )
 
 
-def test_chain_state_transition_unknown_node_raises(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+def test_chain_state_transition_unknown_node_raises(store):
     nodes, edges = _two_node_chain()
     store.record_chain_initialized(job_id="job-1", nodes=nodes, edges=edges)
     with pytest.raises(RuntimeError, match="not found"):
@@ -181,8 +173,7 @@ def test_chain_state_transition_unknown_node_raises(tmp_path):
         )
 
 
-def test_chain_state_initialize_empty_nodes_overall_pending(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+def test_chain_state_initialize_empty_nodes_overall_pending(store):
     store.record_chain_initialized(job_id="job-empty", nodes=[], edges=[])
     state = store.get_chain_state("job-empty")
     assert state is not None
@@ -197,8 +188,7 @@ def test_chain_state_initialize_empty_nodes_overall_pending(tmp_path):
 import hashlib  # noqa: E402 — grouped with audit-artifact tests
 
 
-def test_audit_artifact_record_and_list_returns_metadata_only(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+def test_audit_artifact_record_and_list_returns_metadata_only(store):
     payload = b'{"_type": "slsa.provenance"}'
     artifact_id = store.record_audit_artifact(
         job_id="job-1", kind="slsa_provenance", name="provenance.json", content=payload
@@ -218,8 +208,7 @@ def test_audit_artifact_record_and_list_returns_metadata_only(tmp_path):
     assert "content" not in a
 
 
-def test_audit_artifact_list_orders_by_created_at(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+def test_audit_artifact_list_orders_by_created_at(store):
     a1 = store.record_audit_artifact(
         job_id="job-1", kind="sbom", name="first.json", content=b"{}"
     )
@@ -230,13 +219,11 @@ def test_audit_artifact_list_orders_by_created_at(tmp_path):
     assert [a["artifact_id"] for a in artifacts] == [a1, a2]
 
 
-def test_audit_artifact_list_returns_empty_for_unknown_job(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+def test_audit_artifact_list_returns_empty_for_unknown_job(store):
     assert store.list_audit_artifacts("nope") == []
 
 
-def test_audit_artifact_list_is_job_scoped(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+def test_audit_artifact_list_is_job_scoped(store):
     store.record_audit_artifact(
         job_id="job-a", kind="sbom", name="a.json", content=b"{}"
     )
@@ -249,8 +236,7 @@ def test_audit_artifact_list_is_job_scoped(tmp_path):
     assert len(b) == 1 and b[0]["name"] == "b.json"
 
 
-def test_audit_artifact_get_returns_bytes_name_kind(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+def test_audit_artifact_get_returns_bytes_name_kind(store):
     payload = b"binary\x00data"
     artifact_id = store.record_audit_artifact(
         job_id="job-1", kind="sigstore_bundle", name="bundle.sig", content=payload
@@ -263,14 +249,12 @@ def test_audit_artifact_get_returns_bytes_name_kind(tmp_path):
     assert kind == "sigstore_bundle"
 
 
-def test_audit_artifact_get_returns_none_for_unknown_artifact(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+def test_audit_artifact_get_returns_none_for_unknown_artifact(store):
     assert store.get_audit_artifact(job_id="job-1", artifact_id="missing") is None
 
 
-def test_audit_artifact_get_is_job_scoped(tmp_path):
+def test_audit_artifact_get_is_job_scoped(store):
     """Cross-job access by artifact_id alone must fail (returns None)."""
-    store = JobStore(tmp_path / "jobs.db")
     aid = store.record_audit_artifact(
         job_id="job-a", kind="sbom", name="x.json", content=b"{}"
     )
@@ -278,16 +262,14 @@ def test_audit_artifact_get_is_job_scoped(tmp_path):
     assert store.get_audit_artifact(job_id="job-b", artifact_id=aid) is None
 
 
-def test_audit_artifact_record_rejects_unknown_kind(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+def test_audit_artifact_record_rejects_unknown_kind(store):
     with pytest.raises(ValueError, match="unknown audit artifact kind"):
         store.record_audit_artifact(
             job_id="job-1", kind="invented", name="x", content=b""
         )
 
 
-def test_audit_artifact_record_accepts_all_known_kinds(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+def test_audit_artifact_record_accepts_all_known_kinds(store):
     for kind in [
         "slsa_provenance",
         "sbom",

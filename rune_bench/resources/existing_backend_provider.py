@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Existing LLM backend server resource provider."""
 
+import asyncio
 from rune_bench.resources.base import ProvisioningResult
-from rune_bench.workflows import use_existing_backend_server, warmup_backend_model
+from rune_bench.common.backend_utils import use_existing_backend_server, warmup_backend_model
 
 
 class ExistingBackendProvider:
@@ -27,13 +28,14 @@ class ExistingBackendProvider:
         self._warmup_timeout = warmup_timeout
         self._backend_type = backend_type
 
-    def provision(self) -> ProvisioningResult:
+    async def provision(self) -> ProvisioningResult:
         server = use_existing_backend_server(
             self._backend_url,
             model_name=self._model or "<user-selected>",
         )
         if self._warmup and self._model:
-            warmup_backend_model(
+            await asyncio.to_thread(
+                warmup_backend_model,
                 server.url,
                 self._model,
                 timeout_seconds=self._warmup_timeout,
@@ -44,5 +46,5 @@ class ExistingBackendProvider:
             backend_type=self._backend_type,
         )
 
-    def teardown(self, result: ProvisioningResult) -> None:
+    async def teardown(self, result: ProvisioningResult) -> None:
         pass

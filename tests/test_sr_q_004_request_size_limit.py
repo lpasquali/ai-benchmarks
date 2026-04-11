@@ -3,6 +3,7 @@
 
 import http.client
 import json
+import socket
 import threading
 import time
 
@@ -31,7 +32,11 @@ def test_app(test_storage):
 @pytest.fixture
 def api_server(test_app):
     """Start API server in background thread."""
-    port = 18080
+    # Find a free port
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+
     server_thread = threading.Thread(
         target=test_app.serve,
         args=("127.0.0.1", port),
@@ -39,7 +44,13 @@ def api_server(test_app):
     )
     server_thread.start()
     time.sleep(0.5)  # Give server time to start
-    yield f"127.0.0.1:{port}"
+    try:
+        yield f"127.0.0.1:{port}"
+    finally:
+        # shutdown() is not implemented in RuneApiApplication, but the server
+        # will exit when the process ends because it's a daemon thread.
+        # We MUST close the store though.
+        test_app.store.close()
 
 
 def test_request_size_limit_enforced(api_server):

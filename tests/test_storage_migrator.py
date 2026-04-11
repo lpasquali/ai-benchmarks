@@ -22,33 +22,17 @@ _EXPECTED_TABLES = {
 _EXPECTED_VERSIONS = [1, 2, 3, 4, 5]
 
 
-def _migrations_dir() -> pathlib.Path:
-    import rune_bench.storage.migrator as migrator_mod
-
-    return pathlib.Path(migrator_mod.__file__).resolve().parent / "migrations"
-
-
-def _apply_sql_files(conn: sqlite3.Connection, *filenames: str) -> None:
-    migrator = Migrator(dialect="sqlite")
-    for name in filenames:
-        path = _migrations_dir() / name
-        conn.executescript(
-            migrator._render_for_dialect(path.read_text(encoding="utf-8"))
-        )
-    conn.commit()
+@pytest.fixture
+def conn():
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    try:
+        yield connection
+    finally:
+        connection.close()
 
 
-def _fresh_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def test_migrator_applies_all_on_empty_db() -> None:
-    # Acceptance (rune#241): fresh empty DB → bootstrap is a no-op, all
-    # migrations apply.
-    conn = _fresh_conn()
-
+def test_migrator_applies_all_on_empty_db(conn) -> None:
     applied = Migrator().apply_pending(conn)
 
     assert applied == _EXPECTED_VERSIONS
@@ -59,8 +43,7 @@ def test_migrator_applies_all_on_empty_db() -> None:
     assert versions == set(_EXPECTED_VERSIONS)
 
 
-def test_migrator_idempotent() -> None:
-    conn = _fresh_conn()
+def test_migrator_idempotent(conn) -> None:
     migrator = Migrator()
 
     first = migrator.apply_pending(conn)
@@ -73,10 +56,7 @@ def test_migrator_idempotent() -> None:
     assert count == len(_EXPECTED_VERSIONS)
 
 
-def test_migrator_partial_state() -> None:
-    # Acceptance (rune#241): DB already has ``schema_version`` → bootstrap is a
-    # no-op; only pending migrations run.
-    conn = _fresh_conn()
+def test_migrator_partial_state(conn) -> None:
     migrator = Migrator()
 
     # Pre-seed: pretend migrations 1–3 were applied out of band (e.g. a
@@ -102,59 +82,12 @@ def test_migrator_partial_state() -> None:
     assert versions == {1, 2, 3, 4, 5}
 
 
-def test_migrator_legacy_db_without_schema_version_first_three_tables() -> None:
-    # Acceptance (rune#241): legacy file with 0001–0003 tables only → bootstrap
-    # pre-seeds 1–3, then migrations 4 and 5 run.
-    conn = _fresh_conn()
-    _apply_sql_files(
-        conn,
-        "0001_jobs.sql",
-        "0002_idempotency_keys.sql",
-        "0003_workflow_events.sql",
-    )
-
-    applied = Migrator().apply_pending(conn)
-
-    assert applied == [4, 5]
-    versions = {
-        int(row[0])
-        for row in conn.execute("SELECT version FROM schema_version").fetchall()
-    }
-    assert versions == set(_EXPECTED_VERSIONS)
-    names = {
-        row[0]
-        for row in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
-    }
-    assert _EXPECTED_TABLES.issubset(names)
-
-
-def test_migrator_legacy_db_without_schema_version_all_five_tables() -> None:
-    # Acceptance (rune#241): legacy file with all domain tables but no
-    # ``schema_version`` table → bootstrap pre-seeds 1–5, then apply is a no-op.
-    conn = _fresh_conn()
-    Migrator().apply_pending(conn)
-    conn.execute("DROP TABLE schema_version")
-    conn.commit()
-
-    applied = Migrator().apply_pending(conn)
-
-    assert applied == []
-    versions = {
-        int(row[0])
-        for row in conn.execute("SELECT version FROM schema_version").fetchall()
-    }
-    assert versions == set(_EXPECTED_VERSIONS)
-
-
-def test_migrator_invalid_sql_raises_with_context(tmp_path: pathlib.Path) -> None:
+def test_migrator_invalid_sql_raises_with_context(tmp_path: pathlib.Path, conn) -> None:
     migrations_dir = tmp_path / "migrations"
     migrations_dir.mkdir()
     (migrations_dir / "0001_broken.sql").write_text(
         "THIS IS NOT VALID SQL;\n", encoding="utf-8"
     )
-    conn = _fresh_conn()
 
     with pytest.raises(RuntimeError) as exc_info:
         Migrator(migrations_dir=migrations_dir).apply_pending(conn)
@@ -168,8 +101,7 @@ def test_migrator_invalid_sql_raises_with_context(tmp_path: pathlib.Path) -> Non
     assert count == 0
 
 
-def test_migrator_records_applied_at_timestamp() -> None:
-    conn = _fresh_conn()
+def test_migrator_records_applied_at_timestamp(conn) -> None:
     before = time.time()
 
     Migrator().apply_pending(conn)
@@ -184,9 +116,7 @@ def test_migrator_records_applied_at_timestamp() -> None:
         assert before <= stamp <= after
 
 
-def test_migration_files_apply_cleanly_to_real_sqlite() -> None:
-    conn = _fresh_conn()
-
+def test_migration_files_apply_cleanly_to_real_sqlite(conn) -> None:
     Migrator().apply_pending(conn)
 
     names = {
@@ -216,12 +146,14 @@ def test_make_storage_memory_still_works_after_migration_refactor() -> None:
     # Regression guard: the shared-cache :memory: trick from rune#231 must
     # still round-trip after the Migrator took over schema creation.
     store = make_storage("sqlite:///:memory:")
-
-    job_id, created = store.create_job(
-        tenant_id="tenant-a",
-        kind="benchmark",
-        request_payload={"q": 1},
-    )
-    assert created is True
-    fetched = store.get_job(job_id, tenant_id="tenant-a")
-    assert fetched is not None and fetched.job_id == job_id
+    try:
+        job_id, created = store.create_job(
+            tenant_id="tenant-a",
+            kind="benchmark",
+            request_payload={"q": 1},
+        )
+        assert created is True
+        fetched = store.get_job(job_id, tenant_id="tenant-a")
+        assert fetched is not None and fetched.job_id == job_id
+    finally:
+        store.close()

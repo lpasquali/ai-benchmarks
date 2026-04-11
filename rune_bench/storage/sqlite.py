@@ -7,7 +7,7 @@ import json
 import sqlite3
 import time
 import uuid
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -63,11 +63,24 @@ class SQLiteStorageAdapter:
         connection.row_factory = sqlite3.Row
         return connection
 
+    def close(self) -> None:
+        """Close the storage adapter and its memory anchor connection if it exists."""
+        if self._memory_anchor is not None:
+            self._memory_anchor.close()
+            self._memory_anchor = None
+
+    def __del__(self) -> None:  # pragma: no cover - best-effort cleanup
+        try:
+            self.close()
+        except Exception:
+            pass  # nosec
+
     @contextmanager
     def connection(self) -> Any:
         """Yield a raw SQLite connection for internal tooling/tests."""
-        with self._connect() as conn:
-            yield conn
+        with closing(self._connect()) as conn:
+            with conn:
+                yield conn
 
     def _initialize(self) -> None:
         # Schema creation is delegated to the Migrator so the same set of
@@ -76,9 +89,10 @@ class SQLiteStorageAdapter:
         # reopening an existing database is a no-op.
         from rune_bench.storage.migrator import Migrator
 
-        with self._connect() as conn:
-            conn.execute("PRAGMA journal_mode=WAL")
-            Migrator().apply_pending(conn)
+        with closing(self._connect()) as conn:
+            with conn:
+                conn.execute("PRAGMA journal_mode=WAL")
+                Migrator().apply_pending(conn)
 
     # ── Chain state ────────────────────────────────────────────────────────
     #
@@ -137,18 +151,19 @@ class SQLiteStorageAdapter:
         state = {"nodes": normalized_nodes, "edges": normalized_edges}
         overall = self._compute_overall_chain_status(normalized_nodes)
         now = time.time()
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO chain_state(job_id, state_json, overall_status, updated_at)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(job_id) DO UPDATE SET
-                    state_json = excluded.state_json,
-                    overall_status = excluded.overall_status,
-                    updated_at = excluded.updated_at
-                """,
-                (job_id, json.dumps(state), overall, now),
-            )
+        with closing(self._connect()) as conn:
+            with conn:
+                conn.execute(
+                    """
+                    INSERT INTO chain_state(job_id, state_json, overall_status, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(job_id) DO UPDATE SET
+                        state_json = excluded.state_json,
+                        overall_status = excluded.overall_status,
+                        updated_at = excluded.updated_at
+                    """,
+                    (job_id, json.dumps(state), overall, now),
+                )
 
     def record_chain_node_transition(
         self,
@@ -161,53 +176,55 @@ class SQLiteStorageAdapter:
         error: str | None = None,
     ) -> None:
         """Update one node's fields and recompute overall status. Raises if chain not initialized."""
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT state_json FROM chain_state WHERE job_id = ?",
-                (job_id,),
-            ).fetchone()
-            if row is None:
-                raise RuntimeError(f"chain state not initialized for job_id={job_id}")
-            state = json.loads(row["state_json"])
-            for node in state["nodes"]:
-                if node["id"] == node_id:
-                    node["status"] = status
-                    if started_at is not None:
-                        node["started_at"] = started_at
-                    if finished_at is not None:
-                        node["finished_at"] = finished_at
-                    if error is not None:
-                        node["error"] = error
-                    break
-            else:
-                raise RuntimeError(
-                    f"chain node {node_id!r} not found in state for job_id={job_id}"
+        with closing(self._connect()) as conn:
+            with conn:
+                row = conn.execute(
+                    "SELECT state_json FROM chain_state WHERE job_id = ?",
+                    (job_id,),
+                ).fetchone()
+                if row is None:
+                    raise RuntimeError(f"chain state not initialized for job_id={job_id}")
+                state = json.loads(row["state_json"])
+                for node in state["nodes"]:
+                    if node["id"] == node_id:
+                        node["status"] = status
+                        if started_at is not None:
+                            node["started_at"] = started_at
+                        if finished_at is not None:
+                            node["finished_at"] = finished_at
+                        if error is not None:
+                            node["error"] = error
+                        break
+                else:
+                    raise RuntimeError(
+                        f"chain node {node_id!r} not found in state for job_id={job_id}"
+                    )
+                overall = self._compute_overall_chain_status(state["nodes"])
+                conn.execute(
+                    """
+                    UPDATE chain_state
+                    SET state_json = ?, overall_status = ?, updated_at = ?
+                    WHERE job_id = ?
+                    """,
+                    (json.dumps(state), overall, time.time(), job_id),
                 )
-            overall = self._compute_overall_chain_status(state["nodes"])
-            conn.execute(
-                """
-                UPDATE chain_state
-                SET state_json = ?, overall_status = ?, updated_at = ?
-                WHERE job_id = ?
-                """,
-                (json.dumps(state), overall, time.time(), job_id),
-            )
 
     def get_chain_state(self, job_id: str) -> dict | None:
         """Return {nodes, edges, overall_status} for the chain, or None if no state recorded."""
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT state_json, overall_status FROM chain_state WHERE job_id = ?",
-                (job_id,),
-            ).fetchone()
-            if row is None:
-                return None
-            state = json.loads(row["state_json"])
-            return {
-                "nodes": state["nodes"],
-                "edges": state["edges"],
-                "overall_status": row["overall_status"],
-            }
+        with closing(self._connect()) as conn:
+            with conn:
+                row = conn.execute(
+                    "SELECT state_json, overall_status FROM chain_state WHERE job_id = ?",
+                    (job_id,),
+                ).fetchone()
+                if row is None:
+                    return None
+                state = json.loads(row["state_json"])
+                return {
+                    "nodes": state["nodes"],
+                    "edges": state["edges"],
+                    "overall_status": row["overall_status"],
+                }
 
     # ── Audit artifacts ────────────────────────────────────────────────────
     #
@@ -252,29 +269,31 @@ class SQLiteStorageAdapter:
         sha256 = hashlib.sha256(content).hexdigest()
         size_bytes = len(content)
         now = time.time()
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO audit_artifact(
-                    artifact_id, job_id, kind, name, size_bytes, sha256, content, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (artifact_id, job_id, kind, name, size_bytes, sha256, content, now),
-            )
+        with closing(self._connect()) as conn:
+            with conn:
+                conn.execute(
+                    """
+                    INSERT INTO audit_artifact(
+                        artifact_id, job_id, kind, name, size_bytes, sha256, content, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (artifact_id, job_id, kind, name, size_bytes, sha256, content, now),
+                )
         return artifact_id
 
     def list_audit_artifacts(self, job_id: str) -> list[dict]:
         """Return metadata for all artifacts of a job (no bytes), oldest first."""
-        with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT artifact_id, kind, name, size_bytes, sha256, created_at
-                FROM audit_artifact
-                WHERE job_id = ?
-                ORDER BY created_at ASC, artifact_id ASC
-                """,
-                (job_id,),
-            ).fetchall()
+        with closing(self._connect()) as conn:
+            with conn:
+                rows = conn.execute(
+                    """
+                    SELECT artifact_id, kind, name, size_bytes, sha256, created_at
+                    FROM audit_artifact
+                    WHERE job_id = ?
+                    ORDER BY created_at ASC, artifact_id ASC
+                    """,
+                    (job_id,),
+                ).fetchall()
         return [
             {
                 "artifact_id": row["artifact_id"],
@@ -299,30 +318,32 @@ class SQLiteStorageAdapter:
         cannot fetch an artifact that doesn't belong to the job they're querying
         — this is the building block the API endpoint uses for tenant scoping.
         """
-        with self._connect() as conn:
-            row = conn.execute(
-                """
-                SELECT content, name, kind
-                FROM audit_artifact
-                WHERE job_id = ? AND artifact_id = ?
-                """,
-                (job_id, artifact_id),
-            ).fetchone()
+        with closing(self._connect()) as conn:
+            with conn:
+                row = conn.execute(
+                    """
+                    SELECT content, name, kind
+                    FROM audit_artifact
+                    WHERE job_id = ? AND artifact_id = ?
+                    """,
+                    (job_id, artifact_id),
+                ).fetchone()
         if row is None:
             return None
         return bytes(row["content"]), row["name"], row["kind"]
 
     def mark_incomplete_jobs_failed(self, message: str = "server restarted before job completion") -> None:
         now = time.time()
-        with self._connect() as conn:
-            conn.execute(
-                """
-                UPDATE jobs
-                SET status = ?, error = ?, message = ?, updated_at = ?
-                WHERE status IN ('queued', 'running')
-                """,
-                ("failed", message, message, now),
-            )
+        with closing(self._connect()) as conn:
+            with conn:
+                conn.execute(
+                    """
+                    UPDATE jobs
+                    SET status = ?, error = ?, message = ?, updated_at = ?
+                    WHERE status IN ('queued', 'running')
+                    """,
+                    ("failed", message, message, now),
+                )
 
     def create_job(
         self,
@@ -333,47 +354,48 @@ class SQLiteStorageAdapter:
         idempotency_key: str | None = None,
     ) -> tuple[str, bool]:
         now = time.time()
-        with self._connect() as conn:
-            if idempotency_key:
-                existing = conn.execute(
-                    """
-                    SELECT job_id
-                    FROM idempotency_keys
-                    WHERE tenant_id = ? AND operation = ? AND idempotency_key = ?
-                    """,
-                    (tenant_id, kind, idempotency_key),
-                ).fetchone()
-                if existing is not None:
-                    return str(existing["job_id"]), False
+        with closing(self._connect()) as conn:
+            with conn:
+                if idempotency_key:
+                    existing = conn.execute(
+                        """
+                        SELECT job_id
+                        FROM idempotency_keys
+                        WHERE tenant_id = ? AND operation = ? AND idempotency_key = ?
+                        """,
+                        (tenant_id, kind, idempotency_key),
+                    ).fetchone()
+                    if existing is not None:
+                        return str(existing["job_id"]), False
 
-            job_id = str(uuid.uuid4())
-            conn.execute(
-                """
-                INSERT INTO jobs(job_id, tenant_id, kind, status, request_json, result_json, error, message, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    job_id,
-                    tenant_id,
-                    kind,
-                    "queued",
-                    json.dumps(request_payload, sort_keys=True),
-                    None,
-                    None,
-                    "accepted",
-                    now,
-                    now,
-                ),
-            )
-            if idempotency_key:
+                job_id = str(uuid.uuid4())
                 conn.execute(
                     """
-                    INSERT INTO idempotency_keys(tenant_id, operation, idempotency_key, job_id, created_at)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO jobs(job_id, tenant_id, kind, status, request_json, result_json, error, message, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (tenant_id, kind, idempotency_key, job_id, now),
+                    (
+                        job_id,
+                        tenant_id,
+                        kind,
+                        "queued",
+                        json.dumps(request_payload, sort_keys=True),
+                        None,
+                        None,
+                        "accepted",
+                        now,
+                        now,
+                    ),
                 )
-            return job_id, True
+                if idempotency_key:
+                    conn.execute(
+                        """
+                        INSERT INTO idempotency_keys(tenant_id, operation, idempotency_key, job_id, created_at)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (tenant_id, kind, idempotency_key, job_id, now),
+                    )
+                return job_id, True
 
     def update_job(
         self,
@@ -404,27 +426,29 @@ class SQLiteStorageAdapter:
         values.append(time.time())
         values.append(job_id)
 
-        with self._connect() as conn:
-            conn.execute(f"UPDATE jobs SET {', '.join(fields)} WHERE job_id = ?", values)  # nosec B608 — fields are hardcoded column names, values are parameterized
+        with closing(self._connect()) as conn:
+            with conn:
+                conn.execute(f"UPDATE jobs SET {', '.join(fields)} WHERE job_id = ?", values)  # nosec B608 — fields are hardcoded column names, values are parameterized
 
     def record_workflow_event(self, event: "MetricsEvent") -> None:
         """Persist a single workflow lifecycle event."""
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO workflow_events(job_id, event, status, duration_ms, error_type, labels_json, recorded_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    event.job_id,
-                    event.event,
-                    event.status,
-                    event.duration_ms,
-                    event.error_type,
-                    json.dumps(event.labels, sort_keys=True) if event.labels else None,
-                    event.recorded_at,
-                ),
-            )
+        with closing(self._connect()) as conn:
+            with conn:
+                conn.execute(
+                    """
+                    INSERT INTO workflow_events(job_id, event, status, duration_ms, error_type, labels_json, recorded_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        event.job_id,
+                        event.event,
+                        event.status,
+                        event.duration_ms,
+                        event.error_type,
+                        json.dumps(event.labels, sort_keys=True) if event.labels else None,
+                        event.recorded_at,
+                    ),
+                )
 
     def get_events_summary(self, *, job_id: str | None = None) -> list[dict]:
         """Return per-event aggregate statistics.
@@ -450,8 +474,9 @@ class SQLiteStorageAdapter:
             params.append(job_id)
         query += " GROUP BY event ORDER BY event"
 
-        with self._connect() as conn:
-            rows = conn.execute(query, params).fetchall()
+        with closing(self._connect()) as conn:
+            with conn:
+                rows = conn.execute(query, params).fetchall()
 
         return [
             {
@@ -466,21 +491,23 @@ class SQLiteStorageAdapter:
             for row in rows
         ]
 
-    def get_events_for_job(self, job_id: str) -> list[dict]:
-        """Return all raw workflow events for a single job, ordered by recorded_at."""
-        with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT event, status, duration_ms, error_type, labels_json, recorded_at
-                FROM workflow_events
-                WHERE job_id = ?
-                ORDER BY recorded_at
-                """,
-                (job_id,),
-            ).fetchall()
+    def get_events_for_job(self, job_id: str, after_id: int = 0) -> list[dict]:
+        """Return all raw workflow events for a single job, ordered by id."""
+        with closing(self._connect()) as conn:
+            with conn:
+                rows = conn.execute(
+                    """
+                    SELECT id, event, status, duration_ms, error_type, labels_json, recorded_at
+                    FROM workflow_events
+                    WHERE job_id = ? AND id > ?
+                    ORDER BY id ASC
+                    """,
+                    (job_id, after_id),
+                ).fetchall()
 
         return [
             {
+                "id": int(row["id"]),
                 "event": str(row["event"]),
                 "status": str(row["status"]),
                 "duration_ms": float(row["duration_ms"] or 0.0),
@@ -494,19 +521,20 @@ class SQLiteStorageAdapter:
     def list_jobs_for_finops(self, *, tenant_id: str, limit: int = 2000) -> list[dict[str, Any]]:
         """Return succeeded benchmark / agentic jobs with wall-clock duration for cost projection."""
         cap = max(1, min(int(limit), 5000))
-        with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT kind, request_json, result_json, created_at, updated_at
-                FROM jobs
-                WHERE tenant_id = ?
-                  AND status = 'succeeded'
-                  AND kind IN ('benchmark', 'agentic-agent')
-                ORDER BY updated_at DESC
-                LIMIT ?
-                """,
-                (tenant_id, cap),
-            ).fetchall()
+        with closing(self._connect()) as conn:
+            with conn:
+                rows = conn.execute(
+                    """
+                    SELECT kind, request_json, result_json, created_at, updated_at
+                    FROM jobs
+                    WHERE tenant_id = ?
+                      AND status = 'succeeded'
+                      AND kind IN ('benchmark', 'agentic-agent')
+                    ORDER BY updated_at DESC
+                    LIMIT ?
+                    """,
+                    (tenant_id, cap),
+                ).fetchall()
         out: list[dict[str, Any]] = []
         for row in rows:
             created = float(row["created_at"])
@@ -529,8 +557,9 @@ class SQLiteStorageAdapter:
             query += " AND tenant_id = ?"
             params.append(tenant_id)
 
-        with self._connect() as conn:
-            row = conn.execute(query, params).fetchone()
+        with closing(self._connect()) as conn:
+            with conn:
+                row = conn.execute(query, params).fetchone()
 
         if row is None:
             return None

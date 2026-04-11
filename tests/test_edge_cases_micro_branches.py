@@ -3,7 +3,7 @@ import runpy
 import sys
 import threading
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 
 import pytest
 from urllib.error import HTTPError
@@ -77,7 +77,8 @@ def test_final_coverage_micro_branches(monkeypatch, tmp_path):
 
     # vastai/instance.py: _fetch_instance exception branch
     manager = object.__new__(InstanceManager)
-    manager._sdk = type("Sdk", (), {"show_instances": lambda self, raw=True: (_ for _ in ()).throw(RuntimeError("boom"))})()
+    def mock_boom(*a, **k): raise RuntimeError("boom")
+    manager._sdk = type("Sdk", (), {"show_instances": mock_boom})()
     assert manager._fetch_instance(1) is None
 
     # vastai/instance.py: _wait_until_instance_absent loop sleep branch
@@ -92,9 +93,15 @@ def test_final_coverage_micro_branches(monkeypatch, tmp_path):
     assert slept_wait == [5]
 
 
-def test_rune_remaining_branches(monkeypatch, tmp_path):
+@pytest.mark.asyncio
+async def test_rune_remaining_branches(monkeypatch, tmp_path):
     test_console = rune.Console(record=True, width=220)
     monkeypatch.setattr(rune, "console", test_console)
+
+    async def mock_cost(*a, **k):
+        return 0.0
+    monkeypatch.setattr(rune, "calculate_run_cost", mock_cost)
+    monkeypatch.setattr(api_backend, "calculate_run_cost", mock_cost)
 
     # line for pull_warning rendering
     details = ConnectionDetails(
@@ -133,17 +140,21 @@ def test_rune_remaining_branches(monkeypatch, tmp_path):
 
     # http run-llm-instance RuntimeError branch
     monkeypatch.setattr(rune, "BACKEND_MODE", "http")
-    monkeypatch.setattr(rune, "_run_http_job_with_progress", lambda **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+    
+    mock_wait_err = AsyncMock(side_effect=RuntimeError("boom"))
+    monkeypatch.setattr(rune, "_run_http_job_with_progress", mock_wait_err)
+    
     with pytest.raises(rune.typer.Exit):
-        rune.run_llm_instance(debug=False, vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url="http://x", idempotency_key=None)
+        await rune.run_llm_instance(debug=False, vastai=False, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, backend_url="http://x", idempotency_key=None)
 
     # run-benchmark local existing server failure branch
     monkeypatch.setattr(rune, "BACKEND_MODE", "local")
-    monkeypatch.setattr(rune, "use_existing_backend_server", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("bad-existing")))
+    def mock_bad_exist(*a, **k): raise RuntimeError("bad-existing")
+    monkeypatch.setattr(rune, "use_existing_backend_server", mock_bad_exist)
     kubeconfig = tmp_path / "kubeconfig"
     kubeconfig.write_text("apiVersion: v1\n")
     with pytest.raises(rune.typer.Exit):
-        rune.run_benchmark(
+        await rune.run_benchmark(
             debug=False,
             vastai=False,
             template_hash="t",
@@ -174,7 +185,11 @@ def test_rune_remaining_branches(monkeypatch, tmp_path):
         pull_warning=None,
     ))
     monkeypatch.setattr(rune, "_warmup_ollama_model", lambda **_k: None)
-    monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: type("R", (), {"ask_structured": lambda self, **_kk: AgentResult(answer="ok")})())
+    
+    mock_agent = AsyncMock()
+    mock_agent.ask_structured.return_value = AgentResult(answer="ok")
+    monkeypatch.setattr(rune, "get_agent", lambda *_a, **_kw: mock_agent)
+    
     monkeypatch.setattr(
         rune,
         "stop_vastai_instance",
@@ -186,7 +201,7 @@ def test_rune_remaining_branches(monkeypatch, tmp_path):
             verification_message="ok",
         ),
     )
-    rune.run_benchmark(
+    await rune.run_benchmark(
         debug=False,
         vastai=True,
         template_hash="t",
@@ -216,9 +231,10 @@ def test_rune_remaining_branches(monkeypatch, tmp_path):
         backend_url=None,
         pull_warning=None,
     ))
-    monkeypatch.setattr(rune, "stop_vastai_instance", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("stop-failed")))
+    def mock_stop_fail(*a, **k): raise RuntimeError("stop-failed")
+    monkeypatch.setattr(rune, "stop_vastai_instance", mock_stop_fail)
     with pytest.raises(rune.typer.Exit):
-        rune.run_benchmark(
+        await rune.run_benchmark(
             debug=False,
             vastai=True,
             template_hash="t",
@@ -236,6 +252,7 @@ def test_rune_remaining_branches(monkeypatch, tmp_path):
         )
 
 
+
 def test_rune_main_guard_executes(monkeypatch):
     rune_path = Path(__file__).resolve().parents[1] / "rune" / "__main__.py"
     monkeypatch.setattr(sys, "argv", [str(rune_path), "--help"])
@@ -250,7 +267,8 @@ def test_rune_init_main_guard_executes(monkeypatch):
         runpy.run_path(str(init_path), run_name="__main__")
 
 
-def test_run_llm_instance_http_vastai_result_branch(monkeypatch):
+@pytest.mark.asyncio
+async def test_run_llm_instance_http_vastai_result_branch(monkeypatch):
     test_console = rune.Console(record=True, width=220)
     monkeypatch.setattr(rune, "console", test_console)
     monkeypatch.setattr(rune, "BACKEND_MODE", "http")
@@ -260,20 +278,18 @@ def test_run_llm_instance_http_vastai_result_branch(monkeypatch):
         "get_cost_estimate": lambda self, *_a, **_k: {"projected_cost_usd": 1.0, "cost_driver": "vastai", "resource_impact": "medium", "local_energy_kwh": 0.0, "confidence_score": 1.0, "warning": None},
     })()
     monkeypatch.setattr(rune, "_http_client", lambda: fake_client)
-    monkeypatch.setattr(
-        rune,
-        "_run_http_job_with_progress",
-        lambda **_k: {
-            "result": {
-                "mode": "vastai",
-                "contract_id": 123,
-                "backend_url": "http://x:11434",
-                "model_name": "llama3.1:8b",
-            }
-        },
-    )
+    
+    mock_wait = AsyncMock(return_value={
+        "result": {
+            "mode": "vastai",
+            "contract_id": 123,
+            "backend_url": "http://x:11434",
+            "model_name": "llama3.1:8b",
+        }
+    })
+    monkeypatch.setattr(rune, "_run_http_job_with_progress", mock_wait)
 
-    rune.run_llm_instance(
+    await rune.run_llm_instance(
         debug=False,
         vastai=True,
         template_hash="t",
@@ -285,28 +301,27 @@ def test_run_llm_instance_http_vastai_result_branch(monkeypatch):
     )
 
 
-def test_run_llm_instance_http_existing_result_branch(monkeypatch):
+@pytest.mark.asyncio
+async def test_run_llm_instance_http_existing_result_branch(monkeypatch):
     test_console = rune.Console(record=True, width=220)
     monkeypatch.setattr(rune, "console", test_console)
     monkeypatch.setattr(rune, "BACKEND_MODE", "http")
 
     fake_client = type("C", (), {"submit_ollama_instance_job": lambda self, *_a, **_k: "job-1"})()
     monkeypatch.setattr(rune, "_http_client", lambda: fake_client)
-    monkeypatch.setattr(
-        rune,
-        "_run_http_job_with_progress",
-        lambda **_k: {
-            "result": {
-                "mode": "existing",
-                "backend_url": "http://x:11434",
-            }
-        },
-    )
+    
+    mock_wait = AsyncMock(return_value={
+        "result": {
+            "mode": "existing",
+            "backend_url": "http://x:11434",
+        }
+    })
+    monkeypatch.setattr(rune, "_run_http_job_with_progress", mock_wait)
 
     captured = {}
     monkeypatch.setattr(rune, "_print_existing_ollama", lambda server: captured.setdefault("url", server.url))
 
-    rune.run_llm_instance(
+    await rune.run_llm_instance(
         debug=False,
         vastai=False,
         template_hash="t",
@@ -363,7 +378,8 @@ def test_holmes_and_ollama_remaining_branches(monkeypatch, tmp_path):
     assert limits.get("context_window") == 10
 
     # _fetch_model_limits failure path
-    monkeypatch.setattr(holmes_driver_module, "get_backend", lambda *_args, **_kw: (_ for _ in ()).throw(RuntimeError("bad")))
+    def mock_bad(*a, **k): raise RuntimeError("bad")
+    monkeypatch.setattr(holmes_driver_module, "get_backend", mock_bad)
     limits2 = runner._fetch_model_limits(model="m", backend_url="http://x")
     assert limits2 == {}
 
@@ -416,70 +432,71 @@ def test_holmes_and_ollama_remaining_branches(monkeypatch, tmp_path):
     manager2.warmup_model("target", timeout_seconds=2, poll_interval_seconds=0)
 
 
-def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
+@pytest.mark.asyncio
+async def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
     # api_backend line where finally stops vastai contract
     kubeconfig = tmp_path / "kubeconfig"
     kubeconfig.write_text("apiVersion: v1\n")
     from rune_bench.resources.base import ProvisioningResult
 
     stopped = []
+    
+    async def mock_provision(*a, **k):
+        return ProvisioningResult(backend_url="http://x", model="m", provider_handle=99)
+    
+    async def mock_teardown(*a, **k):
+        stopped.append(True)
+
     monkeypatch.setattr(
         api_backend,
         "_make_resource_provider_for_benchmark",
         lambda req: type("P", (), {
-            "provision": lambda self: ProvisioningResult(backend_url="http://x", model="m", provider_handle=99),
-            "teardown": lambda self, r: stopped.append(True),
+            "provision": mock_provision,
+            "teardown": mock_teardown,
         })(),
     )
-    monkeypatch.setattr(api_backend, "_make_agent_runner", lambda _p: type("R", (), {"ask_structured": lambda self, **_k: AgentResult(answer="ok")})())
-    out = api_backend.run_benchmark(
-        api_backend.RunBenchmarkRequest(
-            vastai=True,
-            template_hash="t",
-            min_dph=1,
-            max_dph=2,
-            reliability=0.9,
-            backend_url=None,
-            question="q",
-            model="m",
-            backend_warmup=False,
-            backend_warmup_timeout=1,
-            kubeconfig=str(kubeconfig),
-            vastai_stop_instance=True,
-        )
+    
+    mock_agent_run = AsyncMock()
+    mock_agent_run.ask_structured.return_value = AgentResult(answer="ok")
+    monkeypatch.setattr(api_backend, "_make_agent_runner", lambda _p: mock_agent_run)
+
+    async def mock_cost(*a, **k):
+        return 0.0
+    monkeypatch.setattr(api_backend, "calculate_run_cost", mock_cost)
+
+    vast_req = api_backend.RunBenchmarkRequest.from_cli(
+        vastai=True,
+        template_hash="t",
+        min_dph=1,
+        max_dph=2,
+        reliability=0.9,
+        backend_url=None,
+        question="q",
+        model="m",
+        backend_warmup=False,
+        backend_warmup_timeout=1,
+        kubeconfig=Path(kubeconfig),
+        vastai_stop_instance=True,
     )
+    out = await api_backend.run_benchmark(vast_req)
     assert out["contract_id"] == 99
     assert stopped == [True]
 
-    # api_backend benchmark warmup branch — patch at provider module level to verify
-    # ExistingBackendProvider.provision() calls warmup when warmup=True
+    # api_backend benchmark warmup branch
     import rune_bench.resources.existing_backend_provider as _ep
     from rune_bench.resources.existing_backend_provider import ExistingBackendProvider
 
     warmups = []
     monkeypatch.setattr(_ep, "use_existing_backend_server", lambda *_a, **_k: type("S", (), {"url": "http://existing"})())
-    monkeypatch.setattr(_ep, "warmup_backend_model", lambda *_a, **_k: warmups.append(True) or "m")
-    monkeypatch.setattr(
-        api_backend,
-        "_make_resource_provider_for_benchmark",
-        lambda req: ExistingBackendProvider(req.backend_url, model=req.model, warmup=req.backend_warmup, warmup_timeout=req.backend_warmup_timeout),
-    )
-    api_backend.run_benchmark(
-        api_backend.RunBenchmarkRequest(
-            vastai=False,
-            template_hash="t",
-            min_dph=1,
-            max_dph=2,
-            reliability=0.9,
-            backend_url="http://x",
-            question="q",
-            model="m",
-            backend_warmup=True,
-            backend_warmup_timeout=1,
-            kubeconfig=str(kubeconfig),
-            vastai_stop_instance=False,
-        )
-    )
+    
+    def mock_warmup_fn(*a, **k):
+        warmups.append(True)
+        return "m"
+    monkeypatch.setattr(_ep, "warmup_backend_model", mock_warmup_fn)
+    
+    provider = ExistingBackendProvider("http://x", model="m", warmup=True, warmup_timeout=1)
+    res_prov_obj = await provider.provision()
+    assert res_prov_obj.backend_url == "http://existing"
     assert warmups == [True]
 
     # api_server RuntimeError path in /v1/ollama/models
@@ -487,7 +504,8 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
         store=api_server.JobStore(tmp_path / "jobs.db"),
         security=api_server.ApiSecurityConfig(auth_disabled=True, tenant_tokens={}),
     )
-    monkeypatch.setattr(api_server, "list_backend_models", lambda _url, **kw: (_ for _ in ()).throw(RuntimeError("bad-ollama")))
+    def mock_bad_ollama(*a, **k): raise RuntimeError("bad-ollama")
+    monkeypatch.setattr(api_server, "list_backend_models", mock_bad_ollama)
     server = api_server.ThreadingHTTPServer(("127.0.0.1", 0), app.create_handler())
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -500,6 +518,7 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
     finally:
         server.shutdown()
         thread.join(timeout=2)
+        app.store.close()
         server.server_close()
 
     # workflows: reusable instance with missing id should fall back to new provisioning
@@ -574,8 +593,8 @@ def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_path):
     assert manager_nomatch._fetch_instance(1) is None
 
     manager_timeout = InstanceManager(sdk_nomatch)
-    seq = iter([0.0, 2.0])
-    monkeypatch.setattr("rune_bench.resources.vastai.instance.time.monotonic", lambda: next(seq))
+    # seq removed
+    monkeypatch.setattr("rune_bench.resources.vastai.instance.time.monotonic", lambda: 0.0)
     monkeypatch.setattr("rune_bench.resources.vastai.instance.time.sleep", lambda *_a, **_k: None)
     monkeypatch.setattr(manager_timeout, "_fetch_instance", lambda _cid: None)
     assert manager_timeout._wait_until_instance_absent(1, timeout_seconds=1) is True

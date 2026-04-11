@@ -14,7 +14,6 @@ import time
 
 from rune_bench.common import make_http_request, normalize_url
 from rune_bench.debug import debug_log
-from rune_bench.drivers.timeouts import driver_invocation_timeout_seconds
 
 _POLL_INTERVAL_S = 2.0
 _POLL_TIMEOUT_S = 3600.0
@@ -46,13 +45,12 @@ class HttpTransport:
     def call(self, action: str, params: dict) -> dict:
         debug_log(f"HttpTransport → {self._base_url} action={action!r}")
 
-        invoke_timeout = max(1, int(driver_invocation_timeout_seconds()))
         response = make_http_request(
             f"{self._base_url}/v1/actions/{action}",
             method="POST",
             payload={"params": params},
             action=f"submit driver action {action!r}",
-            timeout_seconds=invoke_timeout,
+            timeout_seconds=30,
             headers=self._build_headers(),
             debug_prefix="Driver HTTP",
         )
@@ -70,7 +68,7 @@ class HttpTransport:
                 method="GET",
                 payload=None,
                 action=f"poll driver job {job_id}",
-                timeout_seconds=invoke_timeout,
+                timeout_seconds=30,
                 headers=self._build_headers(),
                 debug_prefix="Driver HTTP",
             )
@@ -113,13 +111,12 @@ class AsyncHttpTransport:
 
         debug_log(f"AsyncHttpTransport → {self._base_url} action={action!r}")
 
-        invoke_timeout = max(1, int(driver_invocation_timeout_seconds()))
         response = await make_async_http_request(
             f"{self._base_url}/v1/actions/{action}",
             method="POST",
             payload={"params": params},
             action=f"submit driver action {action!r}",
-            timeout_seconds=invoke_timeout,
+            timeout_seconds=30,
             headers=self._build_headers(),
             debug_prefix="Driver HTTP",
         )
@@ -137,7 +134,7 @@ class AsyncHttpTransport:
                 method="GET",
                 payload=None,
                 action=f"poll driver job {job_id}",
-                timeout_seconds=invoke_timeout,
+                timeout_seconds=30,
                 headers=self._build_headers(),
                 debug_prefix="Driver HTTP",
             )

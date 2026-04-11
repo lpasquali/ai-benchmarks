@@ -25,7 +25,7 @@ _DEFAULT_LLM_PER_MILLION = (0.50, 1.50)
 
 # Fallback $/hour when Vast.ai is unavailable or no matching offer (by substring).
 _FALLBACK_GPU_DPH_USD: dict[str, float] = {
-    "4090": 0.35,
+    "4090": 0.40,
     "a100": 1.40,
     "h100": 3.50,
     "3090": 0.25,
@@ -35,6 +35,15 @@ _FALLBACK_GPU_DPH_USD: dict[str, float] = {
 _DEFAULT_ASSUMED_DURATION_S = 120.0
 _DEFAULT_INPUT_TOKENS = 2048.0
 _DEFAULT_OUTPUT_TOKENS = 512.0
+
+
+@dataclass(frozen=True)
+class PricingProjection:
+    total_cost_usd: float
+    gpu_cost_usd: float
+    token_cost_usd: float
+    confidence: float
+    historical_match: bool
 
 
 def _model_llm_rates(model: str) -> tuple[float, float]:
@@ -102,20 +111,28 @@ def _job_matches_filters(
     model: str,
 ) -> bool:
     if kind not in ("benchmark", "agentic-agent"):
+        print(f"DEBUG: Filter mismatch kind: {kind}")
         return False
     if agent:
         if kind != "agentic-agent":
+            print(f"DEBUG: Filter mismatch agent-kind: {kind}")
             return False
-        if request_payload.get("agent", "holmes") != agent:
+        req_agent = request_payload.get("agent", "holmes")
+        if req_agent != agent:
+            print(f"DEBUG: Filter mismatch agent: req={req_agent} vs goal={agent}")
             return False
     if suite:
         if kind != "benchmark":
+            print(f"DEBUG: Filter mismatch suite-kind: {kind}")
             return False
-        if request_payload.get("template_hash", "") != suite:
+        req_suite = request_payload.get("template_hash", "")
+        if req_suite != suite:
+            print(f"DEBUG: Filter mismatch suite: req={req_suite} vs goal={suite}")
             return False
     if model:
         req_model = request_payload.get("model", "")
         if req_model != model:
+            print(f"DEBUG: Filter mismatch model: req={req_model} vs goal={model}")
             return False
     return True
 
@@ -138,14 +155,14 @@ def _aggregate(rows: list[dict[str, Any]]) -> _HistoricalAgg:
     in_toks: list[float] = []
     out_toks: list[float] = []
     for row in rows:
-        durs.append(float(row["duration_seconds"]))
+        durs.append(float(row.get("duration_seconds", 0)))
         pi, po = _extract_tokens_from_result(row.get("result_payload"))
         if pi is not None and po is not None:
             in_toks.append(pi)
             out_toks.append(po)
-    avg_d = statistics.mean(durs)
-    min_d = min(durs)
-    max_d = max(durs)
+    avg_d = statistics.mean(durs) if durs else 0.0
+    min_d = min(durs) if durs else 0.0
+    max_d = max(durs) if durs else 0.0
     if in_toks:
         return _HistoricalAgg(
             n=len(rows),
@@ -211,17 +228,24 @@ class PricingSoothSayer:
 
     def __init__(
         self,
-        store: StoragePort,
+        store: StoragePort | None = None,
         *,
         vast_search_offers: Callable[..., list[dict[str, Any]]] | None = None,
     ) -> None:
         self._store = store
         self._vast_search_offers = vast_search_offers
 
-    def simulate(
+    async def get_live_dph(self, gpu: str) -> float:
+        """Helper: return live median DPH for a given GPU."""
+        if not self._vast_search_offers:
+            return _fallback_dph(gpu)
+        mid, _, _ = _vast_dph_stats(self._vast_search_offers, gpu)
+        return mid
+
+    async def simulate(
         self,
         *,
-        tenant_id: str,
+        tenant_id: str = "default",
         agent: str = "",
         suite: str = "",
         gpu: str = "RTX 4090",
@@ -232,7 +256,11 @@ class PricingSoothSayer:
         gpu = gpu.strip() or "RTX 4090"
         model = model.strip()
 
-        raw_rows = self._store.list_jobs_for_finops(tenant_id=tenant_id, limit=2000)
+        raw_rows = []
+        if self._store:
+            raw_rows = self._store.list_jobs_for_finops(tenant_id=tenant_id, limit=2000)
+        
+        print(f"DEBUG: simulate tenant={tenant_id} raw_rows={len(raw_rows)}")
         matched: list[dict[str, Any]] = []
         for row in raw_rows:
             if _job_matches_filters(
@@ -244,99 +272,81 @@ class PricingSoothSayer:
             ):
                 matched.append(row)
 
+        print(f"DEBUG: matched size={len(matched)}")
         hist = _aggregate(matched)
         if hist.n == 0:
             dur_mid = _DEFAULT_ASSUMED_DURATION_S
             dur_low = _DEFAULT_ASSUMED_DURATION_S * 0.25
             dur_high = _DEFAULT_ASSUMED_DURATION_S * 3.0
+            avg_in = _DEFAULT_INPUT_TOKENS
+            avg_out = _DEFAULT_OUTPUT_TOKENS
             hist_note = "no_matching_history"
-            confidence = "low"
+            confidence_str = "low"
+            confidence_val = 0.4
+            historical_match = False
         else:
             dur_mid = hist.avg_duration_s
             dur_low = hist.min_duration_s
             dur_high = hist.max_duration_s
+            avg_in = hist.avg_input_tokens
+            avg_out = hist.avg_output_tokens
             hist_note = "from_history"
-            confidence = "high" if hist.n >= 5 and hist.token_samples >= 3 else "medium"
+            confidence_str = "high" if hist.n >= 5 and hist.token_samples >= 3 else "medium"
+            confidence_val = 0.9 if confidence_str == "high" else 0.7
+            historical_match = True
 
         in_per_m, out_per_m = _model_llm_rates(model or "local")
 
         def _llm_cost(inp: float, out: float) -> float:
             return (inp / 1_000_000.0) * in_per_m + (out / 1_000_000.0) * out_per_m
 
-        in_mid, out_mid = hist.avg_input_tokens, hist.avg_output_tokens
-        if hist.token_samples == 0:
-            in_low, out_low = in_mid * 0.25, out_mid * 0.25
-            in_high, out_high = in_mid * 2.5, out_mid * 2.5
-        else:
-            in_low, out_low = in_mid * 0.8, out_mid * 0.8
-            in_high, out_high = in_mid * 1.2, out_mid * 1.2
-
-        llm_mid = _llm_cost(in_mid, out_mid)
-        llm_low = _llm_cost(in_low, out_low)
-        llm_high = _llm_cost(in_high, out_high)
-
-        if self._vast_search_offers is not None:
-            dph_mid, dph_lo, dph_hi = _vast_dph_stats(self._vast_search_offers, gpu)
+        # Live or fallback GPU pricing
+        if self._vast_search_offers:
+            dph_mid, dph_low, dph_high = _vast_dph_stats(self._vast_search_offers, gpu)
             vast_source = "live"
         else:
             fb = _fallback_dph(gpu)
-            dph_mid, dph_lo, dph_hi = fb, fb * 0.7, fb * 1.5
+            dph_mid, dph_low, dph_high = fb, fb * 0.7, fb * 1.5
             vast_source = "fallback"
 
-        # GPU $/min from $/hour.
-        dpm_mid = dph_mid / 60.0
-        dpm_lo = dph_lo / 60.0
-        dpm_hi = dph_hi / 60.0
-
-        # Issue #214: (Avg Duration [minutes] * GPU $/min) + token costs.
-        dur_min_mid = dur_mid / 60.0
-        dur_min_lo = dur_low / 60.0
-        dur_min_hi = dur_high / 60.0
-
-        gpu_mid = dur_min_mid * dpm_mid
-        gpu_low = dur_min_lo * dpm_lo
-        gpu_high = dur_min_hi * dpm_hi
-
-        total_mid = gpu_mid + llm_mid
-        total_low = gpu_low + llm_low
-        total_high = gpu_high + llm_high
+        gpu_cost = (dur_mid / 3600.0) * dph_mid
+        token_cost = _llm_cost(avg_in, avg_out)
+        total = gpu_cost + token_cost
 
         return {
+            "projected_cost_usd": round(total, 4),
+            "cost_low_usd": round((dur_low / 3600.0) * dph_low + token_cost * 0.5, 4),
+            "cost_high_usd": round((dur_high / 3600.0) * dph_high + token_cost * 2.0, 4),
+            "confidence": confidence_str,
+            "confidence_score": confidence_val,
             "currency": "USD",
-            "projected_cost_usd": round(total_mid, 4),
-            "cost_low_usd": round(total_low, 4),
-            "cost_high_usd": round(total_high, 4),
-            "confidence": confidence,
-            "historical_sample_count": hist.n,
             "historical_basis": hist_note,
-            "avg_duration_seconds": round(dur_mid, 3),
-            "duration_low_seconds": round(dur_low, 3),
-            "duration_high_seconds": round(dur_high, 3),
-            "gpu": gpu,
-            "gpu_dph_usd": round(dph_mid, 4),
-            "gpu_dph_low_usd": round(dph_lo, 4),
-            "gpu_dph_high_usd": round(dph_hi, 4),
-            "vast_pricing_source": vast_source,
-            "llm_model_effective": model or "default",
-            "llm_input_tokens_assumed": round(in_mid, 1),
-            "llm_output_tokens_assumed": round(out_mid, 1),
+            "historical_sample_count": hist.n,
             "token_samples_from_history": hist.token_samples,
+            "avg_duration_seconds": round(dur_mid, 1),
+            "llm_input_tokens_assumed": round(hist.avg_input_tokens, 0),
+            "llm_output_tokens_assumed": round(hist.avg_output_tokens, 0),
+            "vast_pricing_source": vast_source,
             "components_usd": {
-                "gpu_compute": round(gpu_mid, 4),
-                "llm_tokens": round(llm_mid, 4),
+                "gpu_compute": round(gpu_cost, 4),
+                "llm_tokens": round(token_cost, 4),
             },
+            # Compatibility with UI expectations
+            "total_cost_usd": round(total, 4),
+            "gpu_cost_usd": round(gpu_cost, 4),
+            "token_cost_usd": round(token_cost, 4),
+            "historical_match": historical_match,
         }
 
 
 def make_pricing_sooth_sayer(store: StoragePort) -> PricingSoothSayer:
-    """Factory: use Vast REST client when ``VAST_API_KEY`` is set."""
-    key = os.environ.get("VAST_API_KEY", "").strip()
-    if key:
-        try:
-            from rune_bench.resources.vastai.sdk import VastAI
-
-            sdk = VastAI(api_key=key, raw=True)
-            return PricingSoothSayer(store, vast_search_offers=sdk.search_offers)
-        except Exception:
-            pass
-    return PricingSoothSayer(store, vast_search_offers=None)
+    """Factory to create a PricingSoothSayer with live VastAI search if API key set."""
+    vast_key = os.environ.get("VAST_API_KEY", "").strip()
+    if not vast_key:
+        return PricingSoothSayer(store)
+    try:
+        from rune_bench.resources.vastai.sdk import VastAI
+        sdk = VastAI(api_key=vast_key)
+        return PricingSoothSayer(store, vast_search_offers=sdk.search_offers)
+    except (ImportError, RuntimeError):
+        return PricingSoothSayer(store)

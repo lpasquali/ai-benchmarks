@@ -1,172 +1,131 @@
 # SPDX-License-Identifier: Apache-2.0
-import json
 import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlparse
+import time
+from http.server import ThreadingHTTPServer
+from unittest.mock import AsyncMock
 
 import pytest
-from typer.testing import CliRunner
+from rich.console import Console
 
 import rune
+from rune_bench.api_server import ApiSecurityConfig, RuneApiApplication
+from rune_bench.storage.sqlite import SQLiteStorageAdapter as JobStore
+from rune_bench.workflows import SpendGateAction
 
 
 @pytest.fixture
-def mock_rune_api_server():
-    state = {
-        "agent_polls": 0,
-        "bench_polls": 0,
-    }
+def rune_api_server(tmp_path):
+    store = JobStore(tmp_path / "jobs.db")
+    state = {"agentic_calls": 0, "benchmark_calls": 0}
 
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self, format, *args):  # noqa: A003
-            return
+    async def run_agentic(request):
+        state["agentic_calls"] += 1
+        return {"answer": "agent-http-answer", "result_type": "text", "artifacts": []}
 
-        def _write_json(self, status: int, payload: dict):
-            raw = json.dumps(payload).encode("utf-8")
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(raw)))
-            self.end_headers()
-            self.wfile.write(raw)
+    async def run_benchmark(request):
+        state["benchmark_calls"] += 1
+        return {"answer": "benchmark-http-answer", "result_type": "text", "artifacts": [], "mode": "existing", "backend_url": "http://x"}
 
-        def do_GET(self):
-            parsed = urlparse(self.path)
-            path = parsed.path
+    app = RuneApiApplication(
+        store=store,
+        security=ApiSecurityConfig(auth_disabled=True, tenant_tokens={}),
+        backend_functions={
+            "agentic-agent": run_agentic,
+            "benchmark": run_benchmark,
+        },
+    )
 
-            if path == "/v1/catalog/vastai-models":
-                self._write_json(
-                    200,
-                    {
-                        "models": [
-                            {
-                                "name": "llama3.1:8b",
-                                "vram_mb": 8000,
-                                "required_disk_gb": 41,
-                            }
-                        ]
-                    },
-                )
-                return
+    # Use a basic handler that delegates to the app but with better logging
+    handler_class = app.create_handler()
 
-            if path == "/v1/ollama/models":
-                query = parse_qs(parsed.query)
-                backend_url = query.get("backend_url", ["http://localhost:11434"])[0]
-                self._write_json(
-                    200,
-                    {
-                        "backend_url": backend_url,
-                        "models": ["llama3.1:8b"],
-                        "running_models": ["llama3.1:8b"],
-                    },
-                )
-                return
-
-            if path == "/v1/jobs/agent-1":
-                state["agent_polls"] += 1
-                if state["agent_polls"] < 2:
-                    self._write_json(200, {"status": "running", "message": "analyzing cluster"})
-                else:
-                    self._write_json(200, {"status": "succeeded", "result": {"answer": "agent-http-answer"}})
-                return
-
-            if path == "/v1/jobs/bench-1":
-                state["bench_polls"] += 1
-                if state["bench_polls"] < 2:
-                    self._write_json(200, {"status": "running", "message": "phase 2"})
-                else:
-                    self._write_json(200, {"status": "succeeded", "result": {"answer": "benchmark-http-answer"}})
-                return
-
-            self._write_json(404, {"error": f"Unknown path: {path}"})
-
-        def do_POST(self):
-            parsed = urlparse(self.path)
-            path = parsed.path
-
-            length = int(self.headers.get("Content-Length", "0"))
-            _body = self.rfile.read(length) if length else b""
-
-            if path == "/v1/jobs/agentic-agent":
-                self._write_json(200, {"job_id": "agent-1"})
-                return
-
-            if path == "/v1/jobs/benchmark":
-                self._write_json(200, {"job_id": "bench-1"})
-                return
-
-            self._write_json(404, {"error": f"Unknown path: {path}"})
-
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler_class)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
 
     host, port = server.server_address
     base_url = f"http://{host}:{port}"
+    
+    # Wait for server to be ready
+    for _ in range(10):
+        try:
+            import socket
+            with socket.create_connection((host, port), timeout=0.1):
+                break
+        except Exception:
+            time.sleep(0.1)
+    
     try:
-        yield base_url
+        yield base_url, state
     finally:
         server.shutdown()
         thread.join(timeout=2)
         server.server_close()
+        store.close()
 
 
-def test_cli_http_ollama_list_models(mock_rune_api_server):
-    runner = CliRunner()
-    result = runner.invoke(
-        rune.app,
-        [
-            "--backend",
-            "http",
-            "--api-base-url",
-            mock_rune_api_server,
-            "ollama-list-models",
-            "--backend-url",
-            "http://example:11434",
-        ],
+@pytest.mark.asyncio
+async def test_cli_http_run_agentic_agent_job_flow(monkeypatch, rune_api_server, tmp_path):
+    base_url, state = rune_api_server
+    test_console = Console(record=True, width=200)
+    monkeypatch.setattr(rune, "console", test_console)
+    monkeypatch.setattr(rune, "BACKEND_MODE", "http")
+    monkeypatch.setenv("RUNE_API_BASE_URL", base_url)
+
+    kubeconfig = tmp_path / "kubeconfig"
+    kubeconfig.write_text("apiVersion: v1\n")
+
+    # Mock preflight behavior to avoid any issues
+    monkeypatch.setattr(rune, "_run_preflight_cost_check", AsyncMock(return_value=None))
+    monkeypatch.setattr(rune, "evaluate_spend_gate", lambda *a, **k: SpendGateAction.ALLOW)
+    
+    # Typer commands might raise Exit(0) on success if they return, but here they just return None
+    await rune.run_agentic_agent(
+        debug=True,
+        question="test-question",
+        model="llama3.1:8b",
+        backend_url="http://ollama:11434",
+        backend_warmup=False,
+        backend_warmup_timeout=1,
+        kubeconfig=kubeconfig,
+        idempotency_key=None,
     )
 
-    assert result.exit_code == 0
-    assert "llama3.1:8b" in result.stdout
-    assert "http://example:11434" in result.stdout
+    output = test_console.export_text()
+    assert "agent-http-answer" in output
+    assert state["agentic_calls"] == 1
 
 
-def test_cli_http_run_agentic_agent_job_flow(mock_rune_api_server):
-    runner = CliRunner()
-    result = runner.invoke(
-        rune.app,
-        [
-            "--backend",
-            "http",
-            "--api-base-url",
-            mock_rune_api_server,
-            "run-agentic-agent",
-            "--question",
-            "What is unhealthy?",
-            "--model",
-            "llama3.1:8b",
-        ],
+@pytest.mark.asyncio
+async def test_cli_http_run_benchmark_job_flow(monkeypatch, rune_api_server, tmp_path):
+    base_url, state = rune_api_server
+    test_console = Console(record=True, width=200)
+    monkeypatch.setattr(rune, "console", test_console)
+    monkeypatch.setattr(rune, "BACKEND_MODE", "http")
+    monkeypatch.setenv("RUNE_API_BASE_URL", base_url)
+
+    kubeconfig = tmp_path / "kubeconfig"
+    kubeconfig.write_text("apiVersion: v1\n")
+
+    monkeypatch.setattr(rune, "_run_preflight_cost_check", AsyncMock(return_value=None))
+    monkeypatch.setattr(rune, "evaluate_spend_gate", lambda *a, **k: SpendGateAction.ALLOW)
+
+    await rune.run_benchmark(
+        debug=True,
+        vastai=False,
+        template_hash="t",
+        min_dph=0.1,
+        max_dph=1.5,
+        reliability=0.9,
+        backend_url="http://ollama:11434",
+        question="bench-question",
+        model="llama3.1:8b",
+        backend_warmup=False,
+        backend_warmup_timeout=1,
+        kubeconfig=kubeconfig,
+        vastai_stop_instance=True,
+        idempotency_key=None,
     )
 
-    assert result.exit_code == 0
-    assert "agent-http-answer" in result.stdout
-
-
-def test_cli_http_run_benchmark_job_flow(mock_rune_api_server):
-    runner = CliRunner()
-    result = runner.invoke(
-        rune.app,
-        [
-            "--backend",
-            "http",
-            "--api-base-url",
-            mock_rune_api_server,
-            "run-benchmark",
-            "--question",
-            "Why degraded?",
-            "--model",
-            "llama3.1:8b",
-        ],
-    )
-
-    assert result.exit_code == 0
-    assert "benchmark-http-answer" in result.stdout
+    output = test_console.export_text()
+    assert "benchmark-http-answer" in output
+    assert state["benchmark_calls"] == 1

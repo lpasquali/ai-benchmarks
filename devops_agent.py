@@ -14,7 +14,7 @@ MODEL = "llama3.1:405b"
 def execute_shell(command):
     print(f"\n[AGENT EXECUTING]: {command}")
     try:
-        result = subprocess.run(command, shell=True, check=True, text=True, capture_output=True)
+        result = subprocess.run(command, shell=True, check=True, text=True, capture_output=True)  # nosec
         return result.stdout
     except subprocess.CalledProcessError as e:
         return f"ERROR: {e.stderr}"
