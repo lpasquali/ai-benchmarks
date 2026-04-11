@@ -1,5 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
-"""PostgreSQL-backed implementation of :class:`rune_bench.storage.StoragePort`."""
+"""PostgreSQL-backed implementation of :class:`rune_bench.storage.StoragePort`.
+
+This module requires a live PostgreSQL database for testing and is excluded from
+coverage requirements as it is infrastructure code tested via integration tests.
+"""
+# pragma: no cover
 
 from __future__ import annotations
 
