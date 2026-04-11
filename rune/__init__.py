@@ -1087,7 +1087,6 @@ async def run_benchmark(
     set_collector(_cli_metrics)
     selected_model_name = model
     selected_backend_url = backend_url
-    console.print(f"DEBUG: selected_backend_url={selected_backend_url}")
     vastai_contract_to_stop: int | str | None = None
 
     if vastai:

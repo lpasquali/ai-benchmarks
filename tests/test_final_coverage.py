@@ -1,9 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 import pytest
+import hashlib
 import os
+import typer
+import json
+import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-from rune_bench.api_server import _audit_artifact_content_type, RuneApiApplication, ApiSecurityConfig
+from unittest.mock import MagicMock, patch, AsyncMock
+from rune_bench.api_server import _audit_artifact_content_type, RuneApiApplication, ApiSecurityConfig, _job_to_payload
 from rune_bench.api_contracts import (
     TokenBreakdown, LatencyPhase, RunStatusResponse,
     UpdateSettingsRequest, CreateProfileRequest, _check_max_str,
@@ -11,6 +15,7 @@ from rune_bench.api_contracts import (
 )
 from rune_bench.api_backend import _vastai_sdk
 from rune_bench.drivers.holmes import HolmesDriverClient
+from rune_bench.metrics.cost import calculate_run_cost
 from rune import app
 
 def test_extra_artifact_types():
@@ -29,7 +34,7 @@ def test_api_contracts_to_dict():
     assert CreateProfileRequest(name="n", settings={}).to_dict()["name"] == "n"
     
     # More contracts
-    assert RunAgenticAgentRequest(question="q", model="m", backend_url=None, backend_warmup=True, backend_warmup_timeout=10).to_dict()["question"] == "q"
+    assert RunAgenticAgentRequest(question="q", model="m", backend_url=None, backend_warmup=True, backend_warmup_timeout=10, kubeconfig="k").to_dict()["question"] == "q"
     assert RunBenchmarkRequest(provisioning=None, backend_url=None, question="q", model="m", backend_warmup=True, backend_warmup_timeout=10, kubeconfig="k").to_dict()["question"] == "q"
     assert RunLLMInstanceRequest(provisioning=None, backend_url=None).to_dict()["provisioning"] is None
     assert CostEstimationRequest(model="m").to_dict()["model"] == "m"
@@ -50,7 +55,8 @@ async def test_api_application_dispatch_more_kinds():
     # Trigger from_dict branches
     payload = {
         "question": "q", "model": "m", "backend_url": "u", 
-        "backend_warmup": True, "backend_warmup_timeout": 10
+        "backend_warmup": True, "backend_warmup_timeout": 10,
+        "kubeconfig": "k"
     }
     await app._dispatch("agentic-agent", payload)
     # CostEstimationRequest has model, but not agent
@@ -400,6 +406,28 @@ def test_api_server_serve_keyboard_interrupt():
         mock_server.return_value.serve_forever.side_effect = KeyboardInterrupt()
         app.serve()
         assert mock_server.return_value.server_close.called
+
+@pytest.mark.asyncio
+async def test_calculate_run_cost_coverage():
+    # Hit lines 30, 32, 42-44 in metrics/cost.py
+    mock_estimator = MagicMock()
+    # 1. Known cloud (azure) - line 30
+    mock_estimator.estimate = AsyncMock(return_value=MagicMock(project_cost_usd=0.5))
+    await calculate_run_cost("azure", "m", 100, estimator=mock_estimator)
+    
+    # 2. Unknown cloud (local) - line 32
+    await calculate_run_cost("local", "m", 100, estimator=mock_estimator)
+    
+    # 3. Exception fallback - lines 42-44
+    mock_estimator.estimate.side_effect = Exception("fail")
+    cost = await calculate_run_cost("vastai", "m", 3600, estimator=mock_estimator)
+    assert cost == 2.5
+
+def test_job_to_payload_coverage():
+    # Hit _job_to_payload with non-JobRecord object
+    res = _job_to_payload("some-id")
+    assert res["job_id"] == "some-id"
+    assert res["status"] == "pending"
 
 def test_langgraph_model_normalize():
     from rune_bench.drivers.langgraph.__main__ import _normalize_model
