@@ -1,10 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Copy an existing SQLite RUNE database into PostgreSQL in bounded batches.
-
-This module requires both SQLite and PostgreSQL databases for testing and is excluded
-from coverage requirements as it is infrastructure code tested via integration tests.
-"""
-# pragma: no cover
+"""Copy an existing SQLite RUNE database into PostgreSQL in bounded batches."""
 
 from __future__ import annotations
 
