@@ -26,6 +26,10 @@ class StoragePort(Protocol):
 
     # ── Lifecycle ──────────────────────────────────────────────────────────
 
+    def close(self) -> None:
+        """Close any persistent connections or resources held by the store."""
+        ...
+
     def mark_incomplete_jobs_failed(
         self, message: str = "server restarted before job completion"
     ) -> None:

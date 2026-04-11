@@ -39,7 +39,10 @@ def api_server(test_app):
     )
     server_thread.start()
     time.sleep(0.5)  # Give server time to start
-    yield f"127.0.0.1:{port}"
+    try:
+        yield f"127.0.0.1:{port}"
+    finally:
+        test_app.store.close()
 
 
 def test_request_size_limit_enforced(api_server):

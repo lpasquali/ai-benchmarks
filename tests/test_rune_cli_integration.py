@@ -32,11 +32,6 @@ def _result():
 async def test_run_http_job_with_progress_logic(monkeypatch):
     client = rune.RuneApiClient("http://api:8080")
     
-    responses = [
-        {"status": "queued"},
-        {"status": "running"},
-        {"status": "succeeded", "result": {"answer": "ok"}}
-    ]
     # RuneApiClient.wait_for_job is sync
     def mock_wait(*a, **k):
         return {"status": "succeeded", "result": {"answer": "ok"}}

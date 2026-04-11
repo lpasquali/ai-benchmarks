@@ -25,7 +25,6 @@ try:
 except ImportError:
     VastAI = None  # type: ignore[assignment,misc]
 
-from rune_bench.metrics.cost import calculate_run_cost
 from rune_bench.api_client import RuneApiClient
 from rune_bench.api_contracts import (
     RunAgenticAgentRequest,
@@ -42,6 +41,7 @@ from rune_bench.common import (
 )
 from rune_bench.debug import set_debug
 from rune_bench.metrics import InMemoryCollector, set_collector, clear_collector
+from rune_bench.metrics.cost import calculate_run_cost
 from rune_bench.backends import get_backend
 from rune_bench.backends.base import ModelCapabilities
 from rune_bench.agents.registry import get_agent
@@ -518,6 +518,7 @@ def _run_vastai_provisioning(
     min_dph: float,
     max_dph: float,
     reliability: float,
+    yes: bool = False,
 ) -> VastAIProvisioningResult:
     sdk = _vastai_sdk()
 
@@ -526,6 +527,17 @@ def _run_vastai_provisioning(
 
         def on_poll(status: str) -> None:
             p.update(task, description=f"Waiting for running status: {status}")
+
+        def _confirm_instance_creation() -> bool:
+            if yes:
+                return True
+            console.print("\n[bold yellow]Interactive Spend Confirmation[/bold yellow]")
+            console.print("This action will provision a new instance on Vast.ai.")
+            try:
+                answer = input("Do you want to proceed? [y/N]: ").strip().lower()
+                return answer in {"y", "yes"}
+            except EOFError:
+                return False
 
         try:
             return provision_vastai_backend(
@@ -706,6 +718,7 @@ async def run_llm_instance(
         min_dph=min_dph,
         max_dph=max_dph,
         reliability=reliability,
+        yes=yes,
     )
     _print_vastai_result(result)
     _print_metrics_summary(_cli_metrics)
@@ -1064,6 +1077,7 @@ async def run_benchmark(
             min_dph=min_dph,
             max_dph=max_dph,
             reliability=reliability,
+            yes=yes,
         )
         selected_model_name = result.model_name
         selected_backend_url = result.backend_url
@@ -1267,3 +1281,33 @@ def show_config() -> None:
         "\n[dim]Secrets (RUNE_API_TOKEN, VAST_API_KEY) are never shown here — "
         "check your environment directly.[/dim]"
     )
+
+@db_app.command("migrate-to-postgres")
+def db_migrate_to_postgres(
+    source: str = typer.Option("sqlite:///home/ubuntu/.rune/jobs.db", "--source", help="Source SQLite URL"),
+    target: str = typer.Option(..., "--target", help="Target Postgres URL"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be migrated without writing"),
+) -> None:
+    """Migrate jobs and events from SQLite to PostgreSQL."""
+    from rune_bench.storage.migrate_to_postgres import migrate_to_postgres
+    
+    console.print(f"[bold blue]Migrating from {source} to PostgreSQL...[/bold blue]")
+    try:
+        results = migrate_to_postgres(source_url=source, target_url=target, dry_run=dry_run)
+        
+        table = Table(title="Migration Results")
+        table.add_column("Table")
+        table.add_column("Source Count")
+        table.add_column("Migrated Count")
+        
+        for r in results:
+            table.add_row(r.table, str(r.source_count), str(r.migrated_count))
+        
+        console.print(table)
+        if dry_run:
+            console.print("[yellow]Dry run: no data was written to target.[/yellow]")
+        else:
+            console.print("[green]Migration complete.[/green]")
+    except Exception as exc:
+        console.print(f"[red]Migration failed:[/red] {exc}")
+        raise typer.Exit(1)

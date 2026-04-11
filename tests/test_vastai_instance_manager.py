@@ -164,19 +164,20 @@ def test_api_security_from_env(monkeypatch):
     long_a, long_b = "a" * 32, "b" * 32
     monkeypatch.setenv("RUNE_API_TOKENS", f"tenant-a:{long_a},tenant-b:{long_b}")
     cfg = api_server.ApiSecurityConfig.from_env()
-    assert cfg.tenant_tokens["tenant-b"] == hashlib.sha256("token-b".encode("utf-8")).hexdigest()
-
+    assert cfg.tenant_tokens["tenant-b"] == hashlib.sha256(long_b.encode("utf-8")).hexdigest()
 
 def test_api_server_misc_paths(misc_server):
     base_url, app = misc_server
 
-    with urlopen(f"{base_url}/v1/catalog/vastai-models") as response:  # nosec  # test request mock/local execution
+    with urlopen(f"{base_url}/v1/catalog/vastai-models") as response:  # nosec
         payload = json.loads(response.read().decode("utf-8"))
-    assert "models" in payload
+    assert isinstance(payload, list)
+    assert any(m["name"] == "llama3.1:8b" for m in payload)
 
-    req = Request(f"{base_url}/v1/ollama/models")
+
+    req = Request(f"{base_url}/v1/catalog/models")
     with pytest.raises(HTTPError) as exc:
-        urlopen(req)  # nosec  # test request mock/local execution
+        urlopen(req)  # nosec
     assert exc.value.code == 400
 
     bad_req = Request(
@@ -186,15 +187,16 @@ def test_api_server_misc_paths(misc_server):
         method="POST",
     )
     with pytest.raises(HTTPError) as exc:
-        urlopen(bad_req)  # nosec  # test request mock/local execution
+        urlopen(bad_req)  # nosec
     assert exc.value.code == 400
 
     unknown_req = Request(f"{base_url}/nope")
     with pytest.raises(HTTPError) as exc:
-        urlopen(unknown_req)  # nosec  # test request mock/local execution
+        urlopen(unknown_req)  # nosec
     assert exc.value.code == 404
 
     job = app.store.create_job(tenant_id="default", kind="agentic-agent", request_payload={})[0]
+
     with urlopen(f"{base_url}/v1/jobs/{job}") as response:  # nosec  # test request mock/local execution
         payload = json.loads(response.read().decode("utf-8"))
     assert payload["job_id"] == job
@@ -226,12 +228,13 @@ async def test_api_server_internal_dispatch_and_failures(tmp_path):
                 "model": "m",
                 "backend_warmup": False,
                 "backend_warmup_timeout": 1,
-                "kubeconfig": "/tmp/k",  # nosec  # test artifact paths
+                "kubeconfig": "/tmp/k",  # nosec
                 "vastai_stop_instance": False,
             },
         )
 
-    await app._execute_job("missing", "agentic-agent", {"question": "q", "model": "m", "backend_url": None, "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"})  # nosec  # test artifact paths
+    handler = app.backend_functions["agentic-agent"]
+    await app._execute_job("missing", handler, "agentic-agent", {"question": "q", "model": "m", "backend_url": None, "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"})  # nosec
     assert store.get_job("missing") is None
 
 

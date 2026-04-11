@@ -18,12 +18,13 @@ import pathlib
 import re
 import sqlite3
 import time
+from typing import Any
 
 _FILENAME_RE = re.compile(r"^(\d{4})_.*\.sql$")
 
 
 class Migrator:
-    """Apply pending SQL migrations to a SQLite connection.
+    """Apply pending SQL migrations to a database connection.
 
     The migrations directory contains ``NNNN_<slug>.sql`` files. Each file is
     executed in a single transaction and, on success, the version is recorded
@@ -31,14 +32,16 @@ class Migrator:
     up-to-date database is a no-op.
     """
 
-    def __init__(self, *, migrations_dir: pathlib.Path | None = None) -> None:
+    def __init__(self, *, migrations_dir: pathlib.Path | None = None, dialect: str = "sqlite") -> None:
         self._migrations_dir = (
             migrations_dir
             if migrations_dir is not None
             else pathlib.Path(__file__).parent / "migrations"
         )
+        self._dialect = dialect
+        self._placeholder = "%s" if dialect == "postgres" else "?"
 
-    def apply_pending(self, conn: sqlite3.Connection) -> list[int]:
+    def apply_pending(self, conn: Any) -> list[int]:
         """Apply every migration newer than the current ``schema_version``.
 
         Returns the list of newly-applied version numbers (empty if the
@@ -55,23 +58,27 @@ class Migrator:
             if version in applied:
                 continue
             sql_text = path.read_text(encoding="utf-8")
-            # SQLite's ``executescript()`` issues an implicit COMMIT before
-            # running, which would break our explicit BEGIN…COMMIT envelope.
-            # Split on ';' and execute each non-empty statement individually
-            # so the whole migration lives inside one transaction and we can
-            # ROLLBACK cleanly on failure.
+            
+            # Split on ';' and execute each non-empty statement individually.
+            # For SQLite we must do this to avoid implicit COMMITs.
+            # For Postgres we can execute all at once, but keeping it uniform is simpler.
             statements = [s.strip() for s in sql_text.split(";") if s.strip()]
-            conn.execute("BEGIN")
+            
+            if self._dialect == "sqlite":
+                conn.execute("BEGIN")
+            
             try:
                 for statement in statements:
                     conn.execute(statement)
                 conn.execute(
-                    "INSERT INTO schema_version(version, applied_at) VALUES (?, ?)",
+                    f"INSERT INTO schema_version(version, applied_at) VALUES ({self._placeholder}, {self._placeholder})",
                     (version, time.time()),
                 )
-                conn.commit()
+                if self._dialect == "sqlite":
+                    conn.commit()
             except Exception as exc:
-                conn.rollback()
+                if self._dialect == "sqlite":
+                    conn.rollback()
                 raise RuntimeError(
                     f"migration {version} ({path.name}) failed: {exc}"
                 ) from exc
@@ -79,19 +86,30 @@ class Migrator:
 
         return newly_applied
 
-    def _ensure_bookkeeping_table(self, conn: sqlite3.Connection) -> None:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS schema_version (
-                version INTEGER PRIMARY KEY,
-                applied_at REAL NOT NULL
+    def _ensure_bookkeeping_table(self, conn: Any) -> None:
+        if self._dialect == "sqlite":
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS schema_version (
+                    version INTEGER PRIMARY KEY,
+                    applied_at REAL NOT NULL
+                )
+                """
             )
-            """
-        )
-        conn.commit()
+            conn.commit()
+        else:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS schema_version (
+                    version INTEGER PRIMARY KEY,
+                    applied_at DOUBLE PRECISION NOT NULL
+                )
+                """
+            )
 
-    def _already_applied(self, conn: sqlite3.Connection) -> set[int]:
-        rows = conn.execute("SELECT version FROM schema_version").fetchall()
+    def _already_applied(self, conn: Any) -> set[int]:
+        cursor = conn.execute("SELECT version FROM schema_version")
+        rows = cursor.fetchall()
         return {int(row[0]) for row in rows}
 
     def _discover(self) -> list[tuple[int, pathlib.Path]]:

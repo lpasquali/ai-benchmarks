@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import os
 import statistics
-from dataclasses import dataclass, asdict
-from typing import Any, Callable, Optional
+from dataclasses import dataclass
+from typing import Any, Callable
 
 from rune_bench.storage import StoragePort
 

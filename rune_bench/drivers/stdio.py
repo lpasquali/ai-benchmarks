@@ -13,6 +13,7 @@ import subprocess
 import uuid
 
 from rune_bench.debug import debug_log
+from rune_bench.drivers.timeouts import driver_invocation_timeout_seconds
 
 
 class StdioTransport:
@@ -29,7 +30,8 @@ class StdioTransport:
         request_id = str(uuid.uuid4())
         request = {"action": action, "params": params, "id": request_id}
         request_json = json.dumps(request)
-        debug_log(f"StdioTransport → {self._cmd[0]} action={action!r} id={request_id}")
+        timeout = driver_invocation_timeout_seconds()
+        debug_log(f"StdioTransport → {self._cmd[0]} action={action!r} id={request_id} timeout={timeout}")
 
         try:
             result = subprocess.run(  # noqa: S603
@@ -38,7 +40,10 @@ class StdioTransport:
                 capture_output=True,
                 text=True,
                 check=False,
+                timeout=timeout,
             )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(f"Driver process {self._cmd[0]!r} timed out after {timeout}s (SR-Q-011)") from exc
         except OSError as exc:
             raise RuntimeError(
                 f"Failed to spawn driver process {self._cmd!r}: {exc}"
@@ -78,7 +83,8 @@ class AsyncStdioTransport:
         request_id = str(uuid.uuid4())
         request = {"action": action, "params": params, "id": request_id}
         request_json = json.dumps(request)
-        debug_log(f"AsyncStdioTransport → {self._cmd[0]} action={action!r} id={request_id}")
+        timeout = driver_invocation_timeout_seconds()
+        debug_log(f"AsyncStdioTransport → {self._cmd[0]} action={action!r} id={request_id} timeout={timeout}")
 
         proc = await asyncio.create_subprocess_exec(
             *self._cmd,
@@ -87,7 +93,17 @@ class AsyncStdioTransport:
             stderr=asyncio.subprocess.PIPE,
         )
 
-        stdout, stderr = await proc.communicate(input=request_json.encode() + b"\n")
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(input=request_json.encode() + b"\n"),
+                timeout=timeout
+            )
+        except asyncio.TimeoutError as exc:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+            raise RuntimeError(f"Driver process {self._cmd[0]!r} timed out after {timeout}s (SR-Q-011)") from exc
 
         if proc.returncode != 0:
             detail = stderr.decode().strip() or stdout.decode().strip() or f"exit {proc.returncode}"

@@ -12,10 +12,10 @@ import threading
 import time
 import asyncio
 import inspect
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Callable, TypeAlias, Any
+from typing import Callable, TypeAlias
 from urllib.parse import parse_qs, urlparse
 
 from rune_bench.api_backend import (
@@ -39,10 +39,8 @@ from rune_bench.common import (
     create_profile,
     get_raw_config,
     load_config,
-    peek_profile_from_argv,
     update_settings,
 )
-from rune_bench.metrics import SQLiteMetricsCollector, clear_collector, set_collector, set_job_id, span
 from rune_bench.metrics.pricing import PricingSoothSayer
 from rune_bench.storage import StoragePort
 from rune_bench.storage.sqlite import JobRecord, SQLiteStorageAdapter
@@ -207,9 +205,12 @@ class RuneApiApplication:
             history.append(now)
             self._rate_limits[tenant_id] = history
 
-    def _dispatch(self, kind: str, payload: dict) -> dict:
+    async def _dispatch(self, kind: str, payload: dict) -> dict:
         handler = self.backend_functions.get(kind)
+        supported_kinds = ("agentic-agent", "benchmark", "ollama-instance", "llm-instance", "cost-estimate")
         if not handler:
+            if kind in supported_kinds:
+                raise RuntimeError(f"no backend function registered for: {kind}")
             raise RuntimeError(f"unsupported job kind: {kind}")
         
         if kind == "agentic-agent":
@@ -223,15 +224,10 @@ class RuneApiApplication:
         else:
             raise ValueError(f"unsupported kind: {kind}")
 
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            res = handler(req)
-            if inspect.isawaitable(res):
-                return loop.run_until_complete(res)
-            return res
-        finally:
-            loop.close()
+        res = handler(req)
+        if inspect.isawaitable(res):
+            return await res
+        return res
 
     def create_handler(self) -> type[BaseHTTPRequestHandler]:
         app = self
@@ -294,7 +290,7 @@ class RuneApiApplication:
                     self._write_json(401, {"error": "unauthorized"})
                     return
 
-                if path == "/v1/catalog/models" or path == "/v1/catalog/vastai-models":
+                if path in ("/v1/catalog/models", "/v1/catalog/vastai-models", "/v1/ollama/models", "/v1/llm/models"):
                     query = parse_qs(parsed.query)
                     backend_url = query.get("backend_url", [""])[0]
                     backend_type = query.get("backend_type", ["ollama"])[0]
@@ -344,12 +340,22 @@ class RuneApiApplication:
                     return
 
                 if path == "/v1/settings":
-                    config = get_raw_config()
-                    if "profiles" in config:
-                        for p in config["profiles"].values():
-                            if "api_token" in p:
+                    raw = get_raw_config()
+                    effective = load_config(os.environ.get("RUNE_PROFILE"))
+                    
+                    # Redact tokens in profiles
+                    if "profiles" in raw:
+                        for p in raw["profiles"].values():
+                            if isinstance(p, dict) and "api_token" in p:
                                 p["api_token"] = "[REDACTED]"
-                    self._write_json(200, config)
+                    
+                    resp = SettingsResponse(
+                        defaults=raw.get("defaults", {}),
+                        profiles=raw.get("profiles", {}),
+                        active_profile=os.environ.get("RUNE_PROFILE"),
+                        effective_config=effective
+                    )
+                    self._write_json(200, resp.to_dict())
                     return
 
                 if path.startswith("/v1/runs/") and path.endswith("/trace"):
@@ -367,6 +373,10 @@ class RuneApiApplication:
                     
                     last_event_id = 0
                     while True:
+                        job = app.store.get_job(run_id)
+                        if not job:
+                            return
+
                         events = app.store.get_events_for_job(run_id, after_id=last_event_id)
                         for e in events:
                             data = json.dumps(e)
@@ -374,11 +384,14 @@ class RuneApiApplication:
                                 self.wfile.write(f"event: log\ndata: {data}\n\n".encode())
                                 self.wfile.flush()
                                 last_event_id = max(last_event_id, e.get("id", 0))
-                            except (ConnectionResetError, BrokenPipeError):
+                            except Exception:
                                 return
                         
                         if job.status in ("succeeded", "failed", "cancelled"):
-                            self.wfile.write(b"event: end\ndata: {}\n\n")
+                            try:
+                                self.wfile.write(b"event: end\ndata: {}\n\n")
+                            except Exception:
+                                pass
                             return
                         
                         time.sleep(1)
@@ -478,7 +491,7 @@ class RuneApiApplication:
 
                 length = int(self.headers.get("Content-Length", 0))
                 if length > 10 * 1024 * 1024:  # 10MB limit
-                    self._write_json(413, {"error": "request too large"})
+                    self._write_json(413, {"error": "request too large (exceeds maximum size of 10 MiB)"})
                     return
                 
                 body = self.rfile.read(length) if length > 0 else b"{}"
@@ -490,13 +503,13 @@ class RuneApiApplication:
 
                 if path == "/v1/settings":
                     req = UpdateSettingsRequest(**data)
-                    update_settings(req)
+                    update_settings(req.settings, req.profile)
                     self._write_json(200, {"status": "updated"})
                     return
                 
                 if path == "/v1/settings/profiles":
                     req = CreateProfileRequest(**data)
-                    create_profile(req)
+                    create_profile(req.name, req.settings)
                     self._write_json(201, {"status": "created"})
                     return
 
@@ -507,6 +520,10 @@ class RuneApiApplication:
                         self._write_json(404, {"error": f"unknown job kind: {kind}"})
                         return
                     
+                    if not isinstance(data, dict):
+                        self._write_json(400, {"error": "request body must be a JSON object"})
+                        return
+
                     idem_key = self.headers.get("Idempotency-Key") or self.headers.get("X-Idempotency-Key")
                     job_id, created = app.store.create_job(
                         tenant_id=tenant_id, 
@@ -516,8 +533,16 @@ class RuneApiApplication:
                     )
                     
                     if created:
+                        def _run_in_thread(job_id_inner, handler_inner, kind_inner, data_inner):
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            try:
+                                loop.run_until_complete(app._execute_job(job_id_inner, handler_inner, kind_inner, data_inner))
+                            finally:
+                                loop.close()
+
                         threading.Thread(
-                            target=app._execute_job,
+                            target=_run_in_thread,
                             args=(job_id, handler, kind, data),
                             daemon=True
                         ).start()
@@ -535,7 +560,7 @@ class RuneApiApplication:
 
         return RuneApiHandler
 
-    def _execute_job(self, job_id: str, handler: BackendHandler, kind: str, payload: dict) -> None:
+    async def _execute_job(self, job_id: str, handler: BackendHandler, kind: str, payload: dict) -> None:
         self.store.update_job(job_id, status="running")
         try:
             if kind == "agentic-agent":
@@ -549,16 +574,11 @@ class RuneApiApplication:
             else:
                 raise ValueError(f"unsupported kind: {kind}")
 
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                res = handler(req)
-                if inspect.isawaitable(res):
-                    result = loop.run_until_complete(res)
-                else:
-                    result = res
-            finally:
-                loop.close()
+            res = handler(req)
+            if inspect.isawaitable(res):
+                result = await res
+            else:
+                result = res
             
             self.store.update_job(job_id, status="succeeded", result_payload=result)
         except Exception as exc:
@@ -574,3 +594,4 @@ class RuneApiApplication:
             pass
         finally:
             server.server_close()
+            self.store.close()

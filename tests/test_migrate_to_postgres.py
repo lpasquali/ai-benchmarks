@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 try:
-    import psycopg
+    import psycopg  # noqa: F401
 except ImportError:
     pytest.skip("psycopg not installed", allow_module_level=True)
 

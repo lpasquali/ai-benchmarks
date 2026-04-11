@@ -51,7 +51,7 @@ def rune_api_server(tmp_path):
             import socket
             with socket.create_connection((host, port), timeout=0.1):
                 break
-        except:
+        except Exception:
             time.sleep(0.1)
     
     try:
@@ -60,6 +60,7 @@ def rune_api_server(tmp_path):
         server.shutdown()
         thread.join(timeout=2)
         server.server_close()
+        store.close()
 
 
 @pytest.mark.asyncio

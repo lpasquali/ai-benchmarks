@@ -518,6 +518,7 @@ async def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_
     finally:
         server.shutdown()
         thread.join(timeout=2)
+        app.store.close()
         server.server_close()
 
     # workflows: reusable instance with missing id should fall back to new provisioning

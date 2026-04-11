@@ -1,9 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 import pytest
 import time
-import json
-from unittest.mock import MagicMock, patch
-from rune_bench.metrics.pricing import PricingSoothSayer, PricingProjection
+from unittest.mock import MagicMock
+from rune_bench.metrics.pricing import PricingSoothSayer
 
 @pytest.fixture
 def rune_api_server():
@@ -41,6 +40,7 @@ def rune_api_server():
         server.shutdown()
         thread.join(timeout=2)
         server.server_close()
+        store.close()
         if Path(tmp_db).exists():
             Path(tmp_db).unlink()
 
@@ -137,5 +137,5 @@ async def test_api_run_trace_sse(rune_api_server):
                 if "event: end" in line:
                     break
 
-            assert any("event: log" in l for l in lines)
-            assert any("data: {" in l for l in lines)
+            assert any("event: log" in line for line in lines)
+            assert any("data: {" in line for line in lines)

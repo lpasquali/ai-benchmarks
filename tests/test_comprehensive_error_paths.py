@@ -194,12 +194,13 @@ async def test_api_server_remaining_paths(monkeypatch, tmp_path):
         server.shutdown()
         thread.join(timeout=2)
         server.server_close()
+        store.close()
 
     jobs = [store.get_job(job_id) for job_id, _ in [store.create_job(tenant_id="tenant", kind="agentic-agent", request_payload={})]]
     assert jobs[0] is not None
 
     job_id, _ = store.create_job(tenant_id="tenant", kind="agentic-agent", request_payload={"question": "q", "model": "m", "backend_url": None, "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"})  # nosec  # test artifact paths
-    await app._execute_job(job_id, "agentic-agent", {"question": "q", "model": "m", "backend_url": None, "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"})  # nosec  # test artifact paths
+    await app._execute_job(job_id, app.backend_functions["agentic-agent"], "agentic-agent", {"question": "q", "model": "m", "backend_url": None, "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"})  # nosec  # test artifact paths
     assert store.get_job(job_id).status == "failed"
 
     assert await app._dispatch("llm-instance", {"provisioning": None, "backend_url": "http://x"}) == {"mode": "existing"}
@@ -256,6 +257,7 @@ async def test_api_server_error_paths(monkeypatch, tmp_path):
         server.shutdown()
         thread.join(timeout=2)
         server.server_close()
+        store.close()
 
     real_store = api_server.JobStore(tmp_path / "ok.db")
 
@@ -272,7 +274,7 @@ async def test_api_server_error_paths(monkeypatch, tmp_path):
         kind="agentic-agent",
         request_payload={"question": "q", "model": "m", "backend_url": None, "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"},  # nosec  # test artifact paths
     )
-    await app._execute_job(job_id, "agentic-agent", {"question": "q", "model": "m", "backend_url": None, "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"})  # nosec  # test artifact paths
+    await app._execute_job(job_id, app.backend_functions["agentic-agent"], "agentic-agent", {"question": "q", "model": "m", "backend_url": None, "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"})  # nosec  # test artifact paths
     assert real_store.get_job(job_id).status == "succeeded"
 
 

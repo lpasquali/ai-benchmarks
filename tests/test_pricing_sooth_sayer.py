@@ -168,6 +168,7 @@ async def test_finops_simulate_http(tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+        store.close()
 
 
 @pytest.mark.asyncio

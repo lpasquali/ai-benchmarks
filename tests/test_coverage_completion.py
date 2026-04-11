@@ -20,7 +20,10 @@ from rune_bench.agents.base import AgentResult
 def sqlite_store(tmp_path):
     db_path = tmp_path / "jobs.db"
     store = JobStore(db_path)
-    yield store
+    try:
+        yield store
+    finally:
+        store.close()
 
 @pytest.mark.asyncio
 async def test_api_server_sse_errors(sqlite_store):
@@ -35,10 +38,12 @@ async def test_api_server_sse_errors(sqlite_store):
     handler_instance.wfile = MagicMock()
     handler_instance.wfile.write.side_effect = ConnectionResetError()
     
-    job_mock = MagicMock()
-    job_mock.status = "running"
+    job_mock_running = MagicMock()
+    job_mock_running.status = "running"
+    job_mock_done = MagicMock()
+    job_mock_done.status = "succeeded"
     
-    with patch.object(app.store, "get_job", return_value=job_mock):
+    with patch.object(app.store, "get_job", side_effect=[job_mock_running, job_mock_done, job_mock_running, job_mock_done]):
         with patch.object(app.store, "get_events_for_job", return_value=[{"recorded_at": time.time(), "event": "e", "status": "ok"}]):
             with patch("time.sleep"):
                 with patch("time.gmtime"):
@@ -243,16 +248,26 @@ async def test_api_server_job_submission(sqlite_store):
         server.shutdown()
         thread.join(timeout=2)
         server.server_close()
+        store.close()
 
 @pytest.mark.asyncio
 async def test_api_server_extra_branches(sqlite_store):
-    app = api_server.RuneApiApplication(store=sqlite_store, security=api_server.ApiSecurityConfig(auth_disabled=True, tenant_tokens={}))
-    req_b = RunBenchmarkRequest(provisioning=None, backend_url="u", question="q", model="m", backend_warmup=False, backend_warmup_timeout=0, kubeconfig="")
+    _ = api_server.RuneApiApplication(
+        store=sqlite_store,
+        security=api_server.ApiSecurityConfig(auth_disabled=True, tenant_tokens={})
+    )
+    req_b = RunBenchmarkRequest(provisioning=None, backend_url="u", question="q", model="m", backend_warmup=False, backend_warmup_timeout=0, kubeconfig="/tmp/k")
     req_a = RunAgenticAgentRequest(question="q", model="m", backend_url="u", backend_warmup=False, backend_warmup_timeout=0)
-    with pytest.raises(RuntimeError): api_server._run_agentic_backend(req_b)
-    with pytest.raises(RuntimeError): api_server._run_benchmark_backend(req_a)
-    with pytest.raises(RuntimeError): api_server._run_llm_instance_backend(req_b)
-    with pytest.raises(RuntimeError): api_server._get_cost_estimate_backend(req_b)
+
+    with pytest.raises(RuntimeError):
+        await api_server._run_agentic_backend(req_b)
+    with pytest.raises(RuntimeError):
+        await api_server._run_benchmark_backend(req_a)
+    with pytest.raises(RuntimeError):
+        await api_server._run_llm_instance_backend(req_b)
+    with pytest.raises(RuntimeError):
+        await api_server._get_cost_estimate_backend(req_b)
+
 
 @pytest.mark.asyncio
 async def test_api_backend_remaining_branches():
@@ -293,20 +308,62 @@ async def test_rune_init_extra_coverage(monkeypatch):
 async def test_rune_commands_full_coverage(monkeypatch):
     with patch("rune.console"):
         with patch("rune._run_preflight_cost_check", AsyncMock()):
-            monkeypatch.setattr(rune, "BACKEND_MODE", "local")
-            monkeypatch.setattr(rune, "use_existing_backend_server", lambda *a, **k: MagicMock(url="u", model_name="m"))
-            monkeypatch.setattr(rune, "_warmup_ollama_model", AsyncMock(return_value=None))
-            monkeypatch.setattr(rune, "get_agent", lambda *a, **k: AsyncMock(ask_structured=AsyncMock(return_value=AgentResult(answer="a"))))
-            monkeypatch.setattr(rune, "calculate_run_cost", AsyncMock(return_value=0.1))
-            
-            await rune.run_agentic_agent(debug=False, question="q", model="m")
-            await rune.run_benchmark(debug=False, question="q", model="m", kubeconfig=Path("/tmp/k"))
-            
-            monkeypatch.setattr(rune, "BACKEND_MODE", "http")
-            mock_client = MagicMock()
-            monkeypatch.setattr(rune, "_http_client", lambda: mock_client)
-            monkeypatch.setattr(rune, "_run_http_job_with_progress", AsyncMock(return_value={"result": {"answer": "a"}}))
-            
-            await rune.run_agentic_agent(debug=False, question="q", model="m")
-            await rune.run_benchmark(debug=False, question="q", model="m", kubeconfig=Path("/tmp/k"))
-            await rune.run_llm_instance(debug=False)
+            with patch("rune._vastai_sdk") as mock_sdk_factory:
+                mock_sdk = mock_sdk_factory.return_value
+                # 1. find_reusable_running_instance call 1
+                # 2. find_reusable_running_instance call 2 (after SDK refresh)
+                # 3. wait_until_running poll 1
+                running_inst = [{"id": 1, "actual_status": "running", "state": "running", "ssh_host": "h", "ssh_port": 22, "service_urls": [], "gpu_total_ram": 24, "dph_total": 0.5, "ports": {"11434/tcp": [{"HostIp": "1.2.3.4", "HostPort": "11434"}]}}]
+
+                mock_sdk.show_instances.side_effect = [[], [], running_inst, running_inst, running_inst]
+                
+                mock_sdk.search_offers.return_value = [{"id": 1, "dph_total": 0.5, "gpu_name": "RTX 4090", "gpu_total_ram": 24000, "reliability2": 0.99, "num_gpus": 1}]
+                mock_sdk.create_instance.return_value = {"success": True, "new_contract": 1}
+                mock_sdk.show_templates.return_value = [{"hash": "tpl-abc", "name": "test-template"}]
+                
+                monkeypatch.setattr(rune, "DEFAULT_VASTAI_TEMPLATE", "tpl-abc")
+                monkeypatch.setattr(rune, "BACKEND_MODE", "local")
+                monkeypatch.setattr(rune, "use_existing_backend_server", lambda *a, **k: MagicMock(url="u", model_name="m"))
+                monkeypatch.setattr(rune, "_warmup_ollama_model", MagicMock(return_value=None))
+                monkeypatch.setattr(rune, "list_backend_models", lambda *a, **k: {"models": [], "running_models": []})
+                monkeypatch.setattr(rune, "list_running_backend_models", lambda *a, **k: [])
+                monkeypatch.setattr(rune, "get_agent", lambda *a, **k: AsyncMock(ask_structured=AsyncMock(return_value=AgentResult(answer="a"))))
+                
+                with patch("rune_bench.metrics.cost.calculate_run_cost", AsyncMock(return_value=0.1)):
+                    with patch("time.sleep"):
+                        await rune.run_agentic_agent(
+                            debug=False, 
+                            question="q", 
+                            model="m"
+                        )
+                        await rune.run_benchmark(
+                            debug=False, 
+                            question="q", 
+                            model="m", 
+                            kubeconfig=Path("/tmp/k"),
+                            vastai=True, 
+                            min_dph=0.1, 
+                            max_dph=1.0, 
+                            reliability=0.9, 
+                            template_hash="tpl-abc",
+                            yes=True
+                        )
+
+                        monkeypatch.setattr(rune, "BACKEND_MODE", "http")
+                        mock_client = MagicMock()
+                        monkeypatch.setattr(rune, "_http_client", lambda: mock_client)
+                        monkeypatch.setattr(rune, "_run_http_job_with_progress", AsyncMock(return_value={"result": {"answer": "a", "backend_url": "http://x", "mode": "existing"}}))
+
+                        await rune.run_agentic_agent(
+                            debug=False, 
+                            question="q", 
+                            model="m"
+                        )
+                        await rune.run_benchmark(
+                            debug=False, 
+                            question="q", 
+                            model="m", 
+                            kubeconfig=Path("/tmp/k"),
+                            vastai=False
+                        )
+                        await rune.run_llm_instance(debug=False)

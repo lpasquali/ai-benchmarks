@@ -8,18 +8,17 @@ Ollama, and surfacing external connection details.
 import time
 from typing import Callable, TYPE_CHECKING
 
+from rune_bench.resources.vastai.sdk import VastAI
+from rune_bench.common import SelectedModel
+from rune_bench.debug import debug_log
+from rune_bench.backends import get_backend
+from .contracts import ConnectionDetails, TeardownResult
+
 if TYPE_CHECKING:
     from .template import Template
 
 _POLL_INTERVAL_S = 10
 _POLL_MAX_ATTEMPTS = 36  # ~6 minutes
-
-from rune_bench.resources.vastai.sdk import VastAI
-
-from rune_bench.common import SelectedModel
-from rune_bench.debug import debug_log
-from rune_bench.backends import get_backend
-from .contracts import ConnectionDetails, TeardownResult
 
 
 

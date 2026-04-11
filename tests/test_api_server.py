@@ -54,6 +54,7 @@ def rune_api_server(tmp_path):
         server.shutdown()
         thread.join(timeout=2)
         server.server_close()
+        store.close()
 
 
 def test_healthz_is_public(rune_api_server):

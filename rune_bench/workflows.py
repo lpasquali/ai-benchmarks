@@ -1,12 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
+"""Application workflows used by the RUNE CLI."""
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Callable
-
-"""Application workflows used by the RUNE CLI."""
 
 if TYPE_CHECKING:
     from rune_bench.resources.vastai.sdk import VastAI
