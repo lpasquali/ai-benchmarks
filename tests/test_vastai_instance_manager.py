@@ -136,6 +136,7 @@ def test_build_connection_details_without_machine_id():
 @pytest.fixture
 def misc_server(tmp_path, monkeypatch):
     monkeypatch.setenv("RUNE_API_AUTH_DISABLED", "1")
+    monkeypatch.delenv("RUNE_DB_URL", raising=False)
     monkeypatch.setenv("RUNE_API_DB_PATH", str(tmp_path / "jobs.db"))
     app = api_server.RuneApiApplication.from_env()
     server = api_server.ThreadingHTTPServer(("127.0.0.1", 0), app.create_handler())
@@ -160,7 +161,8 @@ def test_api_security_from_env(monkeypatch):
     assert api_server.ApiSecurityConfig.from_env().auth_disabled is True
 
     monkeypatch.setenv("RUNE_API_AUTH_DISABLED", "0")
-    monkeypatch.setenv("RUNE_API_TOKENS", "tenant-a:token-a,tenant-b:token-b")
+    long_a, long_b = "a" * 32, "b" * 32
+    monkeypatch.setenv("RUNE_API_TOKENS", f"tenant-a:{long_a},tenant-b:{long_b}")
     cfg = api_server.ApiSecurityConfig.from_env()
     assert cfg.tenant_tokens["tenant-b"] == hashlib.sha256("token-b".encode("utf-8")).hexdigest()
 

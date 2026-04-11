@@ -69,6 +69,12 @@ warmup_existing_ollama_model = warmup_backend_model
 provision_vastai_ollama = provision_vastai_backend
 
 app = typer.Typer(help="RUNE — Reliability Use-case Numeric Evaluator", add_completion=False)
+db_app = typer.Typer(
+    help="Database maintenance utilities",
+    add_completion=False,
+    no_args_is_help=True,
+)
+app.add_typer(db_app, name="db")
 console = Console()
 
 # Load rune.yaml (project) / ~/.rune/config.yaml (global) before reading env vars.

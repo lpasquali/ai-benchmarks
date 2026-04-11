@@ -8,6 +8,7 @@ import hmac
 import json
 import logging
 import os
+import sys
 import threading
 import time
 import asyncio
@@ -16,6 +17,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable, TypeAlias
 from urllib.parse import parse_qs, urlparse
+
+import structlog
 
 from rune_bench.api_backend import (
     get_cost_estimate,
@@ -101,7 +104,8 @@ class ApiSecurityConfig:
         if not auth_disabled and not tenant_tokens:
             raise RuntimeError(
                 "RUNE API auth is enabled but no tenants are configured. "
-                "Set RUNE_API_TOKENS='tenant-a:token-a' or RUNE_API_AUTH_DISABLED=1 for development."
+                f"Set RUNE_API_TOKENS='tenant-a:<{_MIN_API_TOKEN_LEN}+-char-secret>' "
+                "or RUNE_API_AUTH_DISABLED=1 for development."
             )
         return cls(auth_disabled=auth_disabled, tenant_tokens=tenant_tokens)
 
@@ -139,6 +143,13 @@ class RuneApiApplication:
             def log_message(self, format, *args):  # noqa: A003
                 return
 
+            def setup(self) -> None:
+                super().setup()
+                try:
+                    self.request.settimeout(_HTTP_REQUEST_SOCKET_TIMEOUT_S)
+                except (AttributeError, OSError):
+                    pass
+
             def _write_json(self, status_code: int, payload: dict) -> None:
                 raw = json.dumps(payload).encode("utf-8")
                 self.send_response(status_code)
@@ -149,6 +160,9 @@ class RuneApiApplication:
 
             def _read_json(self) -> dict:
                 length = int(self.headers.get("Content-Length", "0"))
+                MAX_BODY_SIZE = 10 * 1024 * 1024  # 10 MiB (SR-Q-004)
+                if length > MAX_BODY_SIZE:
+                    raise ValueError(f"request body exceeds maximum size ({MAX_BODY_SIZE // 1024 // 1024} MiB)")
                 raw = self.rfile.read(length) if length else b"{}"
                 try:
                     payload = json.loads(raw.decode("utf-8") or "{}")
@@ -197,7 +211,19 @@ class RuneApiApplication:
                 path = parsed.path
 
                 if path == "/healthz":
-                    self._write_json(200, {"status": "ok"})
+                    self._write_json(
+                        200,
+                        {
+                            "status": "ok",
+                            "active_threads": threading.active_count(),
+                        },
+                    )
+                    return
+
+                try:
+                    self._enforce_request_rate_limit(path)
+                except RequestRateLimited as exc:
+                    self._write_json(429, {"error": str(exc)})
                     return
 
                 try:
@@ -482,6 +508,12 @@ class RuneApiApplication:
                 parsed = urlparse(self.path)
                 path = parsed.path
                 try:
+                    self._enforce_request_rate_limit(path)
+                except RequestRateLimited as exc:
+                    self._write_json(429, {"error": str(exc)})
+                    return
+
+                try:
                     tenant_id = self._authenticate()
                 except PermissionError as exc:
                     self._write_json(401, {"error": str(exc)})
@@ -490,7 +522,20 @@ class RuneApiApplication:
                 try:
                     payload = self._read_json()
                 except ValueError as exc:
-                    self._write_json(400, {"error": str(exc)})
+                    error_msg = str(exc)
+                    # SR-Q-004: Return 413 for request size violations
+                    if "exceeds maximum size" in error_msg:
+                        self._write_json(413, {"error": error_msg})
+                    else:
+                        self._write_json(400, {"error": error_msg})
+                    return
+
+                if path == "/v1/estimates":
+                    try:
+                        result = app._dispatch("cost-estimate", payload)
+                        self._write_json(200, result)
+                    except Exception as exc:
+                        self._write_json(400, {"error": str(exc)})
                     return
 
                 if path == "/v1/settings/profiles":
@@ -588,6 +633,7 @@ class RuneApiApplication:
 
     def serve(self, host: str = "127.0.0.1", port: int = 8080) -> None:
         server = ThreadingHTTPServer((host, port), self.create_handler())
+        server.timeout = _HTTP_REQUEST_SOCKET_TIMEOUT_S
         try:
             server.serve_forever()
         finally:

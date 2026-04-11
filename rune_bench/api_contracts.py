@@ -8,6 +8,20 @@ used by the current CLI and future HTTP API backend.
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+# SR-Q-035 — string length limits (dataclass validation; see also QUANTITATIVE_SECURITY_REQUIREMENTS.md)
+_MAX_MODEL_NAME_LEN = 128
+_MAX_QUESTION_LEN = 100_000
+_MAX_BACKEND_URL_LEN = 2048
+_MAX_TEMPLATE_HASH_LEN = 256
+_MAX_KUBECONFIG_PATH_LEN = 4096
+_MAX_AGENT_NAME_LEN = 64
+_MAX_BACKEND_TYPE_LEN = 64
+
+
+def _check_max_str(field: str, value: str, maxlen: int) -> None:
+    if len(value) > maxlen:
+        raise ValueError(f"{field} exceeds maximum length {maxlen} (SR-Q-035)")
+
 
 @dataclass(frozen=True)
 class VastAIProvisioning:

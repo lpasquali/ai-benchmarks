@@ -61,7 +61,9 @@ def test_healthz_is_public(rune_api_server):
     with urlopen(f"{base_url}/healthz") as response:  # nosec  # test request mock/local execution
         payload = json.loads(response.read().decode("utf-8"))
 
-    assert payload == {"status": "ok"}
+    assert payload["status"] == "ok"
+    assert isinstance(payload.get("active_threads"), int)
+    assert payload["active_threads"] >= 1
 
 
 def test_api_server_requires_auth(rune_api_server):

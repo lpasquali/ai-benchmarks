@@ -171,7 +171,16 @@ async def test_api_server_remaining_paths(monkeypatch, tmp_path):
         with pytest.raises(Exception):
             urlopen(bad_auth)  # nosec  # test request mock/local execution
 
-        bad_kind = Request(f"{base}/v1/jobs/whatever", method="POST", data=b"{}", headers={"Authorization": "Bearer token", "X-Tenant-ID": "tenant", "Content-Type": "application/json"})
+        bad_kind = Request(
+            f"{base}/v1/jobs/whatever",
+            method="POST",
+            data=b"{}",
+            headers={
+                "Authorization": f"Bearer {_COMPREHENSIVE_API_TOKEN}",
+                "X-Tenant-ID": "tenant",
+                "Content-Type": "application/json",
+            },
+        )
         with pytest.raises(Exception):
             urlopen(bad_kind)  # nosec  # test request mock/local execution
 
@@ -226,7 +235,7 @@ async def test_api_server_error_paths(monkeypatch, tmp_path):
             f"{base}/v1/jobs/agentic-agent",
             method="POST",
             data=b"{",
-            headers={"X-API-Key": "token", "X-Tenant-ID": "tenant", "Content-Type": "application/json"},
+            headers={"X-API-Key": _COMPREHENSIVE_API_TOKEN, "X-Tenant-ID": "tenant", "Content-Type": "application/json"},
         )
         with pytest.raises(Exception):
             urlopen(req)  # nosec  # test request mock/local execution
@@ -235,12 +244,15 @@ async def test_api_server_error_paths(monkeypatch, tmp_path):
             f"{base}/v1/jobs/agentic-agent",
             method="POST",
             data=b"{}",
-            headers={"X-API-Key": "token", "X-Tenant-ID": "tenant", "Content-Type": "application/json"},
+            headers={"X-API-Key": _COMPREHENSIVE_API_TOKEN, "X-Tenant-ID": "tenant", "Content-Type": "application/json"},
         )
         with pytest.raises(Exception):
             urlopen(req)  # nosec  # test request mock/local execution
 
-        req = Request(f"{base}/v1/jobs/missing", headers={"X-API-Key": "token", "X-Tenant-ID": "tenant"})
+        req = Request(
+            f"{base}/v1/jobs/missing",
+            headers={"X-API-Key": _COMPREHENSIVE_API_TOKEN, "X-Tenant-ID": "tenant"},
+        )
         with pytest.raises(Exception):
             urlopen(req)  # nosec  # test request mock/local execution
     finally:
