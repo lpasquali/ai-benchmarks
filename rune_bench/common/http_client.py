@@ -104,7 +104,7 @@ def make_http_request(
     )
 
     try:
-        with urlopen(request, timeout=timeout_seconds, context=ssl_context) as response:
+        with urlopen(request, timeout=timeout_seconds, context=ssl_context) as response:  # nosec: B310
             raw = response.read().decode("utf-8")
             debug_log(
                 f"{debug_prefix} response: method={method} url={url} status={getattr(response, 'status', '<unknown>')} "

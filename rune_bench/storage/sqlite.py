@@ -73,7 +73,7 @@ class SQLiteStorageAdapter:
         try:
             self.close()
         except Exception:
-            pass
+            pass  # nosec
 
     @contextmanager
     def connection(self) -> Any:

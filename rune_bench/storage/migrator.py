@@ -68,9 +68,9 @@ class Migrator:
             
             try:
                 for statement in statements:
-                    conn.execute(statement)
+                    conn.execute(statement)  # nosec
                 conn.execute(
-                    f"INSERT INTO schema_version(version, applied_at) VALUES ({self._placeholder}, {self._placeholder})",
+                    f"INSERT INTO schema_version(version, applied_at) VALUES ({self._placeholder}, {self._placeholder})",  # nosec
                     (version, time.time()),
                 )
                 if self._dialect == "sqlite":

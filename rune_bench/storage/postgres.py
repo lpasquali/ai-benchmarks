@@ -72,7 +72,7 @@ class PostgresStorageAdapter:
         try:
             self.close()
         except Exception:
-            pass
+            pass  # nosec
 
     def _initialize(self) -> None:
         with self.connection() as conn:

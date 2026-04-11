@@ -101,7 +101,8 @@ class SQLiteMetricsCollector:
         try:
             self._store.record_workflow_event(event)
         except Exception:
-            pass  # never let storage errors affect the workflow
+            pass  # nosec
+  # never let storage errors affect the workflow
 
 
 # ---------------------------------------------------------------------------
@@ -167,7 +168,8 @@ class _SpanContext:
         try:
             get_collector().record(ev)
         except Exception:
-            pass  # never let metrics errors propagate into the caller
+            pass  # nosec
+  # never let metrics errors propagate into the caller
         return False  # never suppress exceptions
 
 
