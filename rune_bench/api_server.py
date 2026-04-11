@@ -347,7 +347,7 @@ class RuneApiApplication:
                     if "profiles" in raw:
                         for p in raw["profiles"].values():
                             if isinstance(p, dict) and "api_token" in p:
-                                p["api_token"] = "[REDACTED]"
+                                p["api_token"] = "[REDACTED]"  # nosec
                     
                     resp = SettingsResponse(
                         defaults=raw.get("defaults", {}),

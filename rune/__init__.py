@@ -41,7 +41,7 @@ from rune_bench.common import (
 )
 from rune_bench.debug import set_debug
 from rune_bench.metrics import InMemoryCollector, set_collector, clear_collector
-from rune_bench.metrics.cost import calculate_run_cost
+from rune_bench.metrics.cost import calculate_run_cost as calculate_run_cost
 from rune_bench.backends import get_backend
 from rune_bench.backends.base import ModelCapabilities
 from rune_bench.agents.registry import get_agent
