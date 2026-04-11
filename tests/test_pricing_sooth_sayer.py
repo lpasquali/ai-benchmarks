@@ -24,7 +24,6 @@ from rune_bench.metrics.pricing import (
 )
 
 _API_TOKEN = "a" * 32
-_SHA256_HEX = "3ba3f5f43b92602683c19aee62a20342b084dd5971ddd33808d81a328879a547"
 
 
 class _MemStore:
@@ -141,7 +140,7 @@ async def test_finops_simulate_http(tmp_path):
     store = JobStore(tmp_path / "db.sqlite")
     app = RuneApiApplication(
         store=store,
-        security=ApiSecurityConfig(auth_disabled=False, tenant_tokens={"tenant-a": _SHA256_HEX}),
+        security=ApiSecurityConfig(auth_disabled=False, tenant_tokens={"tenant-a": _API_TOKEN}),
         backend_functions={
             "agentic-agent": lambda r: {"answer": "x"},
             "benchmark": lambda r: {"answer": "b"},

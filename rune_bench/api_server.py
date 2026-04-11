@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 import asyncio
-import hashlib
 import hmac
 import inspect
 import json
@@ -111,9 +110,7 @@ class ApiSecurityConfig:
             for pair in raw_tokens.split(","):
                 if ":" in pair:
                     tenant, secret = pair.split(":", 1)
-                    # For compatibility with tests that expect hashed tokens in from_env
-                    hashed = hashlib.sha256(secret.strip().encode("utf-8")).hexdigest()
-                    tenant_tokens[tenant.strip()] = hashed
+                    tenant_tokens[tenant.strip()] = secret.strip()
         
         if not auth_disabled and not tenant_tokens:
             raise RuntimeError(
@@ -228,12 +225,7 @@ class RuneApiApplication:
                 
                 expected_token = app.security.tenant_tokens.get(tenant_id)
                 if expected_token:
-                    # Try raw comparison first (for tests)
                     if hmac.compare_digest(token, expected_token):
-                        return tenant_id
-                    # Try hash comparison
-                    hashed = hashlib.sha256(token.encode()).hexdigest()
-                    if hmac.compare_digest(hashed, expected_token):
                         return tenant_id
                     else:
                         logging.error(f"Auth failed for {tenant_id}")

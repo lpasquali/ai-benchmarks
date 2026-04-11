@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-import hashlib
 import json
 import threading
 from http.server import ThreadingHTTPServer
@@ -23,10 +22,10 @@ def rune_api_server(tmp_path):
     app = RuneApiApplication(
         store=store,
         security=ApiSecurityConfig(
-            auth_disabled=False, 
+            auth_disabled=False,
             tenant_tokens={
-                "tenant-a": hashlib.sha256(b"token-a").hexdigest(), 
-                "tenant-b": hashlib.sha256(b"token-b").hexdigest()
+                "tenant-a": "token-a",
+                "tenant-b": "token-b"
             }
         ),
         backend_functions={

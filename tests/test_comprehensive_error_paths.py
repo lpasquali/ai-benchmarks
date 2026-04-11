@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-import hashlib
 from pathlib import Path
 from unittest.mock import MagicMock, AsyncMock
 from urllib.request import Request, urlopen
@@ -146,7 +145,7 @@ async def test_api_server_remaining_paths(monkeypatch, tmp_path):
 
     app = api_server.RuneApiApplication(
         store=store,
-        security=api_server.ApiSecurityConfig(auth_disabled=False, tenant_tokens={"tenant": hashlib.sha256(b"token").hexdigest()}),
+        security=api_server.ApiSecurityConfig(auth_disabled=False, tenant_tokens={"tenant": "token"}),
         backend_functions={"llm-instance": backend_ollama, "ollama-instance": backend_ollama, "benchmark": backend_bench, "agentic-agent": backend_agentic_agent},
     )
     monkeypatch.setattr(
@@ -219,7 +218,7 @@ async def test_api_server_error_paths(monkeypatch, tmp_path):
     store = ExplodingStore(tmp_path / "jobs.db")
     app = api_server.RuneApiApplication(
         store=store,
-        security=api_server.ApiSecurityConfig(auth_disabled=False, tenant_tokens={"tenant": hashlib.sha256(b"token").hexdigest()}),
+        security=api_server.ApiSecurityConfig(auth_disabled=False, tenant_tokens={"tenant": "token"}),
         backend_functions={"agentic-agent": lambda request: {"answer": "ok"}},
     )
     server = api_server.ThreadingHTTPServer(("127.0.0.1", 0), app.create_handler())
