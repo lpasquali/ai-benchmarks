@@ -67,7 +67,7 @@ jobs:
       python-version: "3.14"
       coverage-threshold: "97"
       source-dirs: "rune_bench rune"
-      test-deps: "pytest pytest-cov pytest-xdist respx"
+      test-deps: "pytest pytest-asyncio pytest-cov pytest-xdist respx"
       path-filter: '^(rune/|rune_bench/|tests/|requirements\.txt|pyproject\.toml)'
       allowed-license-exceptions: "bashlex,borb"
     secrets: inherit
