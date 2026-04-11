@@ -30,3 +30,7 @@ pyvenv.cfg
 # OS
 .DS_Store
 Thumbs.db
+
+#debug/testing
+home
+sqlite*

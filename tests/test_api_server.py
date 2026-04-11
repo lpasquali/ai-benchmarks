@@ -7,14 +7,9 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import pytest
-from argon2 import PasswordHasher
-
 from rune_bench.api_client import RuneApiClient
 from rune_bench.api_server import ApiSecurityConfig, RuneApiApplication
 from rune_bench.job_store import JobStore
-
-_ph = PasswordHasher()
-
 
 @pytest.fixture
 def rune_api_server(tmp_path):

@@ -230,13 +230,20 @@ class OllamaBackend:
 
         Scans *details.service_urls* for port 11434 (Ollama default).
         """
+        from urllib.parse import urlparse
+
         for svc in details.service_urls:
-            direct = str(svc.get("direct", ""))
-            proxy = str(svc.get("proxy", "")) if svc.get("proxy") else ""
-            if ":11434" in direct:
-                return direct
-            if ":11434" in proxy:
-                return proxy
+            for key in ("direct", "proxy"):
+                val = str(svc.get(key, "")) if svc.get(key) else ""
+                if not val:
+                    continue
+                
+                url_to_parse = val if "://" in val else f"http://{val}"
+                try:
+                    if urlparse(url_to_parse).port == 11434:
+                        return val
+                except (ValueError, AttributeError):
+                    continue
         return None
 
     # -- Server / model operations -----------------------------------------

@@ -96,6 +96,9 @@ class _FakeSQLiteAdapter:
     def connection(self):
         yield self._conn
 
+    def close(self):
+        pass
+
 
 class _FakePostgresAdapter:
     def __init__(self):
@@ -104,6 +107,9 @@ class _FakePostgresAdapter:
     @contextmanager
     def connection(self):
         yield self._conn
+
+    def close(self):
+        pass
 
 
 def _patch_storage(monkeypatch, source, target) -> None:
@@ -276,14 +282,27 @@ def test_migrate_to_postgres_requires_postgres_target(monkeypatch, tmp_path) -> 
 
     db_a = tmp_path / "a.db"
     db_b = tmp_path / "b.db"
-    adapters = [SQLiteStorageAdapter(db_a), SQLiteStorageAdapter(db_b)]
-    monkeypatch.setattr(migration_mod, "make_storage", lambda _url: adapters.pop(0))
+    # Store them in a list so we can close them safely
+    adapter_a = SQLiteStorageAdapter(db_a)
+    adapter_b = SQLiteStorageAdapter(db_b)
+    adapters = [adapter_a, adapter_b]
+    
+    def mock_make_storage(_url):
+        if not adapters:
+            raise IndexError("no more adapters")
+        return adapters.pop(0)
+        
+    monkeypatch.setattr(migration_mod, "make_storage", mock_make_storage)
 
-    with pytest.raises(RuntimeError, match="target must be a postgresql:// URL"):
-        migration_mod.migrate_to_postgres(
-            source_url=f"sqlite:///{db_a.as_posix()}",
-            target_url="postgresql://localhost/rune",
-        )
+    try:
+        with pytest.raises(RuntimeError, match="target must be a postgresql:// URL"):
+            migration_mod.migrate_to_postgres(
+                source_url=f"sqlite:///{db_a.as_posix()}",
+                target_url="postgresql://localhost/rune",
+            )
+    finally:
+        adapter_a.close()
+        adapter_b.close()
 
 
 def test_insert_batch_no_rows_is_noop() -> None:

@@ -5,14 +5,13 @@ from unittest.mock import MagicMock
 from rune_bench.metrics.pricing import PricingSoothSayer
 
 @pytest.fixture
-def rune_api_server():
+def rune_api_server(tmp_path):
     from rune_bench.api_server import RuneApiApplication, JobStore, ApiSecurityConfig, ThreadingHTTPServer
     import threading
-    import tempfile
     from pathlib import Path
 
-    tmp_db = tempfile.mktemp(suffix=".db")
-    store = JobStore(Path(tmp_db))
+    tmp_db = tmp_path / "jobs.db"
+    store = JobStore(tmp_db)
     state = {"agentic_calls": 0, "store": store}
 
     def run_agentic(request):
@@ -41,8 +40,6 @@ def rune_api_server():
         thread.join(timeout=2)
         server.server_close()
         store.close()
-        if Path(tmp_db).exists():
-            Path(tmp_db).unlink()
 
 @pytest.mark.asyncio
 async def test_pricing_sooth_sayer_simulate_basic():

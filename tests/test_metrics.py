@@ -220,49 +220,55 @@ def test_sqlite_metrics_collector_persists_events(tmp_path: Path):
     from rune_bench.job_store import JobStore
 
     store = JobStore(tmp_path / "jobs.db")
-    coll = SQLiteMetricsCollector(store)
+    try:
+        coll = SQLiteMetricsCollector(store)
 
-    ev = MetricsEvent(
-        event="vastai.offer_search",
-        status="ok",
-        duration_ms=1234.5,
-        labels={"min_dph": 2.3, "max_dph": 3.0},
-        recorded_at=time.time(),
-        job_id="job-abc",
-    )
-    coll.record(ev)
+        ev = MetricsEvent(
+            event="vastai.offer_search",
+            status="ok",
+            duration_ms=1234.5,
+            labels={"min_dph": 2.3, "max_dph": 3.0},
+            recorded_at=time.time(),
+            job_id="job-abc",
+        )
+        coll.record(ev)
 
-    rows = store.get_events_for_job("job-abc")
-    assert len(rows) == 1
-    assert rows[0]["event"] == "vastai.offer_search"
-    assert rows[0]["status"] == "ok"
-    assert abs(rows[0]["duration_ms"] - 1234.5) < 0.01
-    assert rows[0]["labels"]["min_dph"] == 2.3
+        rows = store.get_events_for_job("job-abc")
+        assert len(rows) == 1
+        assert rows[0]["event"] == "vastai.offer_search"
+        assert rows[0]["status"] == "ok"
+        assert abs(rows[0]["duration_ms"] - 1234.5) < 0.01
+        assert rows[0]["labels"]["min_dph"] == 2.3
+    finally:
+        store.close()
 
 
 def test_job_store_events_summary_aggregates(tmp_path: Path):
     from rune_bench.job_store import JobStore
 
     store = JobStore(tmp_path / "jobs.db")
-    coll = SQLiteMetricsCollector(store)
+    try:
+        coll = SQLiteMetricsCollector(store)
 
-    for i in range(3):
-        coll.record(MetricsEvent("phase.a", "ok", float(100 + i * 10), {}, time.time(), job_id="j1"))
-    coll.record(MetricsEvent("phase.a", "error", 500.0, {}, time.time(), job_id="j1", error_type="RuntimeError"))
-    coll.record(MetricsEvent("phase.b", "ok", 50.0, {}, time.time(), job_id="j1"))
+        for i in range(3):
+            coll.record(MetricsEvent("phase.a", "ok", float(100 + i * 10), {}, time.time(), job_id="j1"))
+        coll.record(MetricsEvent("phase.a", "error", 500.0, {}, time.time(), job_id="j1", error_type="RuntimeError"))
+        coll.record(MetricsEvent("phase.b", "ok", 50.0, {}, time.time(), job_id="j1"))
 
-    summary = {r["event"]: r for r in store.get_events_summary()}
-    assert summary["phase.a"]["total"] == 4
-    assert summary["phase.a"]["ok"] == 3
-    assert summary["phase.a"]["error"] == 1
-    assert summary["phase.b"]["total"] == 1
+        summary = {r["event"]: r for r in store.get_events_summary()}
+        assert summary["phase.a"]["total"] == 4
+        assert summary["phase.a"]["ok"] == 3
+        assert summary["phase.a"]["error"] == 1
+        assert summary["phase.b"]["total"] == 1
 
-    # Filter by job_id
-    summary_j1 = {r["event"]: r for r in store.get_events_summary(job_id="j1")}
-    assert "phase.a" in summary_j1
+        # Filter by job_id
+        summary_j1 = {r["event"]: r for r in store.get_events_summary(job_id="j1")}
+        assert "phase.a" in summary_j1
 
-    summary_other = store.get_events_summary(job_id="other-job")
-    assert summary_other == []
+        summary_other = store.get_events_summary(job_id="other-job")
+        assert summary_other == []
+    finally:
+        store.close()
 
 
 def test_sqlite_collector_survives_storage_error(tmp_path: Path):
@@ -281,21 +287,24 @@ def test_span_with_sqlite_collector_end_to_end(tmp_path: Path):
     from rune_bench.job_store import JobStore
 
     store = JobStore(tmp_path / "jobs.db")
-    set_collector(SQLiteMetricsCollector(store))
-    set_job_id("job-xyz")
     try:
-        with span("workflow.provision", backend="vastai"):
-            time.sleep(0.001)
-        with pytest.raises(RuntimeError):
-            with span("agent.ask", model="llama3"):
-                raise RuntimeError("timeout")
-    finally:
-        set_job_id(None)
-        clear_collector()
+        set_collector(SQLiteMetricsCollector(store))
+        set_job_id("job-xyz")
+        try:
+            with span("workflow.provision", backend="vastai"):
+                time.sleep(0.001)
+            with pytest.raises(RuntimeError):
+                with span("agent.ask", model="llama3"):
+                    raise RuntimeError("timeout")
+        finally:
+            set_job_id(None)
+            clear_collector()
 
-    rows = store.get_events_for_job("job-xyz")
-    assert len(rows) == 2
-    events_by_name = {r["event"]: r for r in rows}
-    assert events_by_name["workflow.provision"]["status"] == "ok"
-    assert events_by_name["agent.ask"]["status"] == "error"
-    assert events_by_name["agent.ask"]["error_type"] == "RuntimeError"
+        rows = store.get_events_for_job("job-xyz")
+        assert len(rows) == 2
+        events_by_name = {r["event"]: r for r in rows}
+        assert events_by_name["workflow.provision"]["status"] == "ok"
+        assert events_by_name["agent.ask"]["status"] == "error"
+        assert events_by_name["agent.ask"]["error_type"] == "RuntimeError"
+    finally:
+        store.close()

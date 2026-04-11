@@ -68,8 +68,27 @@ list_running_ollama_models = list_running_backend_models
 warmup_existing_ollama_model = warmup_backend_model
 provision_vastai_ollama = provision_vastai_backend
 
-app = typer.Typer(help="RUNE — Reliability Use-case Numeric Evaluator", add_completion=False)
-db_app = typer.Typer(
+import inspect
+from functools import wraps
+
+class AsyncTyper(typer.Typer):
+    def command(self, *args, **kwargs):
+        base_decorator = super().command(*args, **kwargs)
+        def decorator(f):
+            if inspect.iscoroutinefunction(f):
+                @wraps(f)
+                def runner(*f_args, **f_kwargs):
+                    try:
+                        asyncio.get_running_loop()
+                        return f(*f_args, **f_kwargs)
+                    except RuntimeError:
+                        return asyncio.run(f(*f_args, **f_kwargs))
+                return base_decorator(runner)
+            return base_decorator(f)
+        return decorator
+
+app = AsyncTyper(help="RUNE — Reliability Use-case Numeric Evaluator", add_completion=False)
+db_app = AsyncTyper(
     help="Database maintenance utilities",
     add_completion=False,
     no_args_is_help=True,
@@ -1068,6 +1087,7 @@ async def run_benchmark(
     set_collector(_cli_metrics)
     selected_model_name = model
     selected_backend_url = backend_url
+    console.print(f"DEBUG: selected_backend_url={selected_backend_url}")
     vastai_contract_to_stop: int | str | None = None
 
     if vastai:

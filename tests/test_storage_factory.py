@@ -10,18 +10,20 @@ from rune_bench.storage import StoragePort, SQLiteStorageAdapter, make_storage
 
 def test_make_storage_sqlite_memory() -> None:
     store = make_storage("sqlite:///:memory:")
-
-    assert isinstance(store, SQLiteStorageAdapter)
-    # Sanity: the adapter is actually usable round-trip.
-    job_id, created = store.create_job(
-        tenant_id="tenant-a",
-        kind="benchmark",
-        request_payload={"question": "q"},
-    )
-    assert created is True
-    fetched = store.get_job(job_id, tenant_id="tenant-a")
-    assert fetched is not None
-    assert fetched.job_id == job_id
+    try:
+        assert isinstance(store, SQLiteStorageAdapter)
+        # Sanity: the adapter is actually usable round-trip.
+        job_id, created = store.create_job(
+            tenant_id="tenant-a",
+            kind="benchmark",
+            request_payload={"question": "q"},
+        )
+        assert created is True
+        fetched = store.get_job(job_id, tenant_id="tenant-a")
+        assert fetched is not None
+        assert fetched.job_id == job_id
+    finally:
+        store.close()
 
 
 def test_make_storage_sqlite_file_path(tmp_path) -> None:
@@ -29,35 +31,41 @@ def test_make_storage_sqlite_file_path(tmp_path) -> None:
     url = f"sqlite:///{db_file}"
 
     store = make_storage(url)
-
-    assert isinstance(store, SQLiteStorageAdapter)
-    assert db_file.parent.exists()
-    job_id, _ = store.create_job(
-        tenant_id="tenant-a",
-        kind="benchmark",
-        request_payload={"q": 1},
-    )
-    assert db_file.exists()
-    assert store.get_job(job_id) is not None
+    try:
+        assert isinstance(store, SQLiteStorageAdapter)
+        assert db_file.parent.exists()
+        job_id, _ = store.create_job(
+            tenant_id="tenant-a",
+            kind="benchmark",
+            request_payload={"q": 1},
+        )
+        assert db_file.exists()
+        assert store.get_job(job_id) is not None
+    finally:
+        store.close()
 
 
 def test_make_storage_sqlite_empty_path_defaults_to_memory() -> None:
     # ``sqlite://`` (no path component) is an edge case but must not
     # raise; it degrades to an in-memory database.
     store = make_storage("sqlite://")
-
-    assert isinstance(store, SQLiteStorageAdapter)
-    store.create_job(tenant_id="t", kind="benchmark", request_payload={})
+    try:
+        assert isinstance(store, SQLiteStorageAdapter)
+        store.create_job(tenant_id="t", kind="benchmark", request_payload={})
+    finally:
+        store.close()
 
 
 def test_make_storage_sqlite_plus_pysqlite_alias(tmp_path) -> None:
     db_file = tmp_path / "jobs.db"
     store = make_storage(f"sqlite+pysqlite:///{db_file}")
-
-    assert isinstance(store, SQLiteStorageAdapter)
-    assert db_file.exists() or True  # created lazily on first write
-    store.create_job(tenant_id="t", kind="benchmark", request_payload={})
-    assert db_file.exists()
+    try:
+        assert isinstance(store, SQLiteStorageAdapter)
+        assert db_file.exists() or True  # created lazily on first write
+        store.create_job(tenant_id="t", kind="benchmark", request_payload={})
+        assert db_file.exists()
+    finally:
+        store.close()
 
 
 @pytest.mark.parametrize(
@@ -80,9 +88,11 @@ def test_make_storage_unknown_scheme_raises(url: str) -> None:
 
 def test_storage_port_protocol_matches_sqlite_adapter(tmp_path) -> None:
     store = SQLiteStorageAdapter(tmp_path / "jobs.db")
-
-    # runtime_checkable Protocol — structural subtype check.
-    assert isinstance(store, StoragePort)
+    try:
+        # runtime_checkable Protocol — structural subtype check.
+        assert isinstance(store, StoragePort)
+    finally:
+        store.close()
 
 
 def test_storage_port_protocol_rejects_non_conforming_object() -> None:
