@@ -7,9 +7,10 @@ from unittest.mock import MagicMock, patch
 
 try:
     import psycopg  # noqa: F401
+    import psycopg_pool  # noqa: F401
     from psycopg.rows import dict_row  # noqa: F401
 except ImportError:
-    pytest.skip("psycopg not installed", allow_module_level=True)
+    pytest.skip("psycopg or psycopg_pool not installed", allow_module_level=True)
 
 from rune_bench.storage.postgres import PostgresStorageAdapter
 from rune_bench.metrics import MetricsEvent

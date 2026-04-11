@@ -11,8 +11,13 @@ import uuid
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Iterator
 
-from psycopg.rows import dict_row
-from psycopg_pool import ConnectionPool
+try:
+    from psycopg.rows import dict_row
+    from psycopg_pool import ConnectionPool
+except ImportError:
+    # Allow collection even if psycopg is missing
+    dict_row = None  # type: ignore[assignment,misc]
+    ConnectionPool = None  # type: ignore[assignment,misc]
 
 from rune_bench.storage.migrator import Migrator
 from rune_bench.storage.sqlite import JobRecord

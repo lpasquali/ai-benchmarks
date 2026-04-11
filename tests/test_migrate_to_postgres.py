@@ -4,8 +4,9 @@ from __future__ import annotations
 import pytest
 try:
     import psycopg  # noqa: F401
+    import psycopg_pool  # noqa: F401
 except ImportError:
-    pytest.skip("psycopg not installed", allow_module_level=True)
+    pytest.skip("psycopg or psycopg_pool not installed", allow_module_level=True)
 
 from contextlib import contextmanager
 import rune_bench.storage.migrate_to_postgres as migration_mod

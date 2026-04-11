@@ -1,8 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
-import pytest
 import json
 import os
 from unittest.mock import MagicMock, patch
+import pytest
+
+try:
+    import psycopg  # noqa: F401
+    import psycopg_pool  # noqa: F401
+except ImportError:
+    pytest.skip("psycopg or psycopg_pool not installed", allow_module_level=True)
+
 from rune_bench.storage.postgres import PostgresStorageAdapter
 
 @pytest.fixture
