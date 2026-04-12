@@ -13,13 +13,16 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 # kubectl — fetch binary here so the final image needs no curl/wget/git
-# TARGETARCH is injected automatically by docker buildx for multi-arch builds
+# TARGETARCH is set by buildx --platform; do not default to amd64 or arm64
+# hosts pull the wrong kubectl binary. Fall back to dpkg for plain docker build.
 ARG KUBECTL_VERSION=v1.35.3
-ARG TARGETARCH=amd64
-RUN curl -fsSL \
-    "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${TARGETARCH}/kubectl" \
-    -o /usr/local/bin/kubectl \
- && chmod +x /usr/local/bin/kubectl
+ARG TARGETARCH
+RUN set -eux; \
+    arch="${TARGETARCH:-$(dpkg --print-architecture)}"; \
+    curl -fsSL \
+    "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${arch}/kubectl" \
+    -o /usr/local/bin/kubectl; \
+    chmod +x /usr/local/bin/kubectl
 
 # Isolated virtualenv — only this directory is copied to the final stage
 RUN python -m venv /opt/venv
