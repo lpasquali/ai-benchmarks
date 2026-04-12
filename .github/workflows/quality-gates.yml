@@ -57,50 +57,81 @@ jobs:
 
   # ─── Shared: Security scanning (gitleaks + SBOM) ────────────────────────────
   security:
-    uses: lpasquali/rune-ci/.github/workflows/security-scan.yml@main
+    uses: lpasquali/rune-ci/.github/workflows/security-scan.yml@40149ab6e8d7305f01d31d3e53caa4da1361177b
     secrets: inherit
 
   # ─── Shared: Python quality (coverage + lint + SAST + license) ──────────────
   python-quality:
-    uses: lpasquali/rune-ci/.github/workflows/python-quality.yml@main
+    uses: lpasquali/rune-ci/.github/workflows/python-quality.yml@40149ab6e8d7305f01d31d3e53caa4da1361177b
     with:
       python-version: "3.14"
       coverage-threshold: "97"
       source-dirs: "rune_bench rune"
-      test-deps: "pytest pytest-asyncio pytest-cov pytest-xdist respx"
+      test-deps: "pytest pytest-cov pytest-xdist respx psycopg[binary,pool]"
       path-filter: '^(rune/|rune_bench/|tests/|requirements\.txt|pyproject\.toml)'
       allowed-license-exceptions: "bashlex,borb"
     secrets: inherit
 
   # ─── Shared: Integration (Ollama + Smoke) ──────────────────────────────────
   integration:
-    uses: lpasquali/rune-ci/.github/workflows/python-integration.yml@main
+    uses: lpasquali/rune-ci/.github/workflows/python-integration.yml@40149ab6e8d7305f01d31d3e53caa4da1361177b
     needs: [changes, python-quality]
     if: needs.changes.outputs.python == 'true'
     with:
       path-filter: "^(rune/|rune_bench/|tests/|requirements\\.txt|pyproject\\.toml)"
 
+  # ─── PostgreSQL Integration ────────────────────────────────────────────────
+  postgres-integration:
+    name: Postgres Integration
+    needs: [changes, python-quality]
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: rune
+          POSTGRES_PASSWORD: test
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d rune"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.14"
+      - name: Install package and test dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,pg]"
+      - name: Run Postgres integration suite
+        env:
+          RUNE_PG_TEST_URL: postgresql://postgres:test@127.0.0.1:5432/rune
+        run: >-
+          pytest -o addopts='' -m integration_postgres tests/integration/test_postgres_storage.py
+          --cov=rune_bench.storage.postgres --cov-report=term-missing --cov-fail-under=0
+
+  # ─── SR-2 quantitative compliance (rune-audit) ─────────────────────────────
+  sr2-compliance:
+    uses: lpasquali/rune-ci/.github/workflows/sr2-compliance.yml@40149ab6e8d7305f01d31d3e53caa4da1361177b
+    secrets: inherit
+
   # ─── Shared: Container Build (Multi-arch) ──────────────────────────────────
   container:
     needs: [changes, security]
     if: needs.changes.outputs.docker == 'true'
-    uses: lpasquali/rune-ci/.github/workflows/container-build.yml@main
+    uses: lpasquali/rune-ci/.github/workflows/container-build.yml@40149ab6e8d7305f01d31d3e53caa4da1361177b
     with:
       image-name: "rune"
       push: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
   # ─── Compliance/Merge Gate ──────────────────────────────────────────────────
   compliance:
-    needs: [security, python-quality, integration, container]
+    needs: [security, python-quality, integration, postgres-integration, container, sr2-compliance]
     if: always()
-    uses: lpasquali/rune-ci/.github/workflows/pr-compliance.yml@main
+    uses: lpasquali/rune-ci/.github/workflows/pr-compliance.yml@40149ab6e8d7305f01d31d3e53caa4da1361177b
     with:
       needs-json: ${{ toJson(needs) }}
-
-  merge-gate:
-    name: Merge Gate
-    needs: [compliance]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Merge Gate Satisfied"
