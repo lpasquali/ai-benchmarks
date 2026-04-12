@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rune-bench"
-version = "0.0.0a5"
+version = "0.0.0a6"
 description = "RUNE — Reliability Use-case Numeric Evaluator"
 readme = "README.md"
 license = { file = "LICENSE" }
