@@ -57,12 +57,12 @@ jobs:
 
   # ─── Shared: Security scanning (gitleaks + SBOM) ────────────────────────────
   security:
-    uses: lpasquali/rune-ci/.github/workflows/security-scan.yml@40149ab6e8d7305f01d31d3e53caa4da1361177b
+    uses: lpasquali/rune-ci/.github/workflows/security-scan.yml@9f939b2c28317b6f55c1913c6a6485bd91e1bda5
     secrets: inherit
 
   # ─── Shared: Python quality (coverage + lint + SAST + license) ──────────────
   python-quality:
-    uses: lpasquali/rune-ci/.github/workflows/python-quality.yml@40149ab6e8d7305f01d31d3e53caa4da1361177b
+    uses: lpasquali/rune-ci/.github/workflows/python-quality.yml@9f939b2c28317b6f55c1913c6a6485bd91e1bda5
     with:
       python-version: "3.14"
       coverage-threshold: "97"
@@ -74,7 +74,7 @@ jobs:
 
   # ─── Shared: Integration (Ollama + Smoke) ──────────────────────────────────
   integration:
-    uses: lpasquali/rune-ci/.github/workflows/python-integration.yml@40149ab6e8d7305f01d31d3e53caa4da1361177b
+    uses: lpasquali/rune-ci/.github/workflows/python-integration.yml@9f939b2c28317b6f55c1913c6a6485bd91e1bda5
     needs: [changes, python-quality]
     if: needs.changes.outputs.python == 'true'
     with:
@@ -116,14 +116,14 @@ jobs:
 
   # ─── SR-2 quantitative compliance (rune-audit) ─────────────────────────────
   sr2-compliance:
-    uses: lpasquali/rune-ci/.github/workflows/sr2-compliance.yml@40149ab6e8d7305f01d31d3e53caa4da1361177b
+    uses: lpasquali/rune-ci/.github/workflows/sr2-compliance.yml@9f939b2c28317b6f55c1913c6a6485bd91e1bda5
     secrets: inherit
 
   # ─── Shared: Container Build (Multi-arch) ──────────────────────────────────
   container:
     needs: [changes, security]
     if: needs.changes.outputs.docker == 'true'
-    uses: lpasquali/rune-ci/.github/workflows/container-build.yml@40149ab6e8d7305f01d31d3e53caa4da1361177b
+    uses: lpasquali/rune-ci/.github/workflows/container-build.yml@9f939b2c28317b6f55c1913c6a6485bd91e1bda5
     with:
       image-name: "rune"
       push: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
@@ -132,6 +132,6 @@ jobs:
   compliance:
     needs: [security, python-quality, integration, postgres-integration, container, sr2-compliance]
     if: always()
-    uses: lpasquali/rune-ci/.github/workflows/pr-compliance.yml@40149ab6e8d7305f01d31d3e53caa4da1361177b
+    uses: lpasquali/rune-ci/.github/workflows/pr-compliance.yml@9f939b2c28317b6f55c1913c6a6485bd91e1bda5
     with:
       needs-json: ${{ toJson(needs) }}
