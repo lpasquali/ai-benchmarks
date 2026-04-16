@@ -363,11 +363,9 @@ def test_record_chain_initialized_normalizes_nodes(mock_pool):
     storage.record_chain_initialized(job_id="j1", nodes=nodes, edges=edges)
     assert conn.execute.called
     
-    # Check that execute was called with proper data structure
-    call_args = conn.execute.call_args
-    assert call_args is not None
-    # The call should have the INSERT statement and the params tuple
-    assert "j1" in call_args[0] or "j1" in call_args[1]
+    # INSERT uses positional args: (sql, (job_id, state_json, overall, now))
+    _stmt, params = conn.execute.call_args[0]
+    assert params[0] == "j1"
 
 
 def test_get_job(mock_pool):
@@ -431,9 +429,8 @@ def test_list_jobs_for_finops_with_limit(mock_pool):
     result = storage.list_jobs_for_finops(tenant_id="t1", limit=100)
     assert len(result) == 1
     assert conn.execute.called
-    # Verify that the query was called with the limit parameter
-    call_args = conn.execute.call_args
-    assert 100 in call_args[0] or 100 in call_args[1]
+    _stmt, params = conn.execute.call_args[0]
+    assert params == ("t1", 100)
 
 
 def test_get_events_summary_without_job_filter(mock_pool):

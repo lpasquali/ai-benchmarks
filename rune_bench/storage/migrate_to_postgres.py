@@ -100,6 +100,31 @@ _TABLE_SPECS = (
 )
 
 
+def _migrate_table(
+    source: SQLiteStorageAdapter,
+    target: PostgresStorageAdapter,
+    spec: _TableSpec,
+    *,
+    batch_size: int = 1000,
+) -> TableMigrationResult:
+    """Copy rows for a single table from SQLite to PostgreSQL in batches."""
+    total = _count_rows(source, spec.name)
+    migrated = 0
+    for offset in range(0, total, batch_size):
+        rows = _fetch_batch(source, spec, batch_size=batch_size, offset=offset)
+        _insert_batch(target, spec, rows)
+        migrated += len(rows)
+    if spec.reset_sequence_sql is not None:
+        with target.connection() as conn:
+            conn.execute(spec.reset_sequence_sql)
+    return TableMigrationResult(
+        table=spec.name,
+        source_count=total,
+        migrated_count=migrated,
+        dry_run=False,
+    )
+
+
 def migrate_to_postgres(
     *,
     source_url: str,
@@ -135,26 +160,11 @@ def migrate_to_postgres(
             )
             continue
 
-        migrated = 0
-        for offset in range(0, total, batch_size):
-            rows = _fetch_batch(source, spec, batch_size=batch_size, offset=offset)
-            _insert_batch(target, spec, rows)
-            migrated += len(rows)
-            if reporter is not None:
-                reporter(spec.name, migrated, total, False)
+        result = _migrate_table(source, target, spec, batch_size=batch_size)
+        if reporter is not None:
+            reporter(spec.name, result.migrated_count, result.source_count, False)
 
-        if spec.reset_sequence_sql is not None:
-            with target.connection() as conn:
-                conn.execute(spec.reset_sequence_sql)
-
-        results.append(
-            TableMigrationResult(
-                table=spec.name,
-                source_count=total,
-                migrated_count=migrated,
-                dry_run=False,
-            )
-        )
+        results.append(result)
     return results
 
 
