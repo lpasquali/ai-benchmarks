@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from rune_bench import debug_pprof
 from rune_bench.api_backend import (
     get_cost_estimate,
     list_vastai_models,
@@ -550,6 +551,7 @@ class RuneApiApplication:
             self.store.update_job(job_id, status="failed", error=str(exc))
 
     def serve(self, host: str = "127.0.0.1", port: int = 8080) -> None:
+        debug_pprof.start_background_server_if_configured()
         server = ThreadingHTTPServer((host, port), self.create_handler())
         server.timeout = _HTTP_REQUEST_SOCKET_TIMEOUT_S
         try:
