@@ -17,6 +17,7 @@ def pg_url():
         pytest.skip("RUNE_TEST_POSTGRES_URL not set")
     return url
 
+@pytest.mark.integration_postgres
 def test_postgres_storage_basic_ops(pg_url):
     storage = PostgresStorageAdapter(pg_url)
     with storage.connection() as conn:
