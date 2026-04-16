@@ -132,6 +132,6 @@ jobs:
   compliance:
     needs: [security, python-quality, integration, postgres-integration, container, sr2-compliance]
     if: always()
-    uses: lpasquali/rune-ci/.github/workflows/pr-compliance.yml@9f939b2c28317b6f55c1913c6a6485bd91e1bda5
+    uses: lpasquali/rune-ci/.github/workflows/pr-compliance.yml@4f45a889234bed748d7a20bb09bf4e7615219e2d
     with:
       needs-json: ${{ toJson(needs) }}
