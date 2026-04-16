@@ -40,15 +40,6 @@ async def test_backend_type_checks():
 def test_audit_artifact_content_type_fallback():
     assert _audit_artifact_content_type("unknown") == "application/octet-stream"
 
-@pytest.mark.asyncio
-async def test_api_application_unsupported_kind():
-    RuneApiApplication(store=MagicMock(), security=ApiSecurityConfig(auth_disabled=True, tenant_tokens={}))
-    
-    # We'll use _execute_job since _dispatch is going to be removed
-    # But wait, _execute_job doesn't raise, it updates job status to 'failed'
-    # So we should test the logic inside it.
-    pass
-
 def test_api_handler_setup_timeout_error():
     # Test the 'except (AttributeError, OSError): pass' in RuneApiHandler.setup
     app = RuneApiApplication(store=MagicMock(), security=ApiSecurityConfig(auth_disabled=True, tenant_tokens={}))

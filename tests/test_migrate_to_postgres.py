@@ -364,7 +364,7 @@ def test_migrate_empty_tables() -> None:
     
     # Should complete without error
     for spec in migration_mod._TABLE_SPECS:
-        count = source._count(spec.name)
+        count = migration_mod._count_rows(source, spec.name)
         if count > 0:
             migration_mod._migrate_table(source, target, spec)
     
@@ -403,7 +403,7 @@ def test_batch_size_handling() -> None:
     target = _FakePostgresAdapter()
     spec = migration_mod._TABLE_SPECS[0]  # jobs table spec
     
-    migration_mod._migrate_table(source, target, spec)
+    migration_mod._migrate_table(source, target, spec, batch_size=1000)
     
     # Verify all rows were inserted
     assert len(target._conn.tables.get("jobs", [])) == 5000
@@ -416,6 +416,8 @@ def test_idempotency_key_migration() -> None:
             "jobs": [],
             "idempotency_keys": [
                 {
+                    "tenant_id": "tenant-a",
+                    "operation": "benchmark",
                     "idempotency_key": "key-1",
                     "job_id": "job-1",
                     "created_at": 1.0,
@@ -443,7 +445,7 @@ def test_workflow_events_migration() -> None:
             "idempotency_keys": [],
             "workflow_events": [
                 {
-                    "event_id": "ev-1",
+                    "id": 1,
                     "job_id": "job-1",
                     "event": "test_event",
                     "status": "ok",
