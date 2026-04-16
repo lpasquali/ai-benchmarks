@@ -123,7 +123,7 @@ jobs:
   container:
     needs: [changes, security]
     if: needs.changes.outputs.docker == 'true'
-    uses: lpasquali/rune-ci/.github/workflows/container-build.yml@9f939b2c28317b6f55c1913c6a6485bd91e1bda5
+    uses: lpasquali/rune-ci/.github/workflows/container-build.yml@4f45a889234bed748d7a20bb09bf4e7615219e2d
     with:
       image-name: "rune"
       push: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
