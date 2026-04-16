@@ -62,7 +62,7 @@ jobs:
 
   # ─── Shared: Python quality (coverage + lint + SAST + license) ──────────────
   python-quality:
-    uses: lpasquali/rune-ci/.github/workflows/python-quality.yml@9f939b2c28317b6f55c1913c6a6485bd91e1bda5
+    uses: lpasquali/rune-ci/.github/workflows/python-quality.yml@4f45a889234bed748d7a20bb09bf4e7615219e2d
     with:
       python-version: "3.14"
       coverage-threshold: "97"
