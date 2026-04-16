@@ -596,11 +596,23 @@ def serve_api(
         envvar="RUNE_DEBUG",
         help="Show outbound client requests and API calls",
     ),
+    pprof_bind: str | None = typer.Option(
+        None,
+        "--pprof-bind",
+        envvar="RUNE_PPROF_BIND_ADDRESS",
+        help=(
+            "Optional host:port for pprof-style diagnostics (tracemalloc + thread stacks); "
+            "separate from the API port. Use 0 to disable. Example: 127.0.0.1:6060"
+        ),
+    ),
 ) -> None:
     """Start the standalone RUNE API server."""
     from rune_bench.api_server import RuneApiApplication
 
     _enable_debug_if_requested(debug)
+
+    if pprof_bind is not None:
+        os.environ["RUNE_PPROF_BIND_ADDRESS"] = pprof_bind
 
     resolved_port = api_port if api_port is not None else _resolve_serve_port()
     console.print(Panel.fit(
