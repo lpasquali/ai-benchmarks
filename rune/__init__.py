@@ -611,7 +611,9 @@ def serve_api(
 
     _enable_debug_if_requested(debug)
 
-    if pprof_bind is not None:
+    # Typer leaves Option metadata on parameters when the command is invoked
+    # directly (not through the CLI); only propagate real strings to the env.
+    if isinstance(pprof_bind, str):
         os.environ["RUNE_PPROF_BIND_ADDRESS"] = pprof_bind
 
     resolved_port = api_port if api_port is not None else _resolve_serve_port()
