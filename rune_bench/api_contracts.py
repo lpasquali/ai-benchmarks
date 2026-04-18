@@ -19,7 +19,7 @@ _MAX_BACKEND_TYPE_LEN = 64
 
 
 def _check_max_str(field: str, value: str, maxlen: int) -> None:
-    if len(value) > maxlen:
+    if isinstance(value, str) and len(value) > maxlen:
         raise ValueError(f"{field} exceeds maximum length {maxlen} (SR-Q-035)")
 
 
@@ -52,6 +52,11 @@ class RunLLMInstanceRequest:
     backend_url: str | None = None
     backend_type: str = "ollama"
 
+    def __post_init__(self) -> None:
+        if self.backend_url:
+            _check_max_str("backend_url", self.backend_url, _MAX_BACKEND_URL_LEN)
+        _check_max_str("backend_type", self.backend_type, _MAX_BACKEND_TYPE_LEN)
+
     @classmethod
     def from_dict(cls, data: dict) -> "RunLLMInstanceRequest":
         prov = data.get("provisioning")
@@ -78,6 +83,16 @@ class RunAgenticAgentRequest:
     backend_type: str = "ollama"
     kubeconfig: str | None = None
     agent: str = "holmes"
+
+    def __post_init__(self) -> None:
+        _check_max_str("question", self.question, _MAX_QUESTION_LEN)
+        _check_max_str("model", self.model, _MAX_MODEL_NAME_LEN)
+        if self.backend_url:
+            _check_max_str("backend_url", self.backend_url, _MAX_BACKEND_URL_LEN)
+        _check_max_str("backend_type", self.backend_type, _MAX_BACKEND_TYPE_LEN)
+        if self.kubeconfig:
+            _check_max_str("kubeconfig", self.kubeconfig, _MAX_KUBECONFIG_PATH_LEN)
+        _check_max_str("agent", self.agent, _MAX_AGENT_NAME_LEN)
 
     @classmethod
     def from_dict(cls, data: dict) -> "RunAgenticAgentRequest":
@@ -122,6 +137,14 @@ class RunBenchmarkRequest:
     kubeconfig: str
     attestation_required: bool = False
     backend_type: str = "ollama"
+
+    def __post_init__(self) -> None:
+        if self.backend_url:
+            _check_max_str("backend_url", self.backend_url, _MAX_BACKEND_URL_LEN)
+        _check_max_str("question", self.question, _MAX_QUESTION_LEN)
+        _check_max_str("model", self.model, _MAX_MODEL_NAME_LEN)
+        _check_max_str("kubeconfig", self.kubeconfig, _MAX_KUBECONFIG_PATH_LEN)
+        _check_max_str("backend_type", self.backend_type, _MAX_BACKEND_TYPE_LEN)
 
     @classmethod
     def from_cli(
@@ -206,6 +229,9 @@ class CostEstimationRequest:
     # Run parameters
     model: str = ""
     estimated_duration_seconds: int = 3600
+
+    def __post_init__(self) -> None:
+        _check_max_str("model", self.model, _MAX_MODEL_NAME_LEN)
 
     def to_dict(self) -> dict:
         return asdict(self)
