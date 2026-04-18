@@ -7,6 +7,7 @@ import logging
 import os
 import threading
 import time
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -37,6 +38,45 @@ from rune_bench.storage.sqlite import SQLiteStorageAdapter
 
 JobStore = SQLiteStorageAdapter
 _HTTP_REQUEST_SOCKET_TIMEOUT_S = 30.0
+
+
+class JsonFormatter(logging.Formatter):
+    """JSON log formatter for structured audit logging."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        log_data = {
+            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        if record.exc_info:
+            log_data["exception"] = self.formatException(record.exc_info)
+        
+        # Merge extra context if present
+        if hasattr(record, "tenant_id"):
+            log_data["tenant_id"] = record.tenant_id
+        if hasattr(record, "job_id"):
+            log_data["job_id"] = record.job_id
+            
+        return json.dumps(log_data)
+
+
+def setup_logging(level: int = logging.INFO, json_format: bool = True) -> None:
+    """Configure the root logger for RUNE."""
+    root = logging.getLogger()
+    # Clear existing handlers
+    for handler in root.handlers[:]:
+        root.removeHandler(handler)
+        
+    handler = logging.StreamHandler()
+    if json_format:
+        handler.setFormatter(JsonFormatter())
+    else:
+        handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+        
+    root.addHandler(handler)
+    root.setLevel(level)
 
 
 class RequestRateLimited(RuntimeError):
@@ -111,7 +151,13 @@ class ApiSecurityConfig:
             for pair in raw_tokens.split(","):
                 if ":" in pair:
                     tenant, secret = pair.split(":", 1)
-                    tenant_tokens[tenant.strip()] = secret.strip()
+                    secret = secret.strip()
+                    if len(secret) < 32:
+                        raise RuntimeError(
+                            f"RUNE API token for tenant '{tenant.strip()}' is too short "
+                            f"({len(secret)} chars); minimum length is 32 characters."
+                        )
+                    tenant_tokens[tenant.strip()] = secret
         
         if not auth_disabled and not tenant_tokens:
             raise RuntimeError(
@@ -165,7 +211,7 @@ class RuneApiApplication:
         with self._lock:
             history = self._rate_limits.get(tenant_id, [])
             history = [t for t in history if now - t < 60]
-            if len(history) >= 10:
+            if len(history) >= 100:
                 raise RequestRateLimited("rate limit exceeded")
             history.append(now)
             self._rate_limits[tenant_id] = history
@@ -229,9 +275,9 @@ class RuneApiApplication:
                     if hmac.compare_digest(token, expected_token):
                         return tenant_id
                     else:
-                        logging.error(f"Auth failed for {tenant_id}")
+                        logging.error(f"Auth failed for {tenant_id}", extra={"tenant_id": tenant_id})
                 else:
-                    logging.error(f"Auth failed for {tenant_id}: tenant not found")
+                    logging.error(f"Auth failed for {tenant_id}: tenant not found", extra={"tenant_id": tenant_id})
                 return None
 
             def do_GET(self) -> None:
@@ -547,10 +593,13 @@ class RuneApiApplication:
             
             self.store.update_job(job_id, status="succeeded", result_payload=result)
         except Exception as exc:
-            logging.exception("Job %s failed", job_id)
+            job = self.store.get_job(job_id)
+            tenant_id = getattr(job, "tenant_id", "unknown") if job else "unknown"
+            logging.exception("Job %s failed", job_id, extra={"job_id": job_id, "tenant_id": tenant_id})
             self.store.update_job(job_id, status="failed", error=str(exc))
 
     def serve(self, host: str = "127.0.0.1", port: int = 8080) -> None:
+        setup_logging(json_format=True)
         debug_pprof.start_background_server_if_configured()
         server = ThreadingHTTPServer((host, port), self.create_handler())
         server.timeout = _HTTP_REQUEST_SOCKET_TIMEOUT_S

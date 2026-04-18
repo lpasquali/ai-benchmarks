@@ -100,15 +100,15 @@ def test_api_server_enforces_tenant_scoping_and_idempotency(rune_api_server):
 def test_api_server_rate_limiting(rune_api_server):
     base_url, _state = rune_api_server
 
-    # Attempt 10 failed logins
-    for i in range(10):
+    # Attempt 100 failed logins
+    for i in range(100):
         request = Request(f"{base_url}/v1/catalog/vastai-models")
         request.add_header("Authorization", "Bearer invalid-token")
         with pytest.raises(HTTPError) as exc:
             urlopen(request)
         assert exc.value.code == 401
 
-    # 11th attempt should trigger rate limit
+    # 101st attempt should trigger rate limit
     request = Request(f"{base_url}/v1/catalog/vastai-models")
     request.add_header("Authorization", "Bearer invalid-token")
     with pytest.raises(HTTPError) as exc:
