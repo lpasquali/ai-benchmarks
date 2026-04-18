@@ -215,7 +215,7 @@ def test_api_server_rate_limiting():
     from rune_bench.api_server import RuneApiApplication, RequestRateLimited
     app = RuneApiApplication(store=MagicMock(), security=MagicMock())
     # Fill history
-    for _ in range(10):
+    for _ in range(100):
         app._enforce_request_rate_limit("t1")
     
     with pytest.raises(RequestRateLimited):

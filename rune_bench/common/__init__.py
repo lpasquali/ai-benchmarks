@@ -12,7 +12,7 @@ from .config import (
     update_settings,
 )
 from .costs import FailClosedError
-from .http_client import make_http_request, normalize_url
+from .http_client import make_async_http_request, make_http_request, normalize_url
 from .models import MODELS, ModelSelector, SelectedModel
 
 __all__ = [
@@ -21,6 +21,7 @@ __all__ = [
     "SelectedModel",
     "normalize_url",
     "make_http_request",
+    "make_async_http_request",
     "load_config",
     "peek_profile_from_argv",
     "get_loaded_config_files",

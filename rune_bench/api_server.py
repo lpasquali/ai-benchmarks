@@ -275,9 +275,9 @@ class RuneApiApplication:
                     if hmac.compare_digest(token, expected_token):
                         return tenant_id
                     else:
-                        logging.error(f"Auth failed for {tenant_id}")
+                        logging.error(f"Auth failed for {tenant_id}", extra={"tenant_id": tenant_id})
                 else:
-                    logging.error(f"Auth failed for {tenant_id}: tenant not found")
+                    logging.error(f"Auth failed for {tenant_id}: tenant not found", extra={"tenant_id": tenant_id})
                 return None
 
             def do_GET(self) -> None:
@@ -593,7 +593,9 @@ class RuneApiApplication:
             
             self.store.update_job(job_id, status="succeeded", result_payload=result)
         except Exception as exc:
-            logging.exception("Job %s failed", job_id)
+            job = self.store.get_job(job_id)
+            tenant_id = getattr(job, "tenant_id", "unknown") if job else "unknown"
+            logging.exception("Job %s failed", job_id, extra={"job_id": job_id, "tenant_id": tenant_id})
             self.store.update_job(job_id, status="failed", error=str(exc))
 
     def serve(self, host: str = "127.0.0.1", port: int = 8080) -> None:

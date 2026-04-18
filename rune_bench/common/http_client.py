@@ -129,3 +129,56 @@ def make_http_request(
         raise RuntimeError(f"Unexpected JSON payload while attempting to {action}")
     
     return result
+
+
+async def make_async_http_request(
+    url: str,
+    *,
+    method: str,
+    payload: dict[str, Any] | None = None,
+    action: str = "perform request",
+    timeout_seconds: int = 30,
+    headers: dict[str, str] | None = None,
+    debug_prefix: str = "HTTP",
+    verify_ssl: bool = True,
+) -> dict[str, Any]:
+    """Execute an asynchronous HTTP request and return parsed JSON response."""
+    import httpx
+    
+    debug_log(
+        f"{debug_prefix} async request: method={method} url={url} action={action} "
+        f"payload={json.dumps(payload, sort_keys=True) if payload is not None else '<none>'}"
+    )
+
+    try:
+        async with httpx.AsyncClient(verify=verify_ssl) as client:
+            response = await client.request(
+                method=method,
+                url=url,
+                json=payload,
+                headers=headers,
+                timeout=timeout_seconds,
+            )
+            response.raise_for_status()
+            result = response.json()
+            
+            debug_log(
+                f"{debug_prefix} async response: method={method} url={url} status={response.status_code} "
+                f"body={response.text}"
+            )
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text.strip()
+        debug_log(f"{debug_prefix} async HTTP error: method={method} url={url} status={exc.response.status_code} detail={detail}")
+        if detail:
+            raise RuntimeError(f"Failed to {action}: {detail}") from exc
+        raise RuntimeError(f"Failed to {action}: HTTP {exc.response.status_code}") from exc
+    except (httpx.RequestError, TimeoutError) as exc:
+        debug_log(f"{debug_prefix} async transport error: method={method} url={url} error={exc}")
+        raise RuntimeError(f"Failed to {action}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Invalid JSON response while attempting to {action}") from exc
+
+    if not isinstance(result, dict):
+        raise RuntimeError(f"Unexpected JSON payload while attempting to {action}")
+    
+    return result
