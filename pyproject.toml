@@ -41,6 +41,10 @@ holmes = [
     # supabase<2.29 — relaxed upper bound per Dependabot bump
     "supabase>=2.5,<2.29",
 ]
+aws = [
+    "boto3>=1.34",
+    "aioboto3>=12.3",
+]
 vastai = [
     "httpx>=0.27.0",
 ]
@@ -52,6 +56,8 @@ all = [
     "supabase>=2.5,<2.29",
     "httpx>=0.27.0",
     "pyyaml>=6.0",
+    "boto3>=1.34",
+    "aioboto3>=12.3",
 ]
 dev = [
     "pytest>=8",

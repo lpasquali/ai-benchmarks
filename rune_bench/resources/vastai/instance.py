@@ -5,6 +5,8 @@ Handles instance creation, polling until running, model pull via
 Ollama, and surfacing external connection details.
 """
 
+from __future__ import annotations
+
 import time
 from typing import Callable, TYPE_CHECKING
 

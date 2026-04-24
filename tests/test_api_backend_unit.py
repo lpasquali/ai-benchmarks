@@ -5,18 +5,34 @@ from unittest.mock import MagicMock, patch, AsyncMock
 from rune_bench.api_backend import get_cost_estimate, run_agentic_agent, run_benchmark, _vastai_sdk, _make_agent_runner, run_llm_instance, list_backend_models
 from rune_bench.api_contracts import CostEstimationRequest, RunAgenticAgentRequest, RunBenchmarkRequest, Provisioning, RunLLMInstanceRequest, VastAIProvisioning
 
-def test_get_cost_estimate_cloud():
-    req = CostEstimationRequest(estimated_duration_seconds=3600, aws=True, min_dph=1.0, max_dph=2.0)
-    res = get_cost_estimate(req)
-    assert res["projected_cost_usd"] == 1.5
+def test_get_cost_estimate_cloud(monkeypatch):
+    import sys
+    import types
     
-    req = CostEstimationRequest(estimated_duration_seconds=3600, gcp=True, min_dph=1.0, max_dph=2.0)
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {"Items": [{"retailPrice": 3.06}]}
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.get = AsyncMock(return_value=mock_resp)
+    mock_httpx = types.ModuleType("httpx")
+    mock_httpx.AsyncClient = MagicMock(return_value=mock_client)  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "httpx", mock_httpx)
+
+    # AWS: g4dn.xlarge midpoint is 0.526 -> rounded to 0.53
+    req = CostEstimationRequest(estimated_duration_seconds=3600, aws=True, model="g4dn.xlarge")
     res = get_cost_estimate(req)
-    assert res["projected_cost_usd"] == 1.5
+    assert res["projected_cost_usd"] == pytest.approx(0.53, rel=1e-2)
     
-    req = CostEstimationRequest(estimated_duration_seconds=3600, azure=True, min_dph=1.0, max_dph=2.0)
+    # GCP: n1-standard-4 + T4 baseline is 0.70
+    req = CostEstimationRequest(estimated_duration_seconds=3600, gcp=True, model="n1-standard-4")
     res = get_cost_estimate(req)
-    assert res["projected_cost_usd"] == 1.5
+    assert res["projected_cost_usd"] == pytest.approx(0.70, rel=1e-2)
+    
+    # Azure: NC6s_v3 baseline is 3.06
+    req = CostEstimationRequest(estimated_duration_seconds=3600, azure=True, model="Standard_NC6s_v3")
+    res = get_cost_estimate(req)
+    assert res["projected_cost_usd"] == pytest.approx(3.06, rel=1e-2)
 
 def test_get_cost_estimate_local_hardware():
     req = CostEstimationRequest(
