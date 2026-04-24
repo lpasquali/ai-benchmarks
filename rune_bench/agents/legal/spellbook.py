@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any
 
 import httpx
 
@@ -31,11 +30,16 @@ class SpellbookRunner:
             return "Error: SPELLBOOK_API_KEY not set."
 
         headers = {"Authorization": f"Bearer {self._api_key}"}
-        
-        with httpx.Client(base_url=self._api_base, headers=headers, timeout=60.0) as client:
+
+        with httpx.Client(
+            base_url=self._api_base, headers=headers, timeout=60.0
+        ) as client:
             try:
                 # 1. Start review
-                payload = {"document_text": question, "review_type": model or "standard"}
+                payload = {
+                    "document_text": question,
+                    "review_type": model or "standard",
+                }
                 resp = client.post("/reviews", json=payload)
                 resp.raise_for_status()
                 review_id = resp.json()["id"]
@@ -48,10 +52,10 @@ class SpellbookRunner:
                     if job_resp.status_code == 200:
                         job_data = job_resp.json()
                         status = job_data.get("status", "").lower()
-                        
+
                         if status == "completed":
                             return f"Spellbook legal review result: {job_data.get('summary')}"
-                        
+
                         if status == "error":
                             return f"Spellbook: Review failed: {job_data.get('error')}"
 

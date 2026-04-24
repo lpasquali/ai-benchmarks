@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any
 
 import httpx
 
@@ -23,7 +22,9 @@ class RadiantSecurityRunner:
 
     def __init__(self, api_key: str | None = None, base_url: str | None = None) -> None:
         self._api_key = api_key or os.getenv("RADIANT_API_KEY")
-        self._api_base = base_url or os.getenv("RADIANT_API_BASE", "https://api.radiantsecurity.ai/v1")
+        self._api_base = base_url or os.getenv(
+            "RADIANT_API_BASE", "https://api.radiantsecurity.ai/v1"
+        )
 
     def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Submit a security incident to Radiant and return the investigation report."""
@@ -31,8 +32,10 @@ class RadiantSecurityRunner:
             return "Error: RADIANT_API_KEY not set."
 
         headers = {"Authorization": f"Bearer {self._api_key}"}
-        
-        with httpx.Client(base_url=self._api_base, headers=headers, timeout=30.0) as client:
+
+        with httpx.Client(
+            base_url=self._api_base, headers=headers, timeout=30.0
+        ) as client:
             try:
                 # 1. Create Incident / Alert
                 payload = {"description": question, "source": "RUNE-Bench"}
@@ -48,12 +51,14 @@ class RadiantSecurityRunner:
                     if report_resp.status_code == 200:
                         report_data = report_resp.json()
                         status = report_data.get("status", "").lower()
-                        
+
                         if status == "completed":
                             verdict = report_data.get("verdict", "Unknown")
                             summary = report_data.get("summary", "No summary provided.")
-                            return f"Radiant Investigation: {verdict}. Summary: {summary}"
-                        
+                            return (
+                                f"Radiant Investigation: {verdict}. Summary: {summary}"
+                            )
+
                         if status == "failed":
                             return f"Radiant: Investigation failed: {report_data.get('error')}"
 

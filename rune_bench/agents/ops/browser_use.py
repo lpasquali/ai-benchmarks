@@ -11,9 +11,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-from typing import Any
-
-from rune_bench.debug import debug_log
 
 
 class BrowserUseRunner:
@@ -39,10 +36,10 @@ class BrowserUseRunner:
             # For simplicity in this implementation, we assume the environment
             # has already configured the default LLM (e.g. via env vars).
             # Future: Use get_backend() to provide a local Ollama model to Agent.
-            
+
             agent = Agent(
                 task=question,
-                llm=None, # uses default from env
+                llm=None,  # uses default from env
             )
             result = await agent.run()
             return f"Browser-Use task result: {result}"

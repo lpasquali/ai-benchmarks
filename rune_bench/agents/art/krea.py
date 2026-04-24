@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any
 
 import httpx
 
@@ -32,8 +31,10 @@ class KreaRunner:
             return "Error: KREA_API_KEY not set."
 
         headers = {"Authorization": f"Bearer {self._api_key}"}
-        
-        with httpx.Client(base_url=self._api_base, headers=headers, timeout=30.0) as client:
+
+        with httpx.Client(
+            base_url=self._api_base, headers=headers, timeout=30.0
+        ) as client:
             try:
                 # 1. Submit task
                 payload = {"prompt": question, "model": model or "krea-v1"}
@@ -49,11 +50,11 @@ class KreaRunner:
                     if task_resp.status_code == 200:
                         task_data = task_resp.json()
                         status = task_data.get("status", "").lower()
-                        
+
                         if status == "succeeded":
                             image_url = task_data.get("output_url")
                             return f"Krea AI generated image: {image_url}"
-                        
+
                         if status == "failed":
                             return f"Krea: Task failed: {task_data.get('error')}"
 

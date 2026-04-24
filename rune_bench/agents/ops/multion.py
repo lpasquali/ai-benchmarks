@@ -10,12 +10,8 @@ Ecosystem:  Web / SaaS API
 from __future__ import annotations
 
 import os
-import time
-from typing import Any
 
 import httpx
-
-from rune_bench.debug import debug_log
 
 
 class MultiOnRunner:
@@ -31,20 +27,22 @@ class MultiOnRunner:
             return "Error: MULTION_API_KEY not set."
 
         headers = {"Authorization": f"Bearer {self._api_key}"}
-        
-        with httpx.Client(base_url=self._api_base, headers=headers, timeout=60.0) as client:
+
+        with httpx.Client(
+            base_url=self._api_base, headers=headers, timeout=60.0
+        ) as client:
             try:
                 # 1. Browse (Run step-by-step or atomic)
                 # Note: MultiOn 'browse' is often long-running.
                 payload = {
                     "cmd": question,
-                    "url": "https://www.google.com", # Default starting point
-                    "local": False
+                    "url": "https://www.google.com",  # Default starting point
+                    "local": False,
                 }
                 resp = client.post("/browse", json=payload)
                 resp.raise_for_status()
                 data = resp.json()
-                
+
                 # MultiOn returns a summary/message of the action taken
                 return f"MultiOn browsing result: {data.get('message', 'No summary provided.')}"
             except Exception as exc:

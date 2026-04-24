@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any
 
 import httpx
 
@@ -23,7 +22,9 @@ class ClericRunner:
 
     def __init__(self, api_key: str | None = None, base_url: str | None = None) -> None:
         self._api_key = api_key or os.getenv("CLERIC_API_KEY")
-        self._api_base = base_url or os.getenv("CLERIC_API_BASE", "http://localhost:8080/v1")
+        self._api_base = base_url or os.getenv(
+            "CLERIC_API_BASE", "http://localhost:8080/v1"
+        )
 
     def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Run a Cleric investigation and return the findings."""
@@ -33,8 +34,10 @@ class ClericRunner:
         headers = {}
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
-        
-        with httpx.Client(base_url=self._api_base, headers=headers, timeout=60.0) as client:
+
+        with httpx.Client(
+            base_url=self._api_base, headers=headers, timeout=60.0
+        ) as client:
             try:
                 # 1. Start Investigation
                 payload = {"goal": question, "model": model or "gpt-4"}
@@ -50,12 +53,14 @@ class ClericRunner:
                     if job_resp.status_code == 200:
                         job_data = job_resp.json()
                         status = job_data.get("status", "").lower()
-                        
+
                         if status == "finished":
                             return f"Cleric Root Cause Analysis: {job_data.get('conclusion')}"
-                        
+
                         if status == "failed":
-                            return f"Cleric: Investigation failed: {job_data.get('error')}"
+                            return (
+                                f"Cleric: Investigation failed: {job_data.get('error')}"
+                            )
 
                 return "Cleric: Timeout waiting for investigation."
             except Exception as exc:

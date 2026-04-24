@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any
 
 import httpx
 
@@ -31,8 +30,10 @@ class SierraRunner:
             return "Error: SIERRA_API_KEY not set."
 
         headers = {"Authorization": f"Bearer {self._api_key}"}
-        
-        with httpx.Client(base_url=self._api_base, headers=headers, timeout=30.0) as client:
+
+        with httpx.Client(
+            base_url=self._api_base, headers=headers, timeout=30.0
+        ) as client:
             try:
                 # 1. Submit operation
                 payload = {"objective": question, "agent_id": model or "default"}
@@ -48,10 +49,10 @@ class SierraRunner:
                     if run_resp.status_code == 200:
                         run_data = run_resp.json()
                         status = run_data.get("status", "").lower()
-                        
+
                         if status == "completed":
                             return f"Sierra execution result: {run_data.get('summary')}"
-                        
+
                         if status == "failed":
                             return f"Sierra: Run failed: {run_data.get('error')}"
 

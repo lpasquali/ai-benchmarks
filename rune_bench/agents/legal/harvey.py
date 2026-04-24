@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any
 
 import httpx
 
@@ -31,8 +30,10 @@ class HarveyAIRunner:
             return "Error: HARVEY_API_KEY not set."
 
         headers = {"Authorization": f"Bearer {self._api_key}"}
-        
-        with httpx.Client(base_url=self._api_base, headers=headers, timeout=60.0) as client:
+
+        with httpx.Client(
+            base_url=self._api_base, headers=headers, timeout=60.0
+        ) as client:
             try:
                 # 1. Submit Completion
                 payload = {"prompt": question, "matter_type": model or "general"}
@@ -48,10 +49,10 @@ class HarveyAIRunner:
                     if job_resp.status_code == 200:
                         job_data = job_resp.json()
                         status = job_data.get("status", "").lower()
-                        
+
                         if status == "completed":
                             return f"Harvey AI Analysis: {job_data.get('analysis')}"
-                        
+
                         if status == "failed":
                             return f"Harvey: Analysis failed: {job_data.get('error')}"
 

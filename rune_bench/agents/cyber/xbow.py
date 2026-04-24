@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any
 
 import httpx
 
@@ -31,8 +30,10 @@ class XBOWRunner:
             return "Error: XBOW_API_KEY not set."
 
         headers = {"Authorization": f"Bearer {self._api_key}"}
-        
-        with httpx.Client(base_url=self._api_base, headers=headers, timeout=60.0) as client:
+
+        with httpx.Client(
+            base_url=self._api_base, headers=headers, timeout=60.0
+        ) as client:
             try:
                 # 1. Start assessment
                 payload = {"target": question, "scan_type": model or "full"}
@@ -48,11 +49,11 @@ class XBOWRunner:
                     if job_resp.status_code == 200:
                         job_data = job_resp.json()
                         status = job_data.get("status", "").lower()
-                        
+
                         if status == "finished":
                             findings = job_data.get("findings", [])
                             return f"XBOW Findings: {len(findings)} issues found. Summary: {job_data.get('summary')}"
-                        
+
                         if status == "error":
                             return f"XBOW: Assessment failed: {job_data.get('error')}"
 

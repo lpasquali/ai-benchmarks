@@ -3,12 +3,11 @@
 
 from __future__ import annotations
 
-import asyncio
 import sys
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    import dagger
+    pass
 
 
 class DaggerEngine:
@@ -22,15 +21,15 @@ class DaggerEngine:
             # Objective-based pipeline execution.
             # For now, we execute it as a command in a base container.
             # Future: Generate Dagger code dynamically via LLM.
-            
+
             # 1. Start with a base image
             container = client.container().from_("alpine:latest")
-            
+
             # 2. Add objective as an environment variable or file
             container = container.with_env_variable("RUNE_OBJECTIVE", objective)
             if model:
-                 container = container.with_env_variable("RUNE_MODEL", model)
-            
+                container = container.with_env_variable("RUNE_MODEL", model)
+
             # 3. Execute the objective
             # We assume the objective is a shell command for this 'Rank 2' implementation.
             # In a more advanced version, we'd use an agent to write the Dagger code.
