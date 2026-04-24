@@ -357,12 +357,6 @@ def test_get_job_with_tenant_id(mock_pool):
         "updated_at": 1.0,
     }
     res = storage.get_job("j1", tenant_id="t")
-        "result_json": "{}",
-        "error": None,
-        "message": None,
-        "created_at": 1.0,
-        "updated_at": 2.0,
-    }
     result = storage.get_job("j1")
     assert result is not None
     assert result.job_id == "j1"
