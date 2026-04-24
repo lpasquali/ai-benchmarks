@@ -94,7 +94,10 @@ def _handle_ask(params: dict) -> dict:
         ) from None
 
     proc = subprocess.run(  # noqa: S603
-        cmd, capture_output=True, text=True, check=False,
+        cmd,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     if proc.returncode != 0:
         detail = proc.stderr.strip() or proc.stdout.strip() or f"exit {proc.returncode}"
@@ -133,7 +136,9 @@ def main() -> None:
             handler = getattr(current_module, handler_name)
 
             result = handler(params)
-            print(json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True)
+            print(
+                json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True
+            )
         except Exception as exc:  # noqa: BLE001
             print(
                 json.dumps({"status": "error", "error": str(exc), "id": req_id}),

@@ -443,7 +443,9 @@ class PostgresStorageAdapter:
             for row in rows
         ]
 
-    def list_jobs_for_finops(self, *, tenant_id: str, limit: int = 2000) -> list[dict[str, Any]]:
+    def list_jobs_for_finops(
+        self, *, tenant_id: str, limit: int = 2000
+    ) -> list[dict[str, Any]]:
         cap = max(1, min(int(limit), 5000))
         with self.connection() as conn:
             rows = conn.execute(
@@ -467,7 +469,9 @@ class PostgresStorageAdapter:
                 {
                     "kind": str(row["kind"]),
                     "request_payload": json.loads(row["request_json"]),
-                    "result_payload": json.loads(row["result_json"]) if row["result_json"] else None,
+                    "result_payload": json.loads(row["result_json"])
+                    if row["result_json"]
+                    else None,
                     "duration_seconds": duration,
                 }
             )
@@ -492,7 +496,9 @@ class PostgresStorageAdapter:
             kind=str(row["kind"]),
             status=str(row["status"]),
             request_payload=json.loads(row["request_json"]),
-            result_payload=json.loads(row["result_json"]) if row["result_json"] else None,
+            result_payload=json.loads(row["result_json"])
+            if row["result_json"]
+            else None,
             error=str(row["error"]) if row["error"] is not None else None,
             message=str(row["message"]) if row["message"] is not None else None,
             created_at=float(row["created_at"]),

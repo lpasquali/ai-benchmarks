@@ -10,7 +10,12 @@ from __future__ import annotations
 from rune_bench.agents.base import AgentResult
 from rune_bench.api_contracts import LatencyPhase, RunTelemetry, TokenBreakdown
 from rune_bench.debug import debug_log
-from rune_bench.drivers import DriverTransport, AsyncDriverTransport, make_driver_transport, make_async_driver_transport
+from rune_bench.drivers import (
+    DriverTransport,
+    AsyncDriverTransport,
+    make_driver_transport,
+    make_async_driver_transport,
+)
 
 
 class InvokeAIDriverClient:
@@ -23,8 +28,12 @@ class InvokeAIDriverClient:
         transport: DriverTransport | None = None,
     ) -> None:
         self._base_url = base_url or "http://127.0.0.1:9090"
-        self._transport: DriverTransport = transport or make_driver_transport("invokeai")
-        self._async_transport: AsyncDriverTransport = make_async_driver_transport("invokeai")
+        self._transport: DriverTransport = transport or make_driver_transport(
+            "invokeai"
+        )
+        self._async_transport: AsyncDriverTransport = make_async_driver_transport(
+            "invokeai"
+        )
 
     def ask(
         self,
@@ -58,7 +67,9 @@ class InvokeAIDriverClient:
         result = self._transport.call("ask", params)
 
         if "answer" not in result:
-            raise RuntimeError("InvokeAI driver response did not include an answer (image path/URL).")
+            raise RuntimeError(
+                "InvokeAI driver response did not include an answer (image path/URL)."
+            )
 
         return AgentResult(
             answer=str(result["answer"]),
@@ -112,7 +123,8 @@ class InvokeAIDriverClient:
         latency_raw = raw.get("latency", [])
         latency = [
             LatencyPhase(phase=p.get("phase", "unknown"), ms=p.get("ms", 0))
-            for p in latency_raw if isinstance(p, dict)
+            for p in latency_raw
+            if isinstance(p, dict)
         ]
 
         return RunTelemetry(

@@ -34,8 +34,12 @@ class BrowserUseDriverClient:
     ONBOARDING_URL = "https://github.com/browser-use/browser-use"
 
     def __init__(self, *, transport: DriverTransport | None = None) -> None:
-        self._transport: DriverTransport = transport or make_driver_transport("browseruse")
-        self._async_transport: AsyncDriverTransport = make_async_driver_transport("browseruse")
+        self._transport: DriverTransport = transport or make_driver_transport(
+            "browseruse"
+        )
+        self._async_transport: AsyncDriverTransport = make_async_driver_transport(
+            "browseruse"
+        )
 
     def ask(
         self,
@@ -71,11 +75,14 @@ class BrowserUseDriverClient:
                 f"Visit {self.ONBOARDING_URL} to get started. "
                 "Set RUNE_BROWSERUSE_API_KEY (typically an OpenAI key)."
             )
-        result = self._transport.call("ask", {
-            "question": question,
-            "model": model,
-            "backend_url": backend_url,
-        })
+        result = self._transport.call(
+            "ask",
+            {
+                "question": question,
+                "model": model,
+                "backend_url": backend_url,
+            },
+        )
         answer = str(result.get("answer", ""))
         if not answer:
             raise RuntimeError("Driver returned an empty answer.")
@@ -145,7 +152,8 @@ class BrowserUseDriverClient:
         latency_raw = raw.get("latency", [])
         latency = [
             LatencyPhase(phase=p.get("phase", "unknown"), ms=p.get("ms", 0))
-            for p in latency_raw if isinstance(p, dict)
+            for p in latency_raw
+            if isinstance(p, dict)
         ]
 
         return RunTelemetry(

@@ -24,7 +24,13 @@ def rune_api_server(tmp_path):
 
     async def run_benchmark(request):
         state["benchmark_calls"] += 1
-        return {"answer": "benchmark-http-answer", "result_type": "text", "artifacts": [], "mode": "existing", "backend_url": "http://x"}
+        return {
+            "answer": "benchmark-http-answer",
+            "result_type": "text",
+            "artifacts": [],
+            "mode": "existing",
+            "backend_url": "http://x",
+        }
 
     app = RuneApiApplication(
         store=store,
@@ -44,16 +50,17 @@ def rune_api_server(tmp_path):
 
     host, port = server.server_address
     base_url = f"http://{host}:{port}"
-    
+
     # Wait for server to be ready
     for _ in range(10):
         try:
             import socket
+
             with socket.create_connection((host, port), timeout=0.1):
                 break
         except Exception:
             time.sleep(0.1)
-    
+
     try:
         yield base_url, state
     finally:
@@ -64,7 +71,9 @@ def rune_api_server(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_cli_http_run_agentic_agent_job_flow(monkeypatch, rune_api_server, tmp_path):
+async def test_cli_http_run_agentic_agent_job_flow(
+    monkeypatch, rune_api_server, tmp_path
+):
     base_url, state = rune_api_server
     test_console = Console(record=True, width=200)
     monkeypatch.setattr(rune, "console", test_console)
@@ -76,8 +85,10 @@ async def test_cli_http_run_agentic_agent_job_flow(monkeypatch, rune_api_server,
 
     # Mock preflight behavior to avoid any issues
     monkeypatch.setattr(rune, "_run_preflight_cost_check", AsyncMock(return_value=None))
-    monkeypatch.setattr(rune, "evaluate_spend_gate", lambda *a, **k: SpendGateAction.ALLOW)
-    
+    monkeypatch.setattr(
+        rune, "evaluate_spend_gate", lambda *a, **k: SpendGateAction.ALLOW
+    )
+
     # Typer commands might raise Exit(0) on success if they return, but here they just return None
     await rune.run_agentic_agent(
         debug=True,
@@ -107,7 +118,9 @@ async def test_cli_http_run_benchmark_job_flow(monkeypatch, rune_api_server, tmp
     kubeconfig.write_text("apiVersion: v1\n")
 
     monkeypatch.setattr(rune, "_run_preflight_cost_check", AsyncMock(return_value=None))
-    monkeypatch.setattr(rune, "evaluate_spend_gate", lambda *a, **k: SpendGateAction.ALLOW)
+    monkeypatch.setattr(
+        rune, "evaluate_spend_gate", lambda *a, **k: SpendGateAction.ALLOW
+    )
 
     await rune.run_benchmark(
         debug=True,

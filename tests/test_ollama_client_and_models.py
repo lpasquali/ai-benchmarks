@@ -9,7 +9,10 @@ from rune_bench.backends.ollama import OllamaModelManager
 
 
 def test_normalize_url_accepts_host_port_without_scheme():
-    assert normalize_url("localhost:11434", service_name="Ollama") == "http://localhost:11434"
+    assert (
+        normalize_url("localhost:11434", service_name="Ollama")
+        == "http://localhost:11434"
+    )
 
 
 def test_normalize_url_rejects_invalid_input():
@@ -38,7 +41,9 @@ def test_get_model_capabilities_parses_context_length(monkeypatch):
 def test_get_model_capabilities_handles_missing_context(monkeypatch):
     client = OllamaClient("http://example:11434")
 
-    monkeypatch.setattr(client, "_make_request", lambda *args, **kwargs: {"model_info": {"foo": 1}})
+    monkeypatch.setattr(
+        client, "_make_request", lambda *args, **kwargs: {"model_info": {"foo": 1}}
+    )
 
     caps = client.get_model_capabilities("some/model")
     assert caps.context_window is None
@@ -74,7 +79,9 @@ def test_model_manager_warmup_times_out(monkeypatch):
 
     # force immediate timeout
     values = iter([0.0, 1.0])
-    monkeypatch.setattr("rune_bench.backends.ollama.time.monotonic", lambda: next(values))
+    monkeypatch.setattr(
+        "rune_bench.backends.ollama.time.monotonic", lambda: next(values)
+    )
     monkeypatch.setattr("rune_bench.backends.ollama.time.sleep", lambda *_: None)
 
     with pytest.raises(RuntimeError, match="Timed out waiting for Ollama model"):
@@ -94,7 +101,9 @@ def test_warmup_matches_latest_tag_when_bare_name_requested(monkeypatch):
 
     monkeypatch.setattr("rune_bench.backends.ollama.time.sleep", lambda *_: None)
 
-    loaded = manager.warmup_model("tinyllama", timeout_seconds=5, poll_interval_seconds=0)
+    loaded = manager.warmup_model(
+        "tinyllama", timeout_seconds=5, poll_interval_seconds=0
+    )
 
     assert loaded == "tinyllama"
     fake_client.load_model.assert_called_once_with("tinyllama", keep_alive="30m")

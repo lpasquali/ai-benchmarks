@@ -18,11 +18,19 @@ from rune_bench.common.costs import CostEstimator
 
 def _req(**kwargs) -> CostEstimationRequest:
     defaults = dict(
-        vastai=False, aws=False, gcp=False, azure=False, local_hardware=False,
-        min_dph=0.0, max_dph=0.0,
-        local_tdp_watts=0.0, local_energy_rate_kwh=0.0,
-        local_hardware_purchase_price=0.0, local_hardware_lifespan_years=0.0,
-        model="", estimated_duration_seconds=3600,
+        vastai=False,
+        aws=False,
+        gcp=False,
+        azure=False,
+        local_hardware=False,
+        min_dph=0.0,
+        max_dph=0.0,
+        local_tdp_watts=0.0,
+        local_energy_rate_kwh=0.0,
+        local_hardware_purchase_price=0.0,
+        local_hardware_lifespan_years=0.0,
+        model="",
+        estimated_duration_seconds=3600,
     )
     defaults.update(kwargs)
     return CostEstimationRequest(**defaults)
@@ -80,10 +88,12 @@ def test_get_cost_estimate_aws():
     assert out["cost_driver"] == "aws"
     assert out["projected_cost_usd"] == pytest.approx(0.53, rel=1e-2)
 
+
 def test_get_cost_estimate_aws_high_end():
     r = _req(aws=True, model="p4d.24xlarge")
     out = get_cost_estimate(r)
     assert out["projected_cost_usd"] == pytest.approx(12.0, rel=1e-2)
+
 
 def test_get_cost_estimate_gcp():
     r = _req(gcp=True, model="n1-standard-4")
@@ -161,7 +171,9 @@ def test_cost_estimator_local():
 
 def test_cost_estimator_vastai():
     estimator = CostEstimator()
-    r = _estimator_req(vastai=True, min_dph=2.0, max_dph=4.0, estimated_duration_seconds=3600)
+    r = _estimator_req(
+        vastai=True, min_dph=2.0, max_dph=4.0, estimated_duration_seconds=3600
+    )
     result = asyncio.run(estimator.estimate(r))
     assert result.cost_driver == "vastai"
     assert result.projected_cost_usd == pytest.approx(3.0, rel=1e-3)
@@ -169,7 +181,9 @@ def test_cost_estimator_vastai():
 
 def test_cost_estimator_vastai_no_max_dph():
     estimator = CostEstimator()
-    r = _estimator_req(vastai=True, max_dph=0.0, min_dph=2.0, estimated_duration_seconds=3600)
+    r = _estimator_req(
+        vastai=True, max_dph=0.0, min_dph=2.0, estimated_duration_seconds=3600
+    )
     result = asyncio.run(estimator.estimate(r))
     assert result.cost_driver == "vastai"
     assert result.projected_cost_usd == pytest.approx(2.0, rel=1e-3)
@@ -210,7 +224,9 @@ def test_cost_estimator_azure_live_api(monkeypatch):
     mock_httpx.AsyncClient = MagicMock(return_value=mock_client)  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "httpx", mock_httpx)
 
-    r = _estimator_req(azure=True, model="Standard_NC6s_v3", estimated_duration_seconds=3600)
+    r = _estimator_req(
+        azure=True, model="Standard_NC6s_v3", estimated_duration_seconds=3600
+    )
     result = asyncio.run(estimator.estimate(r))
     assert result.cost_driver == "azure"
     assert result.projected_cost_usd == pytest.approx(3.06, rel=1e-2)

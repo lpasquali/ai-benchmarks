@@ -82,7 +82,9 @@ async def test_sooth_sayer_matches_agent_and_model():
     ]
     store = _MemStore(rows)
     sayer = PricingSoothSayer(store, vast_search_offers=None)
-    out = await sayer.simulate(tenant_id="t1", agent="holmes", model="llama3.1:8b", gpu="4090")
+    out = await sayer.simulate(
+        tenant_id="t1", agent="holmes", model="llama3.1:8b", gpu="4090"
+    )
     assert out["historical_sample_count"] == 1
     assert out["avg_duration_seconds"] == 60.0
     assert out["llm_input_tokens_assumed"] == 1000.0
@@ -114,8 +116,12 @@ async def test_sooth_sayer_suite_filters_benchmark_template():
     ]
     store = _MemStore(rows)
     sayer = PricingSoothSayer(store, vast_search_offers=None)
-    assert (await sayer.simulate(tenant_id="t1", suite="tpl-abc", model="m1"))[ "historical_sample_count"] == 1
-    assert (await sayer.simulate(tenant_id="t1", suite="other"))[ "historical_sample_count"] == 0
+    assert (await sayer.simulate(tenant_id="t1", suite="tpl-abc", model="m1"))[
+        "historical_sample_count"
+    ] == 1
+    assert (await sayer.simulate(tenant_id="t1", suite="other"))[
+        "historical_sample_count"
+    ] == 0
 
 
 @pytest.mark.asyncio
@@ -140,7 +146,9 @@ async def test_finops_simulate_http(tmp_path):
     store = JobStore(tmp_path / "db.sqlite")
     app = RuneApiApplication(
         store=store,
-        security=ApiSecurityConfig(auth_disabled=False, tenant_tokens={"tenant-a": _API_TOKEN}),
+        security=ApiSecurityConfig(
+            auth_disabled=False, tenant_tokens={"tenant-a": _API_TOKEN}
+        ),
         backend_functions={
             "agentic-agent": lambda r: {"answer": "x"},
             "benchmark": lambda r: {"answer": "b"},
@@ -185,19 +193,26 @@ async def test_fallback_dph_unknown_uses_default():
 
 @pytest.mark.asyncio
 async def test_extract_tokens_invalid_numbers_skipped_openai_nested():
-    assert _extract_tokens_from_result({"prompt_eval_count": "bad", "eval_count": 1}) == (None, None)
+    assert _extract_tokens_from_result(
+        {"prompt_eval_count": "bad", "eval_count": 1}
+    ) == (None, None)
     assert _extract_tokens_from_result(
         {"prompt_tokens": "bad", "completion_tokens": 20}
     ) == (None, None)
     assert _extract_tokens_from_result(
         {"outer": {"prompt_tokens": 10, "completion_tokens": 20}}
     ) == (10.0, 20.0)
-    assert _extract_tokens_from_result([{"prompt_eval_count": 3, "eval_count": 4}]) == (3.0, 4.0)
+    assert _extract_tokens_from_result([{"prompt_eval_count": 3, "eval_count": 4}]) == (
+        3.0,
+        4.0,
+    )
 
 
 @pytest.mark.asyncio
 async def test_job_matches_filters_edge_cases():
-    assert not _job_matches_filters("llm-instance", {"model": "m"}, agent="", suite="", model="")
+    assert not _job_matches_filters(
+        "llm-instance", {"model": "m"}, agent="", suite="", model=""
+    )
     assert not _job_matches_filters(
         "benchmark",
         {"agent": "holmes", "model": "m", "template_hash": "t"},
@@ -261,7 +276,9 @@ async def test_vast_dph_stats_skips_invalid_dph_and_empty_gpu_filter():
 
 @pytest.mark.asyncio
 async def test_vast_dph_stats_respects_max_offers():
-    offers = [{"gpu_name": "RTX 4090", "dph_total": float(i) * 0.01} for i in range(1, 120)]
+    offers = [
+        {"gpu_name": "RTX 4090", "dph_total": float(i) * 0.01} for i in range(1, 120)
+    ]
 
     def _search(**_kwargs):
         return offers
@@ -319,7 +336,9 @@ async def test_make_pricing_sooth_sayer_wires_vast_when_env_set(mock_vast, monke
 
 @patch("rune_bench.resources.vastai.sdk.VastAI", side_effect=RuntimeError("boom"))
 @pytest.mark.asyncio
-async def test_make_pricing_sooth_sayer_falls_back_when_vast_import_fails(_mock_vast, monkeypatch):
+async def test_make_pricing_sooth_sayer_falls_back_when_vast_import_fails(
+    _mock_vast, monkeypatch
+):
     monkeypatch.setenv("VAST_API_KEY", "k" * 40)
     store = _MemStore([])
     sayer = make_pricing_sooth_sayer(store)

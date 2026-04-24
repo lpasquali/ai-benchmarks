@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+
 try:
     import psycopg  # noqa: F401
 except ImportError:
@@ -11,12 +12,14 @@ import os
 
 import psycopg
 
+
 @pytest.fixture
 def pg_url():
     url = os.environ.get("RUNE_TEST_POSTGRES_URL")
     if not url:
         pytest.skip("RUNE_TEST_POSTGRES_URL not set")
     return url
+
 
 @pytest.mark.integration_postgres
 def test_postgres_service_connectivity(pg_url):

@@ -60,7 +60,9 @@ def test_ask_strips_model_name_whitespace(tmp_path: Path) -> None:
     assert params["model"] == "llama3.1:8b"
 
 
-def test_ask_includes_backend_url_and_limits(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_ask_includes_backend_url_and_limits(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     kubeconfig = tmp_path / "kubeconfig"
     kubeconfig.write_text("apiVersion: v1\n")
 
@@ -75,7 +77,9 @@ def test_ask_includes_backend_url_and_limits(monkeypatch: pytest.MonkeyPatch, tm
         max_output_tokens=26214,
     )
 
-    monkeypatch.setattr(holmes_driver_module, "get_backend", lambda *_args, **_kw: fake_backend)
+    monkeypatch.setattr(
+        holmes_driver_module, "get_backend", lambda *_args, **_kw: fake_backend
+    )
 
     runner = HolmesRunner(kubeconfig, transport=mock_transport)
     runner.ask("q", "llama3.1:8b", backend_url="http://ollama:11434")
@@ -129,13 +133,14 @@ def test_fetch_model_limits_omits_none_values(
         model_name="m", context_window=None, max_output_tokens=None
     )
 
-    monkeypatch.setattr(holmes_driver_module, "get_backend", lambda *_args, **_kw: fake_backend)
+    monkeypatch.setattr(
+        holmes_driver_module, "get_backend", lambda *_args, **_kw: fake_backend
+    )
 
     runner = HolmesRunner(kubeconfig, transport=MagicMock())
     limits = runner._fetch_model_limits(model="m", backend_url="http://ollama")
     assert "context_window" not in limits
     assert "max_output_tokens" not in limits
-
 
 
 def test_ask_raises_when_answer_key_missing(tmp_path: Path) -> None:

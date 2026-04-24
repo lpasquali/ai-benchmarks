@@ -24,7 +24,9 @@ def test_handle_ask_raises_without_api_key(monkeypatch: pytest.MonkeyPatch) -> N
         krea_main._handle_ask({"question": "test", "model": "m"})
 
 
-def test_handle_ask_raises_not_implemented_with_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_handle_ask_raises_not_implemented_with_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("RUNE_KREA_API_KEY", "test-key")
     with pytest.raises(NotImplementedError):
         krea_main._handle_ask({"question": "test", "model": "m"})
@@ -123,11 +125,16 @@ def test_main_ask_error_propagated(
     monkeypatch.setattr(
         krea_main.sys,
         "stdin",
-        io.StringIO(json.dumps({
-            "action": "ask",
-            "params": {"question": "q", "model": "m"},
-            "id": "e1",
-        }) + "\n"),
+        io.StringIO(
+            json.dumps(
+                {
+                    "action": "ask",
+                    "params": {"question": "q", "model": "m"},
+                    "id": "e1",
+                }
+            )
+            + "\n"
+        ),
     )
 
     krea_main.main()
@@ -174,6 +181,7 @@ def test_driver_client_ask_structured_returns_agent_result() -> None:
     try:
         result = client.ask_structured("q", "m", "http://b:11434")
         from rune_bench.agents.base import AgentResult
+
         assert isinstance(result, AgentResult)
         assert result.answer == "structured result"
         assert result.metadata == {"source": "test"}

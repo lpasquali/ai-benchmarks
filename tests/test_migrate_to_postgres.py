@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+
 try:
     import psycopg  # noqa: F401
     import psycopg_pool  # noqa: F401
@@ -287,12 +288,12 @@ def test_migrate_to_postgres_requires_postgres_target(monkeypatch, tmp_path) -> 
     adapter_a = SQLiteStorageAdapter(db_a)
     adapter_b = SQLiteStorageAdapter(db_b)
     adapters = [adapter_a, adapter_b]
-    
+
     def mock_make_storage(_url):
         if not adapters:
             raise IndexError("no more adapters")
         return adapters.pop(0)
-        
+
     monkeypatch.setattr(migration_mod, "make_storage", mock_make_storage)
 
     try:
@@ -361,13 +362,13 @@ def test_migrate_empty_tables() -> None:
         }
     )
     target = _FakePostgresAdapter()
-    
+
     # Should complete without error
     for spec in migration_mod._TABLE_SPECS:
         count = migration_mod._count_rows(source, spec.name)
         if count > 0:
             migration_mod._migrate_table(source, target, spec)
-    
+
     # Target should have no data
     assert target._conn.tables == {}
 
@@ -390,7 +391,7 @@ def test_batch_size_handling() -> None:
         }
         for i in range(5000)  # More than typical batch size
     ]
-    
+
     source = _FakeSQLiteAdapter(
         {
             "jobs": jobs,
@@ -402,9 +403,9 @@ def test_batch_size_handling() -> None:
     )
     target = _FakePostgresAdapter()
     spec = migration_mod._TABLE_SPECS[0]  # jobs table spec
-    
+
     migration_mod._migrate_table(source, target, spec, batch_size=1000)
-    
+
     # Verify all rows were inserted
     assert len(target._conn.tables.get("jobs", [])) == 5000
 
@@ -430,9 +431,9 @@ def test_idempotency_key_migration() -> None:
     )
     target = _FakePostgresAdapter()
     spec = [s for s in migration_mod._TABLE_SPECS if s.name == "idempotency_keys"][0]
-    
+
     migration_mod._migrate_table(source, target, spec)
-    
+
     assert "idempotency_keys" in target._conn.tables
     assert len(target._conn.tables["idempotency_keys"]) == 1
 
@@ -461,9 +462,9 @@ def test_workflow_events_migration() -> None:
     )
     target = _FakePostgresAdapter()
     spec = [s for s in migration_mod._TABLE_SPECS if s.name == "workflow_events"][0]
-    
+
     migration_mod._migrate_table(source, target, spec)
-    
+
     assert "workflow_events" in target._conn.tables
     assert len(target._conn.tables["workflow_events"]) == 1
 
@@ -492,9 +493,9 @@ def test_audit_artifact_migration() -> None:
     )
     target = _FakePostgresAdapter()
     spec = [s for s in migration_mod._TABLE_SPECS if s.name == "audit_artifact"][0]
-    
+
     migration_mod._migrate_table(source, target, spec)
-    
+
     assert "audit_artifact" in target._conn.tables
     assert len(target._conn.tables["audit_artifact"]) == 1
 
@@ -519,8 +520,8 @@ def test_chain_state_migration() -> None:
     )
     target = _FakePostgresAdapter()
     spec = [s for s in migration_mod._TABLE_SPECS if s.name == "chain_state"][0]
-    
+
     migration_mod._migrate_table(source, target, spec)
-    
+
     assert "chain_state" in target._conn.tables
     assert len(target._conn.tables["chain_state"]) == 1

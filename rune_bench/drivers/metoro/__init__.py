@@ -38,7 +38,9 @@ class MetoroDriverClient:
             raise FileNotFoundError(f"kubeconfig not found: {kubeconfig}")
         self._kubeconfig = kubeconfig
         self._transport: DriverTransport = transport or make_driver_transport("metoro")
-        self._async_transport: AsyncDriverTransport = make_async_driver_transport("metoro")
+        self._async_transport: AsyncDriverTransport = make_async_driver_transport(
+            "metoro"
+        )
 
     def ask(
         self,
@@ -79,9 +81,7 @@ class MetoroDriverClient:
             "kubeconfig_path": str(self._kubeconfig),
         }
 
-        debug_log(
-            f"MetoroDriverClient.ask: question={question!r} model={model!r}"
-        )
+        debug_log(f"MetoroDriverClient.ask: question={question!r} model={model!r}")
         result = self._transport.call("ask", params)
 
         if "answer" not in result:
@@ -144,8 +144,6 @@ class MetoroDriverClient:
             telemetry=self._parse_telemetry(result.get("telemetry")),
         )
 
-
-
     def _parse_telemetry(self, raw: dict | None) -> RunTelemetry | None:
         """Parse raw telemetry dict into a RunTelemetry object."""
         if not raw:
@@ -163,7 +161,8 @@ class MetoroDriverClient:
         latency_raw = raw.get("latency", [])
         latency = [
             LatencyPhase(phase=p.get("phase", "unknown"), ms=p.get("ms", 0))
-            for p in latency_raw if isinstance(p, dict)
+            for p in latency_raw
+            if isinstance(p, dict)
         ]
 
         return RunTelemetry(
@@ -171,5 +170,6 @@ class MetoroDriverClient:
             latency=latency,
             cost_estimate_usd=raw.get("cost_estimate_usd"),
         )
+
 
 MetoroRunner = MetoroDriverClient

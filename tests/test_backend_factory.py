@@ -16,6 +16,7 @@ from rune_bench.backends.base import LLMBackend, ModelCapabilities
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 class _MockBackend:
     """Minimal backend that satisfies the LLMBackend protocol for testing."""
 
@@ -64,6 +65,7 @@ def _clean_registry():
 # Factory: get_backend
 # ---------------------------------------------------------------------------
 
+
 class TestGetBackend:
     """Tests for the get_backend() factory function."""
 
@@ -77,6 +79,7 @@ class TestGetBackend:
             backend = get_backend("ollama", "http://localhost:11434")
 
         from rune_bench.backends.ollama import OllamaBackend
+
         assert isinstance(backend, OllamaBackend)
 
     def test_unknown_backend_raises_value_error(self):
@@ -114,6 +117,7 @@ class TestGetBackend:
 # Registry: register_backend / list_backends
 # ---------------------------------------------------------------------------
 
+
 class TestRegistry:
     """Tests for register_backend() and list_backends()."""
 
@@ -147,6 +151,7 @@ class TestRegistry:
 # OllamaBackend protocol conformance
 # ---------------------------------------------------------------------------
 
+
 class TestOllamaBackendProtocol:
     """Verify OllamaBackend satisfies the LLMBackend protocol."""
 
@@ -158,12 +163,14 @@ class TestOllamaBackendProtocol:
             mock_client_cls.return_value = mock_client
 
             from rune_bench.backends.ollama import OllamaBackend
+
             backend = OllamaBackend("http://localhost:11434")
             assert isinstance(backend, LLMBackend)
 
     def test_has_all_protocol_methods(self):
         """OllamaBackend defines every method in the LLMBackend protocol."""
         from rune_bench.backends.ollama import OllamaBackend
+
         required_methods = [
             "base_url",
             "get_model_capabilities",
@@ -180,6 +187,7 @@ class TestOllamaBackendProtocol:
 # OllamaBackend method delegation
 # ---------------------------------------------------------------------------
 
+
 class TestOllamaBackendDelegation:
     """Verify OllamaBackend delegates to OllamaModelManager correctly."""
 
@@ -191,6 +199,7 @@ class TestOllamaBackendDelegation:
             mock_client.base_url = "http://localhost:11434"
             mock_client_cls.return_value = mock_client
             from rune_bench.backends.ollama import OllamaBackend
+
             backend = OllamaBackend("http://localhost:11434")
             backend._mock_client = mock_client
             yield backend
@@ -203,7 +212,9 @@ class TestOllamaBackendDelegation:
         backend._mock_client.get_model_capabilities.return_value = caps
         result = backend.get_model_capabilities("test-model")
         assert result == caps
-        backend._mock_client.get_model_capabilities.assert_called_once_with("test-model")
+        backend._mock_client.get_model_capabilities.assert_called_once_with(
+            "test-model"
+        )
 
     def test_list_models(self, backend):
         backend._mock_client.get_available_models.return_value = ["model-a", "model-b"]
@@ -225,16 +236,19 @@ class TestOllamaBackendDelegation:
         backend._mock_client.load_model.return_value = None
         # After load, model appears in running
         backend._mock_client.get_running_models.side_effect = [
-            set(),         # _unload_conflicting_models
+            set(),  # _unload_conflicting_models
             {"tinyllama"},  # poll check
         ]
-        result = backend.warmup("tinyllama", timeout_seconds=5, poll_interval_seconds=0.1)
+        result = backend.warmup(
+            "tinyllama", timeout_seconds=5, poll_interval_seconds=0.1
+        )
         assert result == "tinyllama"
 
 
 # ---------------------------------------------------------------------------
 # MockBackend protocol conformance
 # ---------------------------------------------------------------------------
+
 
 class TestMockBackendProtocol:
     """Verify _MockBackend satisfies the LLMBackend protocol."""

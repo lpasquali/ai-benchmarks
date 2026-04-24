@@ -18,7 +18,9 @@ from rune_bench.drivers.timeouts import driver_invocation_timeout_seconds
 
 _POLL_INTERVAL_S = 2.0
 _POLL_TIMEOUT_S = 3600.0
-_TERMINAL_STATUSES = frozenset({"succeeded", "success", "completed", "failed", "error", "cancelled"})
+_TERMINAL_STATUSES = frozenset(
+    {"succeeded", "success", "completed", "failed", "error", "cancelled"}
+)
 
 
 class HttpTransport:
@@ -83,7 +85,9 @@ class HttpTransport:
                 return poll.get("result", {})
             time.sleep(_POLL_INTERVAL_S)
 
-        raise RuntimeError(f"Driver job {job_id} timed out after {_POLL_TIMEOUT_S:.0f}s")
+        raise RuntimeError(
+            f"Driver job {job_id} timed out after {_POLL_TIMEOUT_S:.0f}s"
+        )
 
 
 class AsyncHttpTransport:
@@ -149,4 +153,6 @@ class AsyncHttpTransport:
                 return poll.get("result", {})
             await asyncio.sleep(_POLL_INTERVAL_S)
 
-        raise RuntimeError(f"Driver job {job_id} timed out after {_POLL_TIMEOUT_S:.0f}s")
+        raise RuntimeError(
+            f"Driver job {job_id} timed out after {_POLL_TIMEOUT_S:.0f}s"
+        )

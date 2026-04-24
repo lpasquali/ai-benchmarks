@@ -28,10 +28,10 @@ if TYPE_CHECKING:
 @dataclass
 class MetricsEvent:
     event: str
-    status: str           # "ok" | "error"
+    status: str  # "ok" | "error"
     duration_ms: float
-    labels: dict          # extra dimensions: model, kind, backend, …
-    recorded_at: float    # Unix timestamp
+    labels: dict  # extra dimensions: model, kind, backend, …
+    recorded_at: float  # Unix timestamp
     job_id: str | None = None
     error_type: str | None = None
 
@@ -79,15 +79,17 @@ class InMemoryCollector:
             err = sum(1 for e in evs if e.status == "error")
             durations = [e.duration_ms for e in evs]
             avg_ms = sum(durations) / len(durations) if durations else 0.0
-            rows.append({
-                "event": event_name,
-                "total": len(evs),
-                "ok": ok,
-                "error": err,
-                "avg_ms": round(avg_ms, 1),
-                "min_ms": round(min(durations), 1) if durations else 0.0,
-                "max_ms": round(max(durations), 1) if durations else 0.0,
-            })
+            rows.append(
+                {
+                    "event": event_name,
+                    "total": len(evs),
+                    "ok": ok,
+                    "error": err,
+                    "avg_ms": round(avg_ms, 1),
+                    "min_ms": round(min(durations), 1) if durations else 0.0,
+                    "max_ms": round(max(durations), 1) if durations else 0.0,
+                }
+            )
         return rows
 
 
@@ -102,7 +104,9 @@ class SQLiteMetricsCollector:
             self._store.record_workflow_event(event)
         except Exception:
             pass  # nosec
-  # never let storage errors affect the workflow
+
+
+# never let storage errors affect the workflow
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +173,7 @@ class _SpanContext:
             get_collector().record(ev)
         except Exception:
             pass  # nosec
-  # never let metrics errors propagate into the caller
+        # never let metrics errors propagate into the caller
         return False  # never suppress exceptions
 
 

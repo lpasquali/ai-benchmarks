@@ -16,16 +16,16 @@ from rune_bench.debug import debug_log
 
 def normalize_url(url: str | None, service_name: str = "service") -> str:
     """Validate and normalize an HTTP(S) URL.
-    
+
     Adds ``http://`` when no recognized scheme is present.
-    
+
     Args:
         url: URL string to normalize
         service_name: Name of the service (for error messages)
-        
+
     Returns:
         Normalized URL (scheme://netloc/path format)
-        
+
     Raises:
         RuntimeError: If URL is missing, invalid scheme, or missing host.
     """
@@ -61,7 +61,7 @@ def make_http_request(
     verify_ssl: bool = True,
 ) -> dict[str, Any]:
     """Execute an HTTP request and return parsed JSON response.
-    
+
     Args:
         url: Full URL to request
         method: HTTP method (GET, POST, etc.)
@@ -71,16 +71,16 @@ def make_http_request(
         headers: Optional custom headers (Content-Type is auto-added for payloads)
         debug_prefix: Prefix for debug log messages
         verify_ssl: If False, skip TLS certificate verification (for self-signed certs)
-        
+
     Returns:
         Parsed JSON response as dict
-        
+
     Raises:
         RuntimeError: If the request fails or response is invalid
     """
     request_headers: dict[str, str] = headers or {}
     data = None
-    
+
     if payload is not None:
         data = json.dumps(payload).encode("utf-8")
         request_headers["Content-Type"] = "application/json"
@@ -112,22 +112,28 @@ def make_http_request(
             )
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace").strip()
-        debug_log(f"{debug_prefix} HTTP error: method={method} url={url} status={exc.code} detail={detail}")
+        debug_log(
+            f"{debug_prefix} HTTP error: method={method} url={url} status={exc.code} detail={detail}"
+        )
         if detail:
             raise RuntimeError(f"Failed to {action}: {detail}") from exc
         raise RuntimeError(f"Failed to {action}: HTTP {exc.code}") from exc
     except (URLError, TimeoutError) as exc:
-        debug_log(f"{debug_prefix} transport error: method={method} url={url} error={exc}")
+        debug_log(
+            f"{debug_prefix} transport error: method={method} url={url} error={exc}"
+        )
         raise RuntimeError(f"Failed to {action}: {exc}") from exc
 
     try:
         result = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Invalid JSON response while attempting to {action}") from exc
+        raise RuntimeError(
+            f"Invalid JSON response while attempting to {action}"
+        ) from exc
 
     if not isinstance(result, dict):
         raise RuntimeError(f"Unexpected JSON payload while attempting to {action}")
-    
+
     return result
 
 
@@ -144,7 +150,7 @@ async def make_async_http_request(
 ) -> dict[str, Any]:
     """Execute an asynchronous HTTP request and return parsed JSON response."""
     import httpx
-    
+
     debug_log(
         f"{debug_prefix} async request: method={method} url={url} action={action} "
         f"payload={json.dumps(payload, sort_keys=True) if payload is not None else '<none>'}"
@@ -161,24 +167,32 @@ async def make_async_http_request(
             )
             response.raise_for_status()
             result = response.json()
-            
+
             debug_log(
                 f"{debug_prefix} async response: method={method} url={url} status={response.status_code} "
                 f"body={response.text}"
             )
     except httpx.HTTPStatusError as exc:
         detail = exc.response.text.strip()
-        debug_log(f"{debug_prefix} async HTTP error: method={method} url={url} status={exc.response.status_code} detail={detail}")
+        debug_log(
+            f"{debug_prefix} async HTTP error: method={method} url={url} status={exc.response.status_code} detail={detail}"
+        )
         if detail:
             raise RuntimeError(f"Failed to {action}: {detail}") from exc
-        raise RuntimeError(f"Failed to {action}: HTTP {exc.response.status_code}") from exc
+        raise RuntimeError(
+            f"Failed to {action}: HTTP {exc.response.status_code}"
+        ) from exc
     except (httpx.RequestError, TimeoutError) as exc:
-        debug_log(f"{debug_prefix} async transport error: method={method} url={url} error={exc}")
+        debug_log(
+            f"{debug_prefix} async transport error: method={method} url={url} error={exc}"
+        )
         raise RuntimeError(f"Failed to {action}: {exc}") from exc
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Invalid JSON response while attempting to {action}") from exc
+        raise RuntimeError(
+            f"Invalid JSON response while attempting to {action}"
+        ) from exc
 
     if not isinstance(result, dict):
         raise RuntimeError(f"Unexpected JSON payload while attempting to {action}")
-    
+
     return result

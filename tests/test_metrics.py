@@ -251,8 +251,22 @@ def test_job_store_events_summary_aggregates(tmp_path: Path):
         coll = SQLiteMetricsCollector(store)
 
         for i in range(3):
-            coll.record(MetricsEvent("phase.a", "ok", float(100 + i * 10), {}, time.time(), job_id="j1"))
-        coll.record(MetricsEvent("phase.a", "error", 500.0, {}, time.time(), job_id="j1", error_type="RuntimeError"))
+            coll.record(
+                MetricsEvent(
+                    "phase.a", "ok", float(100 + i * 10), {}, time.time(), job_id="j1"
+                )
+            )
+        coll.record(
+            MetricsEvent(
+                "phase.a",
+                "error",
+                500.0,
+                {},
+                time.time(),
+                job_id="j1",
+                error_type="RuntimeError",
+            )
+        )
         coll.record(MetricsEvent("phase.b", "ok", 50.0, {}, time.time(), job_id="j1"))
 
         summary = {r["event"]: r for r in store.get_events_summary()}

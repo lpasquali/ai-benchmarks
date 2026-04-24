@@ -31,7 +31,9 @@ def test_print_existing_ollama_displays_override_rows(monkeypatch):
     monkeypatch.setattr(rune, "console", test_console)
 
     rune._print_existing_ollama(
-        ExistingOllamaServer(url="http://localhost:11434", model_name="kavai/qwen3.5-GPT5:9b"),
+        ExistingOllamaServer(
+            url="http://localhost:11434", model_name="kavai/qwen3.5-GPT5:9b"
+        ),
         capabilities=OllamaModelCapabilities(
             model_name="kavai/qwen3.5-GPT5:9b",
             context_window=262144,
@@ -56,7 +58,9 @@ def test_print_vastai_result_displays_override_rows(monkeypatch):
         ssh_host="1.2.3.4",
         ssh_port=22,
         machine_id="m1",
-        service_urls=[{"name": "ollama", "direct": "http://1.2.3.4:11434", "proxy": None}],
+        service_urls=[
+            {"name": "ollama", "direct": "http://1.2.3.4:11434", "proxy": None}
+        ],
     )
 
     result = VastAIProvisioningResult(

@@ -41,7 +41,7 @@ def _normalize_model(model: str) -> str:
     """Strip provider prefixes (e.g. 'ollama/', 'ollama_chat/') from model name."""
     for prefix in _MODEL_PREFIXES:
         if model.startswith(prefix):
-            return model[len(prefix):]
+            return model[len(prefix) :]
     return model
 
 
@@ -53,9 +53,7 @@ def _handle_ask(params: dict) -> dict:
     try:
         from crewai import Agent, Crew, Task  # type: ignore[import-not-found]
     except ImportError as exc:
-        raise RuntimeError(
-            "CrewAI driver requires: pip install crewai"
-        ) from exc
+        raise RuntimeError("CrewAI driver requires: pip install crewai") from exc
 
     normalized = _normalize_model(model)
 
@@ -124,7 +122,9 @@ def main() -> None:
             handler = getattr(current_module, handler_name)
 
             result = handler(params)
-            print(json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True)
+            print(
+                json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True
+            )
         except Exception as exc:  # noqa: BLE001
             print(
                 json.dumps({"status": "error", "error": str(exc), "id": req_id}),

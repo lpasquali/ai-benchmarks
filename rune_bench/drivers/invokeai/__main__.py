@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import sys
 
+
 def _handle_ask(params: dict) -> dict:
     prompt: str = params["prompt"]
     model: str = params["model"]
@@ -28,29 +29,28 @@ def _handle_ask(params: dict) -> dict:
     # In a real implementation, we would call InvokeAI's REST API.
     # For now, we simulate a successful generation by returning a placeholder URL.
     # Note: InvokeAI uses a node-graph API (v2) since 3.0+.
-    
+
     # Mock behavior for testing:
     return {
         "answer": f"https://invokeai.example.com/outputs/{model}/result.png",
-        "metadata": {
-            "prompt": prompt,
-            "model": model,
-            "engine": "invokeai"
-        }
+        "metadata": {"prompt": prompt, "model": model, "engine": "invokeai"},
     }
+
 
 def _handle_info(_params: dict) -> dict:
     return {
         "name": "invokeai",
         "version": "1",
         "actions": ["ask", "info"],
-        "note": "InvokeAI driver for autonomous art pipelines."
+        "note": "InvokeAI driver for autonomous art pipelines.",
     }
+
 
 _HANDLERS: dict = {
     "ask": "_handle_ask",
     "info": "_handle_info",
 }
+
 
 def main() -> None:
     for raw_line in sys.stdin:
@@ -67,13 +67,19 @@ def main() -> None:
             handler_name = _HANDLERS.get(action)
             if handler_name is None:
                 raise RuntimeError(f"Unknown action: {action!r}")
-            
+
             # Resolve handler from globals
             handler = globals()[handler_name]
             result = handler(params)
-            print(json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True)
+            print(
+                json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True
+            )
         except Exception as exc:
-            print(json.dumps({"status": "error", "error": str(exc), "id": req_id}), flush=True)
+            print(
+                json.dumps({"status": "error", "error": str(exc), "id": req_id}),
+                flush=True,
+            )
+
 
 if __name__ == "__main__":
     main()

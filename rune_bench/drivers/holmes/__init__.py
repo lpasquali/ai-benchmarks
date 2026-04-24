@@ -16,7 +16,12 @@ from rune_bench.agents.base import AgentResult
 from rune_bench.api_contracts import LatencyPhase, RunTelemetry, TokenBreakdown
 from rune_bench.backends import get_backend
 from rune_bench.debug import debug_log
-from rune_bench.drivers import DriverTransport, AsyncDriverTransport, make_driver_transport, make_async_driver_transport
+from rune_bench.drivers import (
+    DriverTransport,
+    AsyncDriverTransport,
+    make_driver_transport,
+    make_async_driver_transport,
+)
 
 
 class HolmesDriverClient:
@@ -36,7 +41,9 @@ class HolmesDriverClient:
             raise FileNotFoundError(f"kubeconfig not found: {kubeconfig}")
         self._kubeconfig = kubeconfig
         self._transport: DriverTransport = transport or make_driver_transport("holmes")
-        self._async_transport: AsyncDriverTransport = make_async_driver_transport("holmes")
+        self._async_transport: AsyncDriverTransport = make_async_driver_transport(
+            "holmes"
+        )
 
     def ask(
         self,
@@ -69,9 +76,13 @@ class HolmesDriverClient:
         }
         if backend_url:
             params["backend_url"] = backend_url
-            params.update(self._fetch_model_limits(
-                model=resolved_model, backend_url=backend_url, backend_type=backend_type,
-            ))
+            params.update(
+                self._fetch_model_limits(
+                    model=resolved_model,
+                    backend_url=backend_url,
+                    backend_type=backend_type,
+                )
+            )
 
         debug_log(
             f"HolmesDriverClient.ask: question={question!r} model={resolved_model!r} "
@@ -114,9 +125,13 @@ class HolmesDriverClient:
         }
         if backend_url:
             params["backend_url"] = backend_url
-            params.update(self._fetch_model_limits(
-                model=resolved_model, backend_url=backend_url, backend_type=backend_type,
-            ))
+            params.update(
+                self._fetch_model_limits(
+                    model=resolved_model,
+                    backend_url=backend_url,
+                    backend_type=backend_type,
+                )
+            )
 
         debug_log(
             f"HolmesDriverClient.ask_async: question={question!r} model={resolved_model!r} "
@@ -160,7 +175,8 @@ class HolmesDriverClient:
         latency_raw = raw.get("latency", [])
         latency = [
             LatencyPhase(phase=p.get("phase", "unknown"), ms=p.get("ms", 0))
-            for p in latency_raw if isinstance(p, dict)
+            for p in latency_raw
+            if isinstance(p, dict)
         ]
 
         return RunTelemetry(
@@ -170,7 +186,11 @@ class HolmesDriverClient:
         )
 
     def _fetch_model_limits(
-        self, *, model: str, backend_url: str, backend_type: str = "ollama",
+        self,
+        *,
+        model: str,
+        backend_url: str,
+        backend_type: str = "ollama",
     ) -> dict:
         """Return context_window / max_output_tokens for *model*, or ``{}`` on error."""
         try:

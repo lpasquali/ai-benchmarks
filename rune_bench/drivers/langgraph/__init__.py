@@ -15,7 +15,12 @@ from rune_bench.agents.base import AgentResult
 from rune_bench.api_contracts import LatencyPhase, RunTelemetry, TokenBreakdown
 
 from rune_bench.debug import debug_log
-from rune_bench.drivers import DriverTransport, AsyncDriverTransport, make_driver_transport, make_async_driver_transport
+from rune_bench.drivers import (
+    DriverTransport,
+    AsyncDriverTransport,
+    make_driver_transport,
+    make_async_driver_transport,
+)
 
 
 class LangGraphDriverClient:
@@ -31,8 +36,12 @@ class LangGraphDriverClient:
         transport: DriverTransport | None = None,
     ) -> None:
         self._kubeconfig = kubeconfig
-        self._transport: DriverTransport = transport or make_driver_transport("langgraph")
-        self._async_transport: AsyncDriverTransport = make_async_driver_transport("langgraph")
+        self._transport: DriverTransport = transport or make_driver_transport(
+            "langgraph"
+        )
+        self._async_transport: AsyncDriverTransport = make_async_driver_transport(
+            "langgraph"
+        )
 
     def ask(
         self,
@@ -137,7 +146,6 @@ class LangGraphDriverClient:
             telemetry=self._parse_telemetry(result.get("telemetry")),
         )
 
-
     def _parse_telemetry(self, raw: dict | None) -> RunTelemetry | None:
         """Parse raw telemetry dict into a RunTelemetry object."""
         if not raw:
@@ -155,7 +163,8 @@ class LangGraphDriverClient:
         latency_raw = raw.get("latency", [])
         latency = [
             LatencyPhase(phase=p.get("phase", "unknown"), ms=p.get("ms", 0))
-            for p in latency_raw if isinstance(p, dict)
+            for p in latency_raw
+            if isinstance(p, dict)
         ]
 
         return RunTelemetry(
@@ -163,5 +172,6 @@ class LangGraphDriverClient:
             latency=latency,
             cost_estimate_usd=raw.get("cost_estimate_usd"),
         )
+
 
 LangGraphRunner = LangGraphDriverClient

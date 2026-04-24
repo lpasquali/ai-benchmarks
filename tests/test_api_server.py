@@ -10,6 +10,7 @@ from rune_bench.api_client import RuneApiClient
 from rune_bench.api_server import ApiSecurityConfig, RuneApiApplication
 from rune_bench.job_store import JobStore
 
+
 @pytest.fixture
 def rune_api_server(tmp_path):
     store = JobStore(tmp_path / "jobs.db")
@@ -23,16 +24,19 @@ def rune_api_server(tmp_path):
         store=store,
         security=ApiSecurityConfig(
             auth_disabled=False,
-            tenant_tokens={
-                "tenant-a": "token-a",
-                "tenant-b": "token-b"
-            }
+            tenant_tokens={"tenant-a": "token-a", "tenant-b": "token-b"},
         ),
         backend_functions={
             "agentic-agent": run_agentic,
             "benchmark": lambda request: {"answer": "bench"},
-            "llm-instance": lambda request: {"mode": "existing", "backend_url": request.backend_url},
-            "ollama-instance": lambda request: {"mode": "existing", "backend_url": request.backend_url},
+            "llm-instance": lambda request: {
+                "mode": "existing",
+                "backend_url": request.backend_url,
+            },
+            "ollama-instance": lambda request: {
+                "mode": "existing",
+                "backend_url": request.backend_url,
+            },
         },
     )
 
@@ -84,12 +88,18 @@ def test_api_server_enforces_tenant_scoping_and_idempotency(rune_api_server):
         "kubeconfig": "/tmp/config",  # nosec  # test artifact paths
     }
 
-    job_id_1 = client_a.submit_agentic_agent_job(request_payload, idempotency_key="idem-1")
-    job_id_2 = client_a.submit_agentic_agent_job(request_payload, idempotency_key="idem-1")
+    job_id_1 = client_a.submit_agentic_agent_job(
+        request_payload, idempotency_key="idem-1"
+    )
+    job_id_2 = client_a.submit_agentic_agent_job(
+        request_payload, idempotency_key="idem-1"
+    )
 
     assert job_id_1 == job_id_2
 
-    payload = client_a.wait_for_job(job_id_1, timeout_seconds=5, poll_interval_seconds=0.01)
+    payload = client_a.wait_for_job(
+        job_id_1, timeout_seconds=5, poll_interval_seconds=0.01
+    )
     assert payload["result"]["answer"] == "ok:What is unhealthy?"
     assert state["agentic_calls"] == 1
 
@@ -171,7 +181,9 @@ def test_chain_state_returns_404_for_other_tenants_run(rune_api_server):
     assert exc.value.code == 404
 
 
-def test_chain_state_returns_empty_shell_when_job_exists_but_no_chain_state(rune_api_server, tmp_path):
+def test_chain_state_returns_empty_shell_when_job_exists_but_no_chain_state(
+    rune_api_server, tmp_path
+):
     base_url, _ = rune_api_server
     client_a = RuneApiClient(base_url, api_token="token-a", tenant_id="tenant-a")  # nosec
     job_id = client_a.submit_agentic_agent_job(
@@ -361,10 +373,7 @@ def test_audit_artifact_content_type_helper():
     assert _audit_artifact_content_type("slsa_provenance") == "application/json"
     assert _audit_artifact_content_type("sbom") == "application/json"
     assert _audit_artifact_content_type("rekor_entry") == "application/json"
-    assert (
-        _audit_artifact_content_type("tla_report")
-        == "text/plain; charset=utf-8"
-    )
+    assert _audit_artifact_content_type("tla_report") == "text/plain; charset=utf-8"
     assert _audit_artifact_content_type("sigstore_bundle") == "application/octet-stream"
     assert _audit_artifact_content_type("tpm_attestation") == "application/octet-stream"
     # Unknown kind → safe fallback
@@ -380,10 +389,16 @@ def test_audit_artifacts_list_returns_populated_artifacts(rune_api_server):
 
     # Two artifacts of two different kinds
     aid1 = store.record_audit_artifact(
-        job_id=job_id, kind="slsa_provenance", name="provenance.json", content=b'{"_type":"slsa.provenance"}'
+        job_id=job_id,
+        kind="slsa_provenance",
+        name="provenance.json",
+        content=b'{"_type":"slsa.provenance"}',
     )
     aid2 = store.record_audit_artifact(
-        job_id=job_id, kind="sbom", name="sbom.json", content=b'{"bomFormat":"CycloneDX"}'
+        job_id=job_id,
+        kind="sbom",
+        name="sbom.json",
+        content=b'{"bomFormat":"CycloneDX"}',
     )
 
     payload = _get_json(
@@ -391,7 +406,10 @@ def test_audit_artifacts_list_returns_populated_artifacts(rune_api_server):
         _auth_headers("token-a", "tenant-a"),
     )
     assert payload["run_id"] == job_id
-    assert payload["summary"] == {"total_count": 2, "kinds_present": ["sbom", "slsa_provenance"]}
+    assert payload["summary"] == {
+        "total_count": 2,
+        "kinds_present": ["sbom", "slsa_provenance"],
+    }
     assert len(payload["artifacts"]) == 2
 
     artifact_ids = {a["artifact_id"] for a in payload["artifacts"]}
@@ -441,7 +459,10 @@ def test_audit_artifact_download_uses_octet_stream_for_binary_kinds(rune_api_ser
     job_id = _create_throwaway_job(client)
 
     artifact_id = store.record_audit_artifact(
-        job_id=job_id, kind="sigstore_bundle", name="bundle.sig", content=b"\x00\x01\x02"
+        job_id=job_id,
+        kind="sigstore_bundle",
+        name="bundle.sig",
+        content=b"\x00\x01\x02",
     )
     request = Request(f"{base_url}/v1/audits/{job_id}/artifacts/{artifact_id}")
     request.add_header("Authorization", "Bearer token-a")  # nosec

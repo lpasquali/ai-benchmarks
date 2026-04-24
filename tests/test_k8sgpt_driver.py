@@ -53,20 +53,26 @@ _SAMPLE_RESULTS = {
 def test_handle_ask_calls_k8sgpt_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict = {}
 
-    def fake_run(cmd: list, env: dict, capture_output: bool, text: bool, check: bool) -> subprocess.CompletedProcess:
+    def fake_run(
+        cmd: list, env: dict, capture_output: bool, text: bool, check: bool
+    ) -> subprocess.CompletedProcess:
         captured["cmd"] = cmd
         captured["env"] = env
-        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(_SAMPLE_RESULTS), stderr="")
+        return subprocess.CompletedProcess(
+            cmd, 0, stdout=json.dumps(_SAMPLE_RESULTS), stderr=""
+        )
 
     monkeypatch.setattr(k8sgpt_main.shutil, "which", lambda _: "/usr/bin/k8sgpt")
     monkeypatch.setattr(k8sgpt_main.subprocess, "run", fake_run)
 
-    result = k8sgpt_main._handle_ask({
-        "question": "What is wrong?",
-        "model": "llama3.1:8b",
-        "kubeconfig_path": "/tmp/kubeconfig",  # nosec  # test artifact paths
-        "backend_url": "http://ollama:11434",
-    })
+    result = k8sgpt_main._handle_ask(
+        {
+            "question": "What is wrong?",
+            "model": "llama3.1:8b",
+            "kubeconfig_path": "/tmp/kubeconfig",  # nosec  # test artifact paths
+            "backend_url": "http://ollama:11434",
+        }
+    )
 
     assert "answer" in result
     assert "findings" in result
@@ -83,16 +89,20 @@ def test_handle_ask_without_backend_url(monkeypatch: pytest.MonkeyPatch) -> None
 
     def fake_run(cmd: list, **kw) -> subprocess.CompletedProcess:
         captured["cmd"] = cmd
-        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(_SAMPLE_RESULTS), stderr="")
+        return subprocess.CompletedProcess(
+            cmd, 0, stdout=json.dumps(_SAMPLE_RESULTS), stderr=""
+        )
 
     monkeypatch.setattr(k8sgpt_main.shutil, "which", lambda _: "/usr/bin/k8sgpt")
     monkeypatch.setattr(k8sgpt_main.subprocess, "run", fake_run)
 
-    result = k8sgpt_main._handle_ask({
-        "question": "q",
-        "model": "m",
-        "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
-    })
+    result = k8sgpt_main._handle_ask(
+        {
+            "question": "q",
+            "model": "m",
+            "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
+        }
+    )
     assert result["answer"]
     assert "--base-url" not in captured["cmd"]
 
@@ -101,11 +111,13 @@ def test_handle_ask_missing_binary(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(k8sgpt_main.shutil, "which", lambda _: None)
 
     with pytest.raises(RuntimeError, match="k8sgpt binary not found"):
-        k8sgpt_main._handle_ask({
-            "question": "q",
-            "model": "m",
-            "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
-        })
+        k8sgpt_main._handle_ask(
+            {
+                "question": "q",
+                "model": "m",
+                "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
+            }
+        )
 
 
 def test_handle_ask_empty_results(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -113,14 +125,18 @@ def test_handle_ask_empty_results(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         k8sgpt_main.subprocess,
         "run",
-        lambda *a, **kw: subprocess.CompletedProcess([], 0, stdout=json.dumps({"results": None}), stderr=""),
+        lambda *a, **kw: subprocess.CompletedProcess(
+            [], 0, stdout=json.dumps({"results": None}), stderr=""
+        ),
     )
 
-    result = k8sgpt_main._handle_ask({
-        "question": "q",
-        "model": "m",
-        "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
-    })
+    result = k8sgpt_main._handle_ask(
+        {
+            "question": "q",
+            "model": "m",
+            "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
+        }
+    )
     assert result["answer"] == "No issues detected"
     assert result["findings"] == []
 
@@ -133,11 +149,13 @@ def test_handle_ask_empty_stdout(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda *a, **kw: subprocess.CompletedProcess([], 0, stdout="", stderr=""),
     )
 
-    result = k8sgpt_main._handle_ask({
-        "question": "q",
-        "model": "m",
-        "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
-    })
+    result = k8sgpt_main._handle_ask(
+        {
+            "question": "q",
+            "model": "m",
+            "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
+        }
+    )
     assert result["answer"] == "No issues detected"
 
 
@@ -146,11 +164,15 @@ def test_handle_ask_raises_on_nonzero_exit(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(
         k8sgpt_main.subprocess,
         "run",
-        lambda *a, **kw: subprocess.CompletedProcess([], 1, stdout="", stderr="k8sgpt error"),
+        lambda *a, **kw: subprocess.CompletedProcess(
+            [], 1, stdout="", stderr="k8sgpt error"
+        ),
     )
 
     with pytest.raises(RuntimeError, match="k8sgpt error"):
-        k8sgpt_main._handle_ask({"question": "q", "model": "m", "kubeconfig_path": "/tmp/kc"})  # nosec  # test artifact paths
+        k8sgpt_main._handle_ask(
+            {"question": "q", "model": "m", "kubeconfig_path": "/tmp/kc"}
+        )  # nosec  # test artifact paths
 
 
 def test_handle_ask_resource_kind_filter(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -158,16 +180,20 @@ def test_handle_ask_resource_kind_filter(monkeypatch: pytest.MonkeyPatch) -> Non
 
     def fake_run(cmd: list, **kw) -> subprocess.CompletedProcess:
         captured["cmd"] = cmd
-        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"results": []}), stderr="")
+        return subprocess.CompletedProcess(
+            cmd, 0, stdout=json.dumps({"results": []}), stderr=""
+        )
 
     monkeypatch.setattr(k8sgpt_main.shutil, "which", lambda _: "/usr/bin/k8sgpt")
     monkeypatch.setattr(k8sgpt_main.subprocess, "run", fake_run)
 
-    k8sgpt_main._handle_ask({
-        "question": "Pod",
-        "model": "m",
-        "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
-    })
+    k8sgpt_main._handle_ask(
+        {
+            "question": "Pod",
+            "model": "m",
+            "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
+        }
+    )
     assert "--filter" in captured["cmd"]
     assert "Pod" in captured["cmd"]
 
@@ -210,16 +236,29 @@ def test_handle_info_returns_driver_metadata() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_main_processes_ask_request(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
-    monkeypatch.setattr(k8sgpt_main, "_handle_ask", lambda p: {"answer": "great answer", "findings": []})
+def test_main_processes_ask_request(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    monkeypatch.setattr(
+        k8sgpt_main, "_handle_ask", lambda p: {"answer": "great answer", "findings": []}
+    )
     monkeypatch.setattr(
         k8sgpt_main.sys,
         "stdin",
-        io.StringIO(json.dumps({
-            "action": "ask",
-            "params": {"question": "q", "model": "m", "kubeconfig_path": "/tmp/kc"},  # nosec  # test artifact paths
-            "id": "test-id",
-        }) + "\n"),
+        io.StringIO(
+            json.dumps(
+                {
+                    "action": "ask",
+                    "params": {
+                        "question": "q",
+                        "model": "m",
+                        "kubeconfig_path": "/tmp/kc",
+                    },  # nosec  # test artifact paths
+                    "id": "test-id",
+                }
+            )
+            + "\n"
+        ),
     )
 
     k8sgpt_main.main()
@@ -265,7 +304,9 @@ def test_client_ask_calls_transport(tmp_path: Path) -> None:
     mock_transport.call.return_value = {"answer": "the answer", "findings": []}
 
     client = K8sGPTDriverClient(kubeconfig, transport=mock_transport)
-    answer = client.ask("What is wrong?", "llama3.1:8b", backend_url="http://ollama:11434")
+    answer = client.ask(
+        "What is wrong?", "llama3.1:8b", backend_url="http://ollama:11434"
+    )
 
     assert answer == "the answer"
     mock_transport.call.assert_called_once()

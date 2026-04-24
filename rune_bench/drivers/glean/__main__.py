@@ -29,7 +29,7 @@ import sys
 import urllib.request
 import urllib.error
 
-_SAFE_INSTANCE_RE = re.compile(r'^[a-z0-9-]+$')
+_SAFE_INSTANCE_RE = re.compile(r"^[a-z0-9-]+$")
 
 
 def _handle_ask(params: dict) -> dict:
@@ -128,7 +128,9 @@ def main() -> None:
             handler = getattr(current_module, handler_name)
 
             result = handler(params)
-            print(json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True)
+            print(
+                json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True
+            )
         except Exception as exc:  # noqa: BLE001
             print(
                 json.dumps({"status": "error", "error": str(exc), "id": req_id}),

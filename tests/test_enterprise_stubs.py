@@ -199,13 +199,13 @@ def test_main_loop_success(
     import io
 
     main_mod = importlib.import_module(f"{module_path}.__main__")
-    
+
     # Test 'info' action
     input_data = json.dumps({"action": "info", "id": "123"}) + "\n"
     monkeypatch.setattr("sys.stdin", io.StringIO(input_data))
-    
+
     main_mod.main()
-    
+
     out, _ = capsys.readouterr()
     resp = json.loads(out.strip())
     assert resp["status"] == "ok"
@@ -232,18 +232,17 @@ def test_main_loop_unknown_action(
     import io
 
     main_mod = importlib.import_module(f"{module_path}.__main__")
-    
+
     input_data = json.dumps({"action": "invalid", "id": "456"}) + "\n"
     monkeypatch.setattr("sys.stdin", io.StringIO(input_data))
-    
+
     main_mod.main()
-    
+
     out, _ = capsys.readouterr()
     resp = json.loads(out.strip())
     assert resp["status"] == "error"
     assert resp["id"] == "456"
     assert "Unknown action" in resp["error"]
-
 
 
 @pytest.mark.parametrize(

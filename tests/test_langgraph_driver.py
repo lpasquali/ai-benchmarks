@@ -47,9 +47,11 @@ def test_handle_ask_raises_on_missing_deps(monkeypatch: pytest.MonkeyPatch) -> N
 
 def _mock_human_message_cls():
     """Create a simple HumanMessage stand-in for tests."""
+
     class FakeHumanMessage:
         def __init__(self, content=""):
             self.content = content
+
     return FakeHumanMessage
 
 
@@ -80,6 +82,7 @@ def test_handle_ask_runs_graph(monkeypatch: pytest.MonkeyPatch) -> None:
 
         def compile(self):
             nodes = self._nodes
+
             class Compiled:
                 def invoke(self, state):
                     # Run the first registered node (name-agnostic)
@@ -87,6 +90,7 @@ def test_handle_ask_runs_graph(monkeypatch: pytest.MonkeyPatch) -> None:
                     result = fn(state)
                     state.update(result)
                     return state
+
             return Compiled()
 
     mock_langgraph_graph.StateGraph = FakeStateGraph
@@ -103,11 +107,13 @@ def test_handle_ask_runs_graph(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(lg_main, "END", "__end__")
     monkeypatch.setattr(lg_main, "HumanMessage", FakeHumanMessage)
 
-    result = lg_main._handle_ask({
-        "question": "What is AI?",
-        "model": "llama3.1:8b",
-        "backend_url": "http://ollama:11434",
-    })
+    result = lg_main._handle_ask(
+        {
+            "question": "What is AI?",
+            "model": "llama3.1:8b",
+            "backend_url": "http://ollama:11434",
+        }
+    )
 
     assert result["answer"] == "research result"
     mock_chat_ollama_cls.assert_called_once_with(
@@ -137,18 +143,23 @@ def test_handle_ask_passthrough_params(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeStateGraph:
         def __init__(self, schema):
             self._nodes = {}
+
         def add_node(self, name, fn):
             self._nodes[name] = fn
+
         def add_edge(self, src, dst):
             pass
+
         def compile(self):
             nodes = self._nodes
+
             class Compiled:
                 def invoke(self, state):
                     fn = next(iter(nodes.values()))
                     result = fn(state)
                     state.update(result)
                     return state
+
             return Compiled()
 
     mock_langgraph_graph.StateGraph = FakeStateGraph
@@ -165,11 +176,13 @@ def test_handle_ask_passthrough_params(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(lg_main, "END", "__end__")
     monkeypatch.setattr(lg_main, "HumanMessage", FakeHumanMessage)
 
-    lg_main._handle_ask({
-        "question": "Explain quantum computing",
-        "model": "mistral:7b",
-        "backend_url": "http://localhost:11434",
-    })
+    lg_main._handle_ask(
+        {
+            "question": "Explain quantum computing",
+            "model": "mistral:7b",
+            "backend_url": "http://localhost:11434",
+        }
+    )
 
     assert captured["llm_kwargs"]["model"] == "mistral:7b"
     assert captured["llm_kwargs"]["base_url"] == "http://localhost:11434"
@@ -197,18 +210,23 @@ def test_handle_ask_without_backend_url(monkeypatch: pytest.MonkeyPatch) -> None
     class FakeStateGraph:
         def __init__(self, schema):
             self._nodes = {}
+
         def add_node(self, name, fn):
             self._nodes[name] = fn
+
         def add_edge(self, src, dst):
             pass
+
         def compile(self):
             nodes = self._nodes
+
             class Compiled:
                 def invoke(self, state):
                     fn = next(iter(nodes.values()))
                     result = fn(state)
                     state.update(result)
                     return state
+
             return Compiled()
 
     mock_langgraph_graph.StateGraph = FakeStateGraph
@@ -256,11 +274,13 @@ def test_main_processes_ask_request(
         lg_main.sys,
         "stdin",
         io.StringIO(
-            json.dumps({
-                "action": "ask",
-                "params": {"question": "q", "model": "m"},
-                "id": "lg-1",
-            })
+            json.dumps(
+                {
+                    "action": "ask",
+                    "params": {"question": "q", "model": "m"},
+                    "id": "lg-1",
+                }
+            )
             + "\n"
         ),
     )

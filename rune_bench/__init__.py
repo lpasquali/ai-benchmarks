@@ -16,10 +16,20 @@ __all__ = [
     "ModelSelector",
 ]
 
+
 def __getattr__(name: str) -> object:
     """Lazily expose vastai resources only when the 'vastai' extra is installed."""
     if name in ("OfferFinder", "TemplateLoader", "InstanceManager"):
-        from rune_bench.resources.vastai import InstanceManager, OfferFinder, TemplateLoader  # noqa: PLC0415
-        _map = {"OfferFinder": OfferFinder, "TemplateLoader": TemplateLoader, "InstanceManager": InstanceManager}
+        from rune_bench.resources.vastai import (
+            InstanceManager,
+            OfferFinder,
+            TemplateLoader,
+        )  # noqa: PLC0415
+
+        _map = {
+            "OfferFinder": OfferFinder,
+            "TemplateLoader": TemplateLoader,
+            "InstanceManager": InstanceManager,
+        }
         return _map[name]
     raise AttributeError(f"module 'rune_bench' has no attribute {name!r}")

@@ -14,7 +14,9 @@ def test_get_agent_success(monkeypatch, tmp_path):
 
 
 def test_get_agent_missing_config():
-    with pytest.raises(RuntimeError, match="Agent 'holmes' requires KUBECONFIG to be set"):
+    with pytest.raises(
+        RuntimeError, match="Agent 'holmes' requires KUBECONFIG to be set"
+    ):
         get_agent("holmes")
 
 
@@ -22,12 +24,14 @@ def test_get_agent_custom_registration(monkeypatch):
     class DummyAgent:
         def __init__(self, api_key=None):
             self.api_key = api_key
-            
+
     register_agent("dummy", DummyAgent, required_config=["api_key"])
-    
-    with pytest.raises(RuntimeError, match="Agent 'dummy' requires RUNE_DUMMY_API_KEY to be set"):
+
+    with pytest.raises(
+        RuntimeError, match="Agent 'dummy' requires RUNE_DUMMY_API_KEY to be set"
+    ):
         get_agent("dummy")
-        
+
     monkeypatch.setenv("RUNE_DUMMY_API_KEY", "dummy-key")
     agent = get_agent("dummy")
     assert agent.api_key == "dummy-key"

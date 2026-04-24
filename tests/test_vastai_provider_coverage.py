@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 from rune_bench.resources.vastai.provider import VastAIProvider
 from rune_bench.resources.base import ProvisioningResult
 
+
 @pytest.fixture
 def provider():
     mock_sdk = MagicMock()
@@ -13,8 +14,9 @@ def provider():
         min_dph=0.1,
         max_dph=1.0,
         reliability=0.9,
-        stop_on_teardown=True
+        stop_on_teardown=True,
     )
+
 
 @pytest.mark.asyncio
 async def test_vastai_provider_provision(provider):
@@ -22,11 +24,14 @@ async def test_vastai_provider_provision(provider):
     mock_result.backend_url = "http://u"
     mock_result.model_name = "m"
     mock_result.contract_id = 123
-    
-    with patch("rune_bench.workflows.provision_vastai_backend", return_value=mock_result):
+
+    with patch(
+        "rune_bench.workflows.provision_vastai_backend", return_value=mock_result
+    ):
         res = await provider.provision()
         assert res.backend_url == "http://u"
         assert res.provider_handle == 123
+
 
 @pytest.mark.asyncio
 async def test_vastai_provider_teardown(provider):
@@ -34,6 +39,7 @@ async def test_vastai_provider_teardown(provider):
     with patch("rune_bench.workflows.stop_vastai_instance") as mock_stop:
         await provider.teardown(res)
         assert mock_stop.called
+
 
 @pytest.mark.asyncio
 async def test_vastai_provider_teardown_no_stop(provider):

@@ -21,7 +21,12 @@ from __future__ import annotations
 import importlib
 
 from .base import BackendCredentials, LLMBackend, ModelCapabilities
-from .ollama import OllamaBackend, OllamaClient, OllamaModelCapabilities, OllamaModelManager
+from .ollama import (
+    OllamaBackend,
+    OllamaClient,
+    OllamaModelCapabilities,
+    OllamaModelManager,
+)
 
 _BACKEND_REGISTRY: dict[str, type] = {}
 
@@ -59,7 +64,9 @@ def get_backend(backend_type: str, base_url: str, **kwargs: object) -> LLMBacken
         cls = getattr(mod, class_name)
         return cls(base_url, **kwargs)  # type: ignore[return-value]
 
-    available = sorted(set(list(_BACKEND_REGISTRY.keys()) + list(_BUILTIN_BACKENDS.keys())))
+    available = sorted(
+        set(list(_BACKEND_REGISTRY.keys()) + list(_BUILTIN_BACKENDS.keys()))
+    )
     raise ValueError(
         f"Unknown backend type {backend_type!r}. Available: {', '.join(available)}"
     )

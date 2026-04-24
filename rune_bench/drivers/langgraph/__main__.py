@@ -25,12 +25,14 @@ from typing import Any, TypedDict
 
 _MODEL_PREFIXES = ("ollama/", "ollama_chat/")
 
+
 def _normalize_model(model: str) -> str:
     """Strip provider prefixes from model name."""
     for prefix in _MODEL_PREFIXES:
         if model.startswith(prefix):
-            return model[len(prefix):]
+            return model[len(prefix) :]
     return model
+
 
 try:
     from langchain_ollama import ChatOllama
@@ -43,13 +45,16 @@ except ImportError:
     END = None
     HumanMessage = None
 
+
 class GraphState(TypedDict):
     """State for the LangGraph SRE/Research workflow."""
+
     question: str
     kubeconfig: str | None
     history: list[BaseMessage]
     next_step: str
     answer: str | None
+
 
 def _handle_ask(params: dict) -> dict:
     question: str = params["question"]
@@ -70,9 +75,9 @@ def _handle_ask(params: dict) -> dict:
     def diagnostic_node(state: GraphState) -> dict:
         """Analyze the situation, possibly using tools if it were a full ReAct loop."""
         prompt = f"You are an SRE assistant. Question: {state['question']}\n"
-        if state['kubeconfig']:
+        if state["kubeconfig"]:
             prompt += f"Context: Kubernetes cluster diagnostics enabled via {state['kubeconfig']}\n"
-        
+
         # In a real SRE workflow, we would bind tools here (kubectl, etc.)
         # For this Tier 1 implementation, we simulate a multi-step diagnostic logic
         response = llm.invoke([HumanMessage(content=prompt)])
@@ -85,17 +90,18 @@ def _handle_ask(params: dict) -> dict:
     workflow.add_edge("diagnose", END)
 
     compiled = workflow.compile()
-    
+
     initial_state: GraphState = {
         "question": question,
         "kubeconfig": kubeconfig_path,
         "history": [],
         "next_step": "",
-        "answer": None
+        "answer": None,
     }
-    
+
     result = compiled.invoke(initial_state)
     return {"answer": result["answer"]}
+
 
 def _handle_info(_params: dict) -> dict:
     return {
@@ -105,10 +111,12 @@ def _handle_info(_params: dict) -> dict:
         "note": "Supports SRE and Research scopes via LangGraph multi-agent orchestration.",
     }
 
+
 _HANDLERS: dict = {
     "ask": "_handle_ask",
     "info": "_handle_info",
 }
+
 
 def main() -> None:
     current_module = sys.modules[__name__]
@@ -129,9 +137,15 @@ def main() -> None:
             handler = getattr(current_module, handler_name)
 
             result = handler(params)
-            print(json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True)
+            print(
+                json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True
+            )
         except Exception as exc:
-            print(json.dumps({"status": "error", "error": str(exc), "id": req_id}), flush=True)
+            print(
+                json.dumps({"status": "error", "error": str(exc), "id": req_id}),
+                flush=True,
+            )
+
 
 if __name__ == "__main__":
     main()

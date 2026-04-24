@@ -16,8 +16,8 @@ _HASH_FIELDS = ("id", "hash_id", "hash", "template_hash")
 
 @dataclass
 class Template:
-    env: str          # raw env string from the template (e.g. "-e VAR=val -p 11434:11434")
-    image: str | None # docker image, if set in the template
+    env: str  # raw env string from the template (e.g. "-e VAR=val -p 11434:11434")
+    image: str | None  # docker image, if set in the template
     raw: dict
 
 
@@ -56,7 +56,9 @@ class TemplateLoader:
                 "Check the hash or run: python -m vastai show templates"
             )
 
-        debug_log(f"Vast.ai template selected: hash={template_hash} image={match.get('image') or match.get('docker_image')}")
+        debug_log(
+            f"Vast.ai template selected: hash={template_hash} image={match.get('image') or match.get('docker_image')}"
+        )
 
         raw_env = str(match.get("env", "")).strip()
         final_env = f"{raw_env} -v /workspace".strip()

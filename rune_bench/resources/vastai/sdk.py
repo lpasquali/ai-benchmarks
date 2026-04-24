@@ -8,7 +8,6 @@ from typing import Any
 import httpx
 
 
-
 class VastAI:
     """Minimal wrapper around the Vast.ai REST API."""
 
@@ -23,14 +22,18 @@ class VastAI:
         }
 
     def search_offers(
-        self, query: dict[str, Any], order: str = "score-", disable_bundling: bool = True, raw: bool = True
+        self,
+        query: dict[str, Any],
+        order: str = "score-",
+        disable_bundling: bool = True,
+        raw: bool = True,
     ) -> list[dict[str, Any]]:
         if not isinstance(query, dict):
             raise ValueError("query must be a dict")
         query_str = json.dumps(query)
         query_encoded = urllib.parse.quote(query_str)
         url = f"{self.base_url}/bundles/?q={query_encoded}"
-        
+
         with httpx.Client() as client:
             resp = client.get(url, headers=self._get_headers(), timeout=30.0)
             resp.raise_for_status()
@@ -44,7 +47,9 @@ class VastAI:
             resp.raise_for_status()
             return resp.json()
 
-    def create_instance(self, id: str, disk: float, env: str, image: str | None = None, raw: bool = True) -> dict[str, Any]:
+    def create_instance(
+        self, id: str, disk: float, env: str, image: str | None = None, raw: bool = True
+    ) -> dict[str, Any]:
         url = f"{self.base_url}/asks/{id}/"
         payload = {
             "client_id": "me",
@@ -56,7 +61,9 @@ class VastAI:
             payload["image"] = image
 
         with httpx.Client() as client:
-            resp = client.put(url, json=payload, headers=self._get_headers(), timeout=30.0)
+            resp = client.put(
+                url, json=payload, headers=self._get_headers(), timeout=30.0
+            )
             resp.raise_for_status()
             return resp.json()
 

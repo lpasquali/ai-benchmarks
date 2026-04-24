@@ -26,7 +26,9 @@ import rune_bench.drivers.mindgard.__main__ as mindgard_main
 # ---------------------------------------------------------------------------
 
 
-def _patch_mindgard(monkeypatch, stdout_data: dict, returncode: int = 0, stderr: str = ""):
+def _patch_mindgard(
+    monkeypatch, stdout_data: dict, returncode: int = 0, stderr: str = ""
+):
     """Patch subprocess.run and shutil.which for mindgard tests."""
     monkeypatch.setenv("RUNE_MINDGARD_API_KEY", "test-api-key")
     monkeypatch.setattr(mindgard_main.shutil, "which", lambda name: "/usr/bin/mindgard")
@@ -36,7 +38,10 @@ def _patch_mindgard(monkeypatch, stdout_data: dict, returncode: int = 0, stderr:
     def fake_run(cmd, capture_output=False, text=False, check=False, **kwargs):
         captured["cmd"] = cmd
         return subprocess.CompletedProcess(
-            cmd, returncode, stdout=json.dumps(stdout_data), stderr=stderr,
+            cmd,
+            returncode,
+            stdout=json.dumps(stdout_data),
+            stderr=stderr,
         )
 
     monkeypatch.setattr(mindgard_main.subprocess, "run", fake_run)
@@ -47,16 +52,22 @@ def test_handle_ask_calls_mindgard_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     data = {
         "risk_score": 7.5,
         "vulnerabilities": [
-            {"name": "Jailbreak", "severity": "HIGH", "description": "Model can be jailbroken"},
+            {
+                "name": "Jailbreak",
+                "severity": "HIGH",
+                "description": "Model can be jailbroken",
+            },
         ],
     }
     captured = _patch_mindgard(monkeypatch, data)
 
-    result = mindgard_main._handle_ask({
-        "question": "test the model",
-        "model": "llama3:8b",
-        "backend_url": "http://target:11434",
-    })
+    result = mindgard_main._handle_ask(
+        {
+            "question": "test the model",
+            "model": "llama3:8b",
+            "backend_url": "http://target:11434",
+        }
+    )
 
     # Verify CLI command structure
     assert "mindgard" in captured["cmd"]
@@ -75,7 +86,9 @@ def test_handle_ask_calls_mindgard_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "7.5" in result["answer"]
 
 
-def test_handle_ask_inverted_backend_url_semantics(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_handle_ask_inverted_backend_url_semantics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """backend_url is the ATTACK TARGET, not the LLM backend.
 
     The URL should appear as --target with /v1 appended, meaning it points
@@ -83,18 +96,22 @@ def test_handle_ask_inverted_backend_url_semantics(monkeypatch: pytest.MonkeyPat
     """
     captured = _patch_mindgard(monkeypatch, {"risk_score": 0.0, "vulnerabilities": []})
 
-    mindgard_main._handle_ask({
-        "question": "red team this",
-        "model": "gpt-4",
-        "backend_url": "http://victim-model:8080",
-    })
+    mindgard_main._handle_ask(
+        {
+            "question": "red team this",
+            "model": "gpt-4",
+            "backend_url": "http://victim-model:8080",
+        }
+    )
 
     target_idx = captured["cmd"].index("--target")
     target_url = captured["cmd"][target_idx + 1]
     assert target_url == "http://victim-model:8080/v1"
 
 
-def test_handle_ask_default_target_without_backend_url(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_handle_ask_default_target_without_backend_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     captured = _patch_mindgard(monkeypatch, {"risk_score": 0.0, "vulnerabilities": []})
 
     mindgard_main._handle_ask({"question": "q", "model": "m"})
@@ -134,20 +151,26 @@ def test_handle_ask_raises_on_nonzero_exit(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(
         mindgard_main.subprocess,
         "run",
-        lambda *a, **kw: subprocess.CompletedProcess([], 1, stdout="", stderr="auth failed"),
+        lambda *a, **kw: subprocess.CompletedProcess(
+            [], 1, stdout="", stderr="auth failed"
+        ),
     )
 
     with pytest.raises(RuntimeError, match="auth failed"):
         mindgard_main._handle_ask({"question": "q", "model": "m"})
 
 
-def test_handle_ask_raises_on_invalid_json_output(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_handle_ask_raises_on_invalid_json_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("RUNE_MINDGARD_API_KEY", "key")
     monkeypatch.setattr(mindgard_main.shutil, "which", lambda name: "/usr/bin/mindgard")
     monkeypatch.setattr(
         mindgard_main.subprocess,
         "run",
-        lambda *a, **kw: subprocess.CompletedProcess([], 0, stdout="not json", stderr=""),
+        lambda *a, **kw: subprocess.CompletedProcess(
+            [], 0, stdout="not json", stderr=""
+        ),
     )
 
     with pytest.raises(RuntimeError, match="parse Mindgard JSON"):
@@ -156,10 +179,15 @@ def test_handle_ask_raises_on_invalid_json_output(monkeypatch: pytest.MonkeyPatc
 
 def test_handle_ask_uses_findings_key_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     """Some Mindgard versions return 'findings' instead of 'vulnerabilities'."""
-    _patch_mindgard(monkeypatch, {
-        "risk_score": 3.0,
-        "findings": [{"type": "Prompt Injection", "risk": "MEDIUM", "detail": "Injected"}],
-    })
+    _patch_mindgard(
+        monkeypatch,
+        {
+            "risk_score": 3.0,
+            "findings": [
+                {"type": "Prompt Injection", "risk": "MEDIUM", "detail": "Injected"}
+            ],
+        },
+    )
 
     result = mindgard_main._handle_ask({"question": "q", "model": "m"})
 
@@ -184,7 +212,9 @@ def test_handle_info_returns_driver_metadata() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_main_processes_ask_request(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_main_processes_ask_request(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     monkeypatch.setattr(
         mindgard_main,
         "_handle_ask",
@@ -193,11 +223,16 @@ def test_main_processes_ask_request(monkeypatch: pytest.MonkeyPatch, capsys: pyt
     monkeypatch.setattr(
         mindgard_main.sys,
         "stdin",
-        io.StringIO(json.dumps({
-            "action": "ask",
-            "params": {"question": "q", "model": "m"},
-            "id": "test-id",
-        }) + "\n"),
+        io.StringIO(
+            json.dumps(
+                {
+                    "action": "ask",
+                    "params": {"question": "q", "model": "m"},
+                    "id": "test-id",
+                }
+            )
+            + "\n"
+        ),
     )
 
     mindgard_main.main()
@@ -208,7 +243,9 @@ def test_main_processes_ask_request(monkeypatch: pytest.MonkeyPatch, capsys: pyt
     assert response["id"] == "test-id"
 
 
-def test_main_processes_info_request(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_main_processes_info_request(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     monkeypatch.setattr(
         mindgard_main.sys,
         "stdin",
@@ -238,7 +275,9 @@ def test_main_returns_error_for_unknown_action(
     assert "unknown" in response["error"].lower()
 
 
-def test_main_handles_invalid_json(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_main_handles_invalid_json(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     monkeypatch.setattr(mindgard_main.sys, "stdin", io.StringIO("not-json\n"))
 
     mindgard_main.main()
@@ -247,7 +286,9 @@ def test_main_handles_invalid_json(monkeypatch: pytest.MonkeyPatch, capsys: pyte
     assert response["status"] == "error"
 
 
-def test_main_skips_empty_lines(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_main_skips_empty_lines(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     monkeypatch.setattr(mindgard_main.sys, "stdin", io.StringIO("\n\n   \n"))
 
     mindgard_main.main()
@@ -259,5 +300,6 @@ def test_main_entrypoint(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify that calling main() as a script works (module-level coverage)."""
     # We just want to make sure it doesn't crash and returns after EOF on stdin.
     import io
+
     monkeypatch.setattr("sys.stdin", io.StringIO(""))
     mindgard_main.main()

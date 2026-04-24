@@ -24,7 +24,9 @@ class TestChainExecutionEngine:
         agent = MagicMock()
         agent.ask_async = AsyncMock(return_value=AgentResult(answer="result"))
 
-        steps = [ChainStep(name="step1", agent=agent, question_template="What is {topic}?")]
+        steps = [
+            ChainStep(name="step1", agent=agent, question_template="What is {topic}?")
+        ]
         engine = ChainExecutionEngine(steps)
 
         result = asyncio.run(engine.execute({"topic": "AI"}, model="m"))
@@ -42,11 +44,18 @@ class TestChainExecutionEngine:
 
         steps = [
             ChainStep(name="a", agent=agent1, question_template="Start {topic}"),
-            ChainStep(name="b", agent=agent2, question_template="Continue: {a}", dependencies=["a"]),
+            ChainStep(
+                name="b",
+                agent=agent2,
+                question_template="Continue: {a}",
+                dependencies=["a"],
+            ),
         ]
         engine = ChainExecutionEngine(steps)
 
-        result = asyncio.run(engine.execute({"topic": "AI"}, model="m", backend_url="http://x"))
+        result = asyncio.run(
+            engine.execute({"topic": "AI"}, model="m", backend_url="http://x")
+        )
         assert result.steps["b"].answer == "second"
 
     def test_cycle_detection(self) -> None:
@@ -64,7 +73,14 @@ class TestChainExecutionEngine:
         from rune_bench.agents.chain import ChainExecutionEngine, ChainStep
 
         agent = MagicMock()
-        steps = [ChainStep(name="a", agent=agent, question_template="q", dependencies=["nonexistent"])]
+        steps = [
+            ChainStep(
+                name="a",
+                agent=agent,
+                question_template="q",
+                dependencies=["nonexistent"],
+            )
+        ]
         with pytest.raises(ValueError, match="unknown step"):
             ChainExecutionEngine(steps)
 
@@ -149,7 +165,9 @@ class TestChainExecutionEngine:
 
         steps = [
             ChainStep(name="a", agent=agent, question_template="{topic}"),
-            ChainStep(name="b", agent=agent, question_template="{a}", dependencies=["a"]),
+            ChainStep(
+                name="b", agent=agent, question_template="{a}", dependencies=["a"]
+            ),
         ]
         engine = ChainExecutionEngine(steps, recorder=recorder, job_id="job-1")
         asyncio.run(engine.execute({"topic": "x"}, model="m"))
@@ -173,7 +191,11 @@ class TestChainExecutionEngine:
 
         statuses = [c.kwargs["status"] for c in recorder.transition.call_args_list]
         assert "failed" in statuses
-        failed_call = next(c for c in recorder.transition.call_args_list if c.kwargs["status"] == "failed")
+        failed_call = next(
+            c
+            for c in recorder.transition.call_args_list
+            if c.kwargs["status"] == "failed"
+        )
         assert failed_call.kwargs["error"] == "boom"
 
     def test_engine_recorder_records_template_failure(self) -> None:
@@ -370,7 +392,9 @@ class TestBrowserDriverTransport:
 
 
 class TestDriverFactories:
-    def test_make_driver_transport_manual(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_make_driver_transport_manual(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from rune_bench.drivers import make_driver_transport
         from rune_bench.drivers.manual import ManualDriverTransport
 
@@ -378,7 +402,9 @@ class TestDriverFactories:
         transport = make_driver_transport("test")
         assert isinstance(transport, ManualDriverTransport)
 
-    def test_make_driver_transport_browser(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_make_driver_transport_browser(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from rune_bench.drivers import make_driver_transport
         from rune_bench.drivers.browser import BrowserDriverTransport
 
@@ -395,7 +421,9 @@ class TestDriverFactories:
         transport = make_driver_transport("test")
         assert isinstance(transport, HttpTransport)
 
-    def test_make_driver_transport_http_missing_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_make_driver_transport_http_missing_url(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from rune_bench.drivers import make_driver_transport
 
         monkeypatch.setenv("RUNE_TEST_DRIVER_MODE", "http")
@@ -403,7 +431,9 @@ class TestDriverFactories:
         with pytest.raises(RuntimeError, match="not set"):
             make_driver_transport("test")
 
-    def test_make_async_driver_transport_manual(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_make_async_driver_transport_manual(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from rune_bench.drivers import make_async_driver_transport
         from rune_bench.drivers.manual import ManualDriverTransport
 
@@ -411,7 +441,9 @@ class TestDriverFactories:
         transport = make_async_driver_transport("test")
         assert isinstance(transport, ManualDriverTransport)
 
-    def test_make_async_driver_transport_browser(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_make_async_driver_transport_browser(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from rune_bench.drivers import make_async_driver_transport
         from rune_bench.drivers.browser import BrowserDriverTransport
 
@@ -419,7 +451,9 @@ class TestDriverFactories:
         transport = make_async_driver_transport("test")
         assert isinstance(transport, BrowserDriverTransport)
 
-    def test_make_async_driver_transport_http(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_make_async_driver_transport_http(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from rune_bench.drivers import make_async_driver_transport
         from rune_bench.drivers.http import AsyncHttpTransport
 
@@ -428,7 +462,9 @@ class TestDriverFactories:
         transport = make_async_driver_transport("test")
         assert isinstance(transport, AsyncHttpTransport)
 
-    def test_make_async_driver_transport_http_missing_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_make_async_driver_transport_http_missing_url(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from rune_bench.drivers import make_async_driver_transport
 
         monkeypatch.setenv("RUNE_TEST_DRIVER_MODE", "http")
@@ -436,7 +472,9 @@ class TestDriverFactories:
         with pytest.raises(RuntimeError, match="not set"):
             make_async_driver_transport("test")
 
-    def test_make_async_driver_transport_stdio_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_make_async_driver_transport_stdio_default(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from rune_bench.drivers import make_async_driver_transport
         from rune_bench.drivers.stdio import AsyncStdioTransport
 
@@ -445,7 +483,9 @@ class TestDriverFactories:
         transport = make_async_driver_transport("test")
         assert isinstance(transport, AsyncStdioTransport)
 
-    def test_make_async_driver_transport_stdio_custom_cmd(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_make_async_driver_transport_stdio_custom_cmd(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from rune_bench.drivers import make_async_driver_transport
         from rune_bench.drivers.stdio import AsyncStdioTransport
 
@@ -837,9 +877,11 @@ class TestAgentAliases:
     def test_invokeai_runner_exists(self) -> None:
         from rune_bench.agents.art.invokeai import InvokeAIRunner
         from rune_bench.drivers.invokeai import InvokeAIDriverClient
+
         assert InvokeAIRunner is InvokeAIDriverClient
 
     def test_browseruse_runner_exists(self) -> None:
         from rune_bench.agents.ops.browseruse import BrowserUseRunner
         from rune_bench.drivers.browseruse import BrowserUseDriverClient
+
         assert BrowserUseRunner is BrowserUseDriverClient

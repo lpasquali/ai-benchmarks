@@ -12,10 +12,8 @@ Ecosystem:  OSS Community
 
 from __future__ import annotations
 
-import json
 import time
 import uuid
-from typing import Any
 
 import httpx
 
@@ -99,5 +97,5 @@ class ComfyUIRunner:
                             view_url = f"{self._base_url}/view?filename={filename}&subfolder={subfolder}&type={type_}"
                             return f"Generated image: {view_url}"
                         return "ComfyUI: Generation finished but no output image found."
-            
+
             return "ComfyUI: Timeout waiting for generation."

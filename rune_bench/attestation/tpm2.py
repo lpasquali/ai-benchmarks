@@ -89,12 +89,18 @@ class TPM2Driver(AttestationDriver):
 
             cmd = [
                 "tpm2_quote",
-                "--key-context", "ak.ctx",
-                "--pcr-list", _DEFAULT_PCR_LIST,
-                "--qualifying-data", qualifying_data,
-                "--signature", sig_path,
-                "--pcrs_output", pcrs_path,
-                "--message", msg_path,
+                "--key-context",
+                "ak.ctx",
+                "--pcr-list",
+                _DEFAULT_PCR_LIST,
+                "--qualifying-data",
+                qualifying_data,
+                "--signature",
+                sig_path,
+                "--pcrs_output",
+                pcrs_path,
+                "--message",
+                msg_path,
             ]
 
             try:
@@ -128,13 +134,20 @@ class TPM2Driver(AttestationDriver):
             if self.pcr_policy_path:
                 check_cmd = [
                     "tpm2_checkquote",
-                    "--public", "ak.pub",
-                    "--message", msg_path,
-                    "--signature", sig_path,
-                    "--pcrs_input", pcrs_path,
-                    "--pcr-list", _DEFAULT_PCR_LIST,
-                    "--qualification", qualifying_data,
-                    "--policy", self.pcr_policy_path,
+                    "--public",
+                    "ak.pub",
+                    "--message",
+                    msg_path,
+                    "--signature",
+                    sig_path,
+                    "--pcrs_input",
+                    pcrs_path,
+                    "--pcr-list",
+                    _DEFAULT_PCR_LIST,
+                    "--qualification",
+                    qualifying_data,
+                    "--policy",
+                    self.pcr_policy_path,
                 ]
                 try:
                     check_proc = subprocess.run(

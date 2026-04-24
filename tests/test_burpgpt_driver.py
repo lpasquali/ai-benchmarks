@@ -83,22 +83,28 @@ def _mock_urlopen(responses: list):
 # ---------------------------------------------------------------------------
 
 
-def test_handle_ask_runs_scan_and_returns_findings(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_handle_ask_runs_scan_and_returns_findings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("RUNE_BURPGPT_BURP_API_URL", "http://burp:1337")
     # time.sleep is a no-op for tests
     monkeypatch.setattr(burp_main.time, "sleep", lambda _: None)
 
-    mock = _mock_urlopen([
-        _SCAN_START_RESPONSE,       # POST /v0.1/scan
-        _SCAN_RUNNING_RESPONSE,     # GET /v0.1/scan/scan-42 (1st poll)
-        _SCAN_SUCCEEDED_RESPONSE,   # GET /v0.1/scan/scan-42 (2nd poll)
-    ])
+    mock = _mock_urlopen(
+        [
+            _SCAN_START_RESPONSE,  # POST /v0.1/scan
+            _SCAN_RUNNING_RESPONSE,  # GET /v0.1/scan/scan-42 (1st poll)
+            _SCAN_SUCCEEDED_RESPONSE,  # GET /v0.1/scan/scan-42 (2nd poll)
+        ]
+    )
     monkeypatch.setattr(burp_main.urllib.request, "urlopen", mock)
 
-    result = burp_main._handle_ask({
-        "question": "Scan https://target.local",
-        "model": "",
-    })
+    result = burp_main._handle_ask(
+        {
+            "question": "Scan https://target.local",
+            "model": "",
+        }
+    )
 
     assert "SQL Injection" in result["answer"]
     assert "Cross-Site Scripting" in result["answer"]
@@ -136,10 +142,12 @@ def test_handle_ask_extracts_url_from_question(monkeypatch: pytest.MonkeyPatch) 
 
     monkeypatch.setattr(burp_main.urllib.request, "urlopen", capture_urlopen)
 
-    burp_main._handle_ask({
-        "question": "Please scan https://example.com/app for vulnerabilities",
-        "model": "",
-    })
+    burp_main._handle_ask(
+        {
+            "question": "Please scan https://example.com/app for vulnerabilities",
+            "model": "",
+        }
+    )
 
     assert captured_data[0]["urls"] == ["https://example.com/app"]
 
@@ -155,10 +163,12 @@ def test_handle_ask_no_findings(monkeypatch: pytest.MonkeyPatch) -> None:
     mock = _mock_urlopen([_SCAN_START_RESPONSE, _SCAN_NO_FINDINGS_RESPONSE])
     monkeypatch.setattr(burp_main.urllib.request, "urlopen", mock)
 
-    result = burp_main._handle_ask({
-        "question": "https://safe.local",
-        "model": "",
-    })
+    result = burp_main._handle_ask(
+        {
+            "question": "https://safe.local",
+            "model": "",
+        }
+    )
 
     assert "No vulnerabilities found" in result["answer"]
     assert result["findings"] == []
@@ -172,16 +182,20 @@ def test_handle_ask_no_findings(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_handle_ask_burp_not_running(monkeypatch: pytest.MonkeyPatch) -> None:
     import urllib.error
 
-    mock = _mock_urlopen([
-        urllib.error.URLError("Connection refused"),
-    ])
+    mock = _mock_urlopen(
+        [
+            urllib.error.URLError("Connection refused"),
+        ]
+    )
     monkeypatch.setattr(burp_main.urllib.request, "urlopen", mock)
 
     with pytest.raises(RuntimeError, match="Cannot connect to Burp Suite"):
-        burp_main._handle_ask({
-            "question": "https://target.local",
-            "model": "",
-        })
+        burp_main._handle_ask(
+            {
+                "question": "https://target.local",
+                "model": "",
+            }
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -195,17 +209,21 @@ def test_handle_ask_scan_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     times = iter([0, 0, 999999])
     monkeypatch.setattr(burp_main.time, "monotonic", lambda: next(times))
 
-    mock = _mock_urlopen([
-        _SCAN_START_RESPONSE,
-        _SCAN_RUNNING_RESPONSE,
-    ])
+    mock = _mock_urlopen(
+        [
+            _SCAN_START_RESPONSE,
+            _SCAN_RUNNING_RESPONSE,
+        ]
+    )
     monkeypatch.setattr(burp_main.urllib.request, "urlopen", mock)
 
     with pytest.raises(RuntimeError, match="timed out"):
-        burp_main._handle_ask({
-            "question": "https://target.local",
-            "model": "",
-        })
+        burp_main._handle_ask(
+            {
+                "question": "https://target.local",
+                "model": "",
+            }
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -216,17 +234,21 @@ def test_handle_ask_scan_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_handle_ask_scan_failed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(burp_main.time, "sleep", lambda _: None)
 
-    mock = _mock_urlopen([
-        _SCAN_START_RESPONSE,
-        {"status": "failed", "message": "Invalid target"},
-    ])
+    mock = _mock_urlopen(
+        [
+            _SCAN_START_RESPONSE,
+            {"status": "failed", "message": "Invalid target"},
+        ]
+    )
     monkeypatch.setattr(burp_main.urllib.request, "urlopen", mock)
 
     with pytest.raises(RuntimeError, match="scan.*failed"):
-        burp_main._handle_ask({
-            "question": "https://target.local",
-            "model": "",
-        })
+        burp_main._handle_ask(
+            {
+                "question": "https://target.local",
+                "model": "",
+            }
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -239,10 +261,12 @@ def test_handle_ask_no_scan_id(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(burp_main.urllib.request, "urlopen", mock)
 
     with pytest.raises(RuntimeError, match="did not return a scan ID"):
-        burp_main._handle_ask({
-            "question": "https://target.local",
-            "model": "",
-        })
+        burp_main._handle_ask(
+            {
+                "question": "https://target.local",
+                "model": "",
+            }
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -251,13 +275,16 @@ def test_handle_ask_no_scan_id(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_extract_target_url_from_sentence() -> None:
-    assert burp_main._extract_target_url(
-        "Scan https://example.com/app for XSS"
-    ) == "https://example.com/app"
+    assert (
+        burp_main._extract_target_url("Scan https://example.com/app for XSS")
+        == "https://example.com/app"
+    )
 
 
 def test_extract_target_url_plain() -> None:
-    assert burp_main._extract_target_url("http://10.0.0.1:8080") == "http://10.0.0.1:8080"
+    assert (
+        burp_main._extract_target_url("http://10.0.0.1:8080") == "http://10.0.0.1:8080"
+    )
 
 
 def test_extract_target_url_fallback() -> None:
@@ -275,13 +302,17 @@ def test_check_authorization_skips_when_unset(monkeypatch: pytest.MonkeyPatch) -
     burp_main._check_authorization("https://any-target.com")
 
 
-def test_check_authorization_allows_listed_target(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_check_authorization_allows_listed_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("RUNE_BURPGPT_ALLOWED_TARGETS", "example.com, target.local")
     # Should not raise
     burp_main._check_authorization("https://target.local/path")
 
 
-def test_check_authorization_raises_on_unlisted_target(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_check_authorization_raises_on_unlisted_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("RUNE_BURPGPT_ALLOWED_TARGETS", "example.com")
     with pytest.raises(RuntimeError, match="not in RUNE_BURPGPT_ALLOWED_TARGETS"):
         burp_main._check_authorization("https://unauthorized.com")
@@ -308,17 +339,23 @@ def test_main_processes_ask_request(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:
     monkeypatch.setattr(
-        burp_main, "_handle_ask",
+        burp_main,
+        "_handle_ask",
         lambda p: {"answer": "scan done", "findings": []},
     )
     monkeypatch.setattr(
         burp_main.sys,
         "stdin",
-        io.StringIO(json.dumps({
-            "action": "ask",
-            "params": {"question": "https://t.local", "model": ""},
-            "id": "test-id",
-        }) + "\n"),
+        io.StringIO(
+            json.dumps(
+                {
+                    "action": "ask",
+                    "params": {"question": "https://t.local", "model": ""},
+                    "id": "test-id",
+                }
+            )
+            + "\n"
+        ),
     )
 
     burp_main.main()

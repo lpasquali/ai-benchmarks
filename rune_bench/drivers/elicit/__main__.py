@@ -72,9 +72,13 @@ def _handle_ask(params: dict) -> dict:
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Elicit API returned non-JSON response: {raw[:200]}") from exc
+        raise RuntimeError(
+            f"Elicit API returned non-JSON response: {raw[:200]}"
+        ) from exc
 
-    papers: list[dict] = data if isinstance(data, list) else data.get("papers", data.get("results", []))
+    papers: list[dict] = (
+        data if isinstance(data, list) else data.get("papers", data.get("results", []))
+    )
 
     lines: list[str] = []
     for i, paper in enumerate(papers, 1):
@@ -94,7 +98,9 @@ def _handle_ask(params: dict) -> dict:
     if not lines:
         formatted = "No papers found for the given query."
     else:
-        formatted = f"Found {len(papers)} paper(s) for: {question}\n\n" + "\n".join(lines)
+        formatted = f"Found {len(papers)} paper(s) for: {question}\n\n" + "\n".join(
+            lines
+        )
 
     return {"answer": formatted, "papers": papers}
 
@@ -129,7 +135,9 @@ def main() -> None:
             handler = getattr(current_module, handler_name)
 
             result = handler(params)
-            print(json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True)
+            print(
+                json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True
+            )
         except Exception as exc:  # noqa: BLE001
             print(
                 json.dumps({"status": "error", "error": str(exc), "id": req_id}),

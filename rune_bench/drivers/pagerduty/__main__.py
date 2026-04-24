@@ -81,7 +81,9 @@ def _fetch_alerts_for_incident(incident_id: str, api_key: str) -> list[dict]:
     return data.get("alerts", [])
 
 
-def _format_incident_data(incidents: list[dict], alerts_by_incident: dict[str, list[dict]]) -> str:
+def _format_incident_data(
+    incidents: list[dict], alerts_by_incident: dict[str, list[dict]]
+) -> str:
     """Format incident and alert data as structured text for LLM consumption."""
     if not incidents:
         return "No open incidents found."
@@ -99,8 +101,10 @@ def _format_incident_data(incidents: list[dict], alerts_by_incident: dict[str, l
         if alerts:
             lines.append(f"  Alerts ({len(alerts)}):")
             for alert in alerts:
-                lines.append(f"    - {alert.get('summary', 'N/A')} "
-                             f"(severity: {alert.get('severity', 'N/A')})")
+                lines.append(
+                    f"    - {alert.get('summary', 'N/A')} "
+                    f"(severity: {alert.get('severity', 'N/A')})"
+                )
         lines.append("")
 
     return "\n".join(lines)
@@ -201,7 +205,9 @@ def main() -> None:
             handler = getattr(current_module, handler_name)
 
             result = handler(params)
-            print(json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True)
+            print(
+                json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True
+            )
         except Exception as exc:  # noqa: BLE001
             print(
                 json.dumps({"status": "error", "error": str(exc), "id": req_id}),

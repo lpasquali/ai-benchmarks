@@ -23,7 +23,6 @@ _POLL_INTERVAL_S = 10
 _POLL_MAX_ATTEMPTS = 36  # ~6 minutes
 
 
-
 class InstanceManager:
     """Create, monitor, and interact with a Vast.ai instance."""
 
@@ -135,7 +134,9 @@ class InstanceManager:
         """Return a best-effort running instance matching constraints, if any."""
         candidates: list[dict] = []
         for inst in self.list_instances():
-            status = str(inst.get("actual_status", inst.get("state", inst.get("status", "")))).lower()
+            status = str(
+                inst.get("actual_status", inst.get("state", inst.get("status", "")))
+            ).lower()
             if status != "running":
                 continue
 
@@ -143,7 +144,9 @@ class InstanceManager:
             if dph is not None and not (min_dph <= dph <= max_dph):
                 continue
 
-            rel = self._first_float(inst, ("reliability2", "reliability", "machine_reliability"))
+            rel = self._first_float(
+                inst, ("reliability2", "reliability", "machine_reliability")
+            )
             if rel is not None and rel < reliability:
                 continue
 
@@ -155,7 +158,9 @@ class InstanceManager:
         # Prefer bigger VRAM, then lower price.
         def _score(item: dict) -> tuple[int, float]:
             vram = int(self._first_float(item, ("gpu_total_ram", "gpu_ram")) or 0)
-            dph = float(self._first_float(item, ("dph_total", "dph", "price")) or 9999.0)
+            dph = float(
+                self._first_float(item, ("dph_total", "dph", "price")) or 9999.0
+            )
             return (vram, -dph)
 
         candidates.sort(key=_score, reverse=True)
@@ -169,7 +174,9 @@ class InstanceManager:
         """Destroy only the instance contract."""
         self._destroy_instance(contract_id)
 
-    def destroy_instance_and_related_storage(self, contract_id: int | str) -> TeardownResult:
+    def destroy_instance_and_related_storage(
+        self, contract_id: int | str
+    ) -> TeardownResult:
         """Destroy instance and related volumes, then verify spend stopped.
 
         This attempts to remove the contract and any attached volume IDs discoverable
@@ -196,7 +203,9 @@ class InstanceManager:
 
         parts = []
         parts.append(
-            "contract no longer active" if instance_gone else "contract still present in show_instances"
+            "contract no longer active"
+            if instance_gone
+            else "contract still present in show_instances"
         )
         parts.append(volume_msg)
 
@@ -215,7 +224,9 @@ class InstanceManager:
             debug_log(f"Vast.ai API call: destroy_instance id={cid} raw=True")
             self._sdk.destroy_instance(id=cid, raw=True)
         except Exception as exc:
-            raise RuntimeError(f"Failed to destroy Vast.ai instance {cid}: {exc}") from exc
+            raise RuntimeError(
+                f"Failed to destroy Vast.ai instance {cid}: {exc}"
+            ) from exc
 
     # ------------------------------------------------------------------ #
     # Block 8 — Pull model via backend                                     #
@@ -317,7 +328,9 @@ class InstanceManager:
             None,
         )
 
-    def _wait_until_instance_absent(self, contract_id: int | str, timeout_seconds: int = 120) -> bool:
+    def _wait_until_instance_absent(
+        self, contract_id: int | str, timeout_seconds: int = 120
+    ) -> bool:
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
             if self._fetch_instance(contract_id) is None:
@@ -355,11 +368,7 @@ class InstanceManager:
         if volumes is None:
             return False, "could not verify volumes (SDK has no volume-list method)"
 
-        existing_ids = {
-            str(v.get("id"))
-            for v in volumes
-            if v.get("id") is not None
-        }
+        existing_ids = {str(v.get("id")) for v in volumes if v.get("id") is not None}
         remaining = [vid for vid in volume_ids if str(vid) in existing_ids]
         if remaining:
             return False, f"remaining volumes: {', '.join(remaining)}"

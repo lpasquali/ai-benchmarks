@@ -41,21 +41,25 @@ def clean_env():
 def test_handle_ask_calls_holmes_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict = {}
 
-    def fake_run(cmd: list, env: dict, capture_output: bool, text: bool, check: bool) -> subprocess.CompletedProcess:
+    def fake_run(
+        cmd: list, env: dict, capture_output: bool, text: bool, check: bool
+    ) -> subprocess.CompletedProcess:
         captured["cmd"] = cmd
         captured["env"] = env
         return subprocess.CompletedProcess(cmd, 0, stdout="the answer\n", stderr="")
 
     monkeypatch.setattr(holmes_main.subprocess, "run", fake_run)
 
-    result = holmes_main._handle_ask({
-        "question": "What is wrong?",
-        "model": "llama3.1:8b",
-        "kubeconfig_path": "/tmp/kubeconfig",  # nosec  # test artifact paths
-        "backend_url": "http://ollama:11434",
-        "context_window": 131072,
-        "max_output_tokens": 26214,
-    })
+    result = holmes_main._handle_ask(
+        {
+            "question": "What is wrong?",
+            "model": "llama3.1:8b",
+            "kubeconfig_path": "/tmp/kubeconfig",  # nosec  # test artifact paths
+            "backend_url": "http://ollama:11434",
+            "context_window": 131072,
+            "max_output_tokens": 26214,
+        }
+    )
 
     assert result["answer"] == "the answer"
     assert "holmes.main" in captured["cmd"]
@@ -66,17 +70,23 @@ def test_handle_ask_calls_holmes_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     assert captured["env"]["OVERRIDE_MAX_OUTPUT_TOKEN"] == "26214"
 
 
-def test_handle_ask_works_without_optional_params(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_handle_ask_works_without_optional_params(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         holmes_main.subprocess,
         "run",
-        lambda *a, **kw: subprocess.CompletedProcess([], 0, stdout="answer\n", stderr=""),
+        lambda *a, **kw: subprocess.CompletedProcess(
+            [], 0, stdout="answer\n", stderr=""
+        ),
     )
-    result = holmes_main._handle_ask({
-        "question": "q",
-        "model": "m",
-        "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
-    })
+    result = holmes_main._handle_ask(
+        {
+            "question": "q",
+            "model": "m",
+            "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
+        }
+    )
     assert result["answer"] == "answer"
 
 
@@ -84,38 +94,54 @@ def test_handle_ask_raises_on_nonzero_exit(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(
         holmes_main.subprocess,
         "run",
-        lambda *a, **kw: subprocess.CompletedProcess([], 1, stdout="", stderr="holmes error"),
+        lambda *a, **kw: subprocess.CompletedProcess(
+            [], 1, stdout="", stderr="holmes error"
+        ),
     )
     with pytest.raises(RuntimeError, match="holmes error"):
-        holmes_main._handle_ask({"question": "q", "model": "m", "kubeconfig_path": "/tmp/kc"})  # nosec  # test artifact paths
+        holmes_main._handle_ask(
+            {"question": "q", "model": "m", "kubeconfig_path": "/tmp/kc"}
+        )  # nosec  # test artifact paths
 
 
-def test_handle_ask_uses_stdout_detail_on_stderr_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_handle_ask_uses_stdout_detail_on_stderr_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         holmes_main.subprocess,
         "run",
-        lambda *a, **kw: subprocess.CompletedProcess([], 1, stdout="stdout error", stderr=""),
+        lambda *a, **kw: subprocess.CompletedProcess(
+            [], 1, stdout="stdout error", stderr=""
+        ),
     )
     with pytest.raises(RuntimeError, match="stdout error"):
-        holmes_main._handle_ask({"question": "q", "model": "m", "kubeconfig_path": "/tmp/kc"})  # nosec  # test artifact paths
+        holmes_main._handle_ask(
+            {"question": "q", "model": "m", "kubeconfig_path": "/tmp/kc"}
+        )  # nosec  # test artifact paths
 
 
-def test_handle_ask_does_not_override_existing_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_handle_ask_does_not_override_existing_env_vars(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     captured: dict = {}
     monkeypatch.setattr(
         holmes_main.subprocess,
         "run",
-        lambda cmd, env, **kw: (captured.update({"env": env}) or
-                                 subprocess.CompletedProcess(cmd, 0, stdout="ans\n", stderr="")),
+        lambda cmd, env, **kw: (
+            captured.update({"env": env})
+            or subprocess.CompletedProcess(cmd, 0, stdout="ans\n", stderr="")
+        ),
     )
     monkeypatch.setenv("OVERRIDE_MAX_CONTENT_SIZE", "9999")
 
-    holmes_main._handle_ask({
-        "question": "q",
-        "model": "m",
-        "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
-        "context_window": 1234,
-    })
+    holmes_main._handle_ask(
+        {
+            "question": "q",
+            "model": "m",
+            "kubeconfig_path": "/tmp/kc",  # nosec  # test artifact paths
+            "context_window": 1234,
+        }
+    )
     # setdefault should preserve the pre-existing env var
     assert captured["env"]["OVERRIDE_MAX_CONTENT_SIZE"] == "9999"
 
@@ -137,16 +163,29 @@ def test_handle_info_returns_driver_metadata() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_main_processes_ask_request(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
-    monkeypatch.setattr(holmes_main, "_handle_ask", lambda p: {"answer": "great answer"})
+def test_main_processes_ask_request(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    monkeypatch.setattr(
+        holmes_main, "_handle_ask", lambda p: {"answer": "great answer"}
+    )
     monkeypatch.setattr(
         holmes_main.sys,
         "stdin",
-        io.StringIO(json.dumps({
-            "action": "ask",
-            "params": {"question": "q", "model": "m", "kubeconfig_path": "/tmp/kc"},  # nosec  # test artifact paths
-            "id": "test-id",
-        }) + "\n"),
+        io.StringIO(
+            json.dumps(
+                {
+                    "action": "ask",
+                    "params": {
+                        "question": "q",
+                        "model": "m",
+                        "kubeconfig_path": "/tmp/kc",
+                    },  # nosec  # test artifact paths
+                    "id": "test-id",
+                }
+            )
+            + "\n"
+        ),
     )
 
     holmes_main.main()
@@ -157,7 +196,9 @@ def test_main_processes_ask_request(monkeypatch: pytest.MonkeyPatch, capsys: pyt
     assert response["id"] == "test-id"
 
 
-def test_main_processes_info_request(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_main_processes_info_request(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     monkeypatch.setattr(
         holmes_main.sys,
         "stdin",
@@ -188,7 +229,9 @@ def test_main_returns_error_for_unknown_action(
     assert response["id"] == "u1"
 
 
-def test_main_handles_invalid_json(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_main_handles_invalid_json(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     monkeypatch.setattr(holmes_main.sys, "stdin", io.StringIO("not-json\n"))
 
     holmes_main.main()
@@ -197,7 +240,9 @@ def test_main_handles_invalid_json(monkeypatch: pytest.MonkeyPatch, capsys: pyte
     assert response["status"] == "error"
 
 
-def test_main_skips_empty_lines(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_main_skips_empty_lines(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     monkeypatch.setattr(holmes_main.sys, "stdin", io.StringIO("\n\n   \n"))
 
     holmes_main.main()
@@ -205,7 +250,9 @@ def test_main_skips_empty_lines(monkeypatch: pytest.MonkeyPatch, capsys: pytest.
     assert capsys.readouterr().out.strip() == ""
 
 
-def test_main_dunder_main_guard(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_main_dunder_main_guard(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     """Line 113: ensure the __main__ guard invokes main() when run as __main__."""
     import runpy
     from pathlib import Path

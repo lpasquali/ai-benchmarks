@@ -28,7 +28,9 @@ class TestAsyncStdioTransport:
         mock_proc = AsyncMock()
         mock_proc.returncode = 0
         mock_proc.communicate.return_value = (
-            json.dumps({"status": "ok", "result": {"answer": "async"}, "id": "1"}).encode(),
+            json.dumps(
+                {"status": "ok", "result": {"answer": "async"}, "id": "1"}
+            ).encode(),
             b"",
         )
 
@@ -102,7 +104,9 @@ class TestAsyncHttpTransport:
     def test_build_headers_with_token(self) -> None:
         from rune_bench.drivers.http import AsyncHttpTransport
 
-        transport = AsyncHttpTransport("http://localhost:9999", api_token="secret", tenant="myteam")
+        transport = AsyncHttpTransport(
+            "http://localhost:9999", api_token="secret", tenant="myteam"
+        )
         headers = transport._build_headers()
         assert headers["Authorization"] == "Bearer secret"
         assert headers["X-Tenant-ID"] == "myteam"
@@ -137,13 +141,24 @@ class TestInvokeAIMain:
         assert result["name"] == "invokeai"
         assert "ask" in result["actions"]
 
-    def test_main_ask(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+    def test_main_ask(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
         import rune_bench.drivers.invokeai.__main__ as inv_main
 
         monkeypatch.setattr(
             inv_main.sys,
             "stdin",
-            io.StringIO(json.dumps({"action": "ask", "params": {"prompt": "test", "model": "m"}, "id": "i1"}) + "\n"),
+            io.StringIO(
+                json.dumps(
+                    {
+                        "action": "ask",
+                        "params": {"prompt": "test", "model": "m"},
+                        "id": "i1",
+                    }
+                )
+                + "\n"
+            ),
         )
         inv_main.main()
         response = json.loads(capsys.readouterr().out.strip())
@@ -151,19 +166,25 @@ class TestInvokeAIMain:
         assert response["result"]["answer"].startswith("https://")  # nosec
         assert response["id"] == "i1"
 
-    def test_main_info(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+    def test_main_info(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
         import rune_bench.drivers.invokeai.__main__ as inv_main
 
         monkeypatch.setattr(
             inv_main.sys,
             "stdin",
-            io.StringIO(json.dumps({"action": "info", "params": {}, "id": "i2"}) + "\n"),
+            io.StringIO(
+                json.dumps({"action": "info", "params": {}, "id": "i2"}) + "\n"
+            ),
         )
         inv_main.main()
         response = json.loads(capsys.readouterr().out.strip())
         assert response["result"]["name"] == "invokeai"
 
-    def test_main_unknown_action(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+    def test_main_unknown_action(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
         import rune_bench.drivers.invokeai.__main__ as inv_main
 
         monkeypatch.setattr(
@@ -175,7 +196,9 @@ class TestInvokeAIMain:
         response = json.loads(capsys.readouterr().out.strip())
         assert response["status"] == "error"
 
-    def test_main_invalid_json(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+    def test_main_invalid_json(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
         import rune_bench.drivers.invokeai.__main__ as inv_main
 
         monkeypatch.setattr(inv_main.sys, "stdin", io.StringIO("not-json\n"))
@@ -183,7 +206,9 @@ class TestInvokeAIMain:
         response = json.loads(capsys.readouterr().out.strip())
         assert response["status"] == "error"
 
-    def test_main_skips_empty_lines(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+    def test_main_skips_empty_lines(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
         import rune_bench.drivers.invokeai.__main__ as inv_main
 
         monkeypatch.setattr(inv_main.sys, "stdin", io.StringIO("\n  \n"))

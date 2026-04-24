@@ -16,7 +16,12 @@ from rune_bench.api_contracts import LatencyPhase, RunTelemetry, TokenBreakdown
 from pathlib import Path
 
 from rune_bench.debug import debug_log
-from rune_bench.drivers import DriverTransport, AsyncDriverTransport, make_driver_transport, make_async_driver_transport
+from rune_bench.drivers import (
+    DriverTransport,
+    AsyncDriverTransport,
+    make_driver_transport,
+    make_async_driver_transport,
+)
 
 
 class PagerDutyDriverClient:
@@ -36,8 +41,12 @@ class PagerDutyDriverClient:
         if kubeconfig is not None and not kubeconfig.exists():
             raise FileNotFoundError(f"kubeconfig not found: {kubeconfig}")
         self._kubeconfig = kubeconfig
-        self._transport: DriverTransport = transport or make_driver_transport("pagerduty")
-        self._async_transport: AsyncDriverTransport = make_async_driver_transport("pagerduty")
+        self._transport: DriverTransport = transport or make_driver_transport(
+            "pagerduty"
+        )
+        self._async_transport: AsyncDriverTransport = make_async_driver_transport(
+            "pagerduty"
+        )
 
     def ask(
         self,
@@ -124,9 +133,13 @@ class PagerDutyDriverClient:
         if backend_url:
             params["backend_url"] = backend_url
             if hasattr(self, "_fetch_model_limits"):
-                params.update(self._fetch_model_limits(
-                    model=resolved_model, backend_url=backend_url, backend_type=backend_type,
-                ))
+                params.update(
+                    self._fetch_model_limits(
+                        model=resolved_model,
+                        backend_url=backend_url,
+                        backend_type=backend_type,
+                    )
+                )
 
         debug_log(
             f"{self.__class__.__name__}.ask_async: question={question!r} model={resolved_model!r} "
@@ -153,8 +166,6 @@ class PagerDutyDriverClient:
             telemetry=self._parse_telemetry(result.get("telemetry")),
         )
 
-
-
     def _parse_telemetry(self, raw: dict | None) -> RunTelemetry | None:
         """Parse raw telemetry dict into a RunTelemetry object."""
         if not raw:
@@ -172,7 +183,8 @@ class PagerDutyDriverClient:
         latency_raw = raw.get("latency", [])
         latency = [
             LatencyPhase(phase=p.get("phase", "unknown"), ms=p.get("ms", 0))
-            for p in latency_raw if isinstance(p, dict)
+            for p in latency_raw
+            if isinstance(p, dict)
         ]
 
         return RunTelemetry(
@@ -180,5 +192,6 @@ class PagerDutyDriverClient:
             latency=latency,
             cost_estimate_usd=raw.get("cost_estimate_usd"),
         )
+
 
 PagerDutyRunner = PagerDutyDriverClient

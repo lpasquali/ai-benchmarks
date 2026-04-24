@@ -2,7 +2,7 @@
 """Experimental Model Context Protocol (MCP) Integration PoC.
 
 This module demonstrates how RUNE can act as an MCP Server exposing tools
-to autonomous agents (MCP Clients). 
+to autonomous agents (MCP Clients).
 """
 
 import json
@@ -25,9 +25,7 @@ class MCPToolServer:
                 "description": "Echo a string.",
                 "parameters": {
                     "type": "object",
-                    "properties": {
-                        "message": {"type": "string"}
-                    },
+                    "properties": {"message": {"type": "string"}},
                     "required": ["message"],
                 },
             },
@@ -36,19 +34,23 @@ class MCPToolServer:
     def list_tools(self) -> List[Dict[str, Any]]:
         """Return a list of available tools in MCP format."""
         return [
-            {"name": name, "description": details["description"], "parameters": details["parameters"]}
+            {
+                "name": name,
+                "description": details["description"],
+                "parameters": details["parameters"],
+            }
             for name, details in self.tools.items()
         ]
 
     def execute_tool(self, name: str, params: Dict[str, Any]) -> str:
         """Execute a requested tool."""
         logger.info(f"MCP Server executing tool: {name} with params: {params}")
-        
+
         if name == "kubectl_get_pods":
             return "pod/web-server-12345 Running"
         elif name == "echo":
             return f"Echoing: {params.get('message', '')}"
-        
+
         raise ValueError(f"Unknown tool: {name}")
 
 
@@ -68,14 +70,16 @@ class MCPClientDriver:
         return self.server.execute_tool(tool_name, kwargs)
 
 
-def route_dynamic_plan(plan: List[Dict[str, Any]], client: MCPClientDriver) -> List[str]:
+def route_dynamic_plan(
+    plan: List[Dict[str, Any]], client: MCPClientDriver
+) -> List[str]:
     """Execute a dynamic tool routing plan via MCP."""
     results = []
-    
+
     # 1. Discover what tools we can use
     tools_json = client.discover_tools()
     results.append(f"Discovered tools: {tools_json}")
-    
+
     # 2. Execute plan
     for step in plan:
         tool = str(step.get("tool", ""))
@@ -85,5 +89,5 @@ def route_dynamic_plan(plan: List[Dict[str, Any]], client: MCPClientDriver) -> L
             results.append(f"Step {tool} succeeded: {output}")
         except Exception as e:
             results.append(f"Step {tool} failed: {e}")
-            
+
     return results

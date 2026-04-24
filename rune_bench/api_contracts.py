@@ -35,6 +35,7 @@ class VastAIProvisioning:
     def from_dict(cls, data: dict) -> "VastAIProvisioning":
         return cls(**data)
 
+
 @dataclass(frozen=True)
 class Provisioning:
     vastai: VastAIProvisioning | None = None
@@ -45,6 +46,7 @@ class Provisioning:
         if vastai and isinstance(vastai, dict):
             vastai = VastAIProvisioning.from_dict(vastai)
         return cls(vastai=vastai)
+
 
 @dataclass(frozen=True)
 class RunLLMInstanceRequest:
@@ -218,14 +220,14 @@ class CostEstimationRequest:
     azure: bool = False
     min_dph: float = 0.0
     max_dph: float = 0.0
-    
+
     # Local hardware parameters
     local_hardware: bool = False
     local_tdp_watts: float = 0.0
     local_energy_rate_kwh: float = 0.0
     local_hardware_purchase_price: float = 0.0
     local_hardware_lifespan_years: float = 0.0
-    
+
     # Run parameters
     model: str = ""
     estimated_duration_seconds: int = 3600
@@ -315,6 +317,7 @@ class TokenBreakdown:
     def to_dict(self) -> dict:
         return asdict(self)
 
+
 @dataclass(frozen=True)
 class LatencyPhase:
     phase: str
@@ -322,6 +325,7 @@ class LatencyPhase:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
 
 @dataclass(frozen=True)
 class RunTelemetry:

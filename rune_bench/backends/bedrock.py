@@ -17,7 +17,7 @@ from rune_bench.debug import debug_log
 from rune_bench.metrics import span
 
 if TYPE_CHECKING:
-    import boto3
+    pass
 
 
 class BedrockBackend:
@@ -42,9 +42,7 @@ class BedrockBackend:
             self._credentials = BackendCredentials(extra={})
 
         self._region = (
-            base_url
-            or self._credentials.extra.get("region")
-            or kwargs.get("region")
+            base_url or self._credentials.extra.get("region") or kwargs.get("region")
         )
 
         if not self._region:
@@ -67,21 +65,23 @@ class BedrockBackend:
         try:
             response = self._client.get_foundation_model(modelIdentifier=api_model_name)
             details = response.get("modelDetails", {})
-            
+
             # Bedrock doesn't always return context window in the API call for all models.
             # We provide known defaults for common models.
-            context_window = details.get("inputModalities", []) # just a placeholder
+            context_window = details.get("inputModalities", [])  # just a placeholder
             # Extract actual context length if available
             context_window = details.get("maxContextTokens")
-            
+
             return ModelCapabilities(
                 model_name=api_model_name,
                 context_window=context_window,
-                max_output_tokens=None, # Usually defined per request in Bedrock
+                max_output_tokens=None,  # Usually defined per request in Bedrock
                 raw=response,
             )
         except Exception as exc:
-            debug_log(f"Failed to fetch Bedrock capabilities for {api_model_name}: {exc}")
+            debug_log(
+                f"Failed to fetch Bedrock capabilities for {api_model_name}: {exc}"
+            )
             return ModelCapabilities(model_name=api_model_name)
 
     def list_models(self) -> list[str]:
@@ -122,7 +122,6 @@ class BedrockBackend:
         """Invoke a model on AWS Bedrock."""
         api_model_name = self.normalize_model_name(model)
         response = self._runtime.invoke_model(
-            modelId=api_model_name,
-            body=json.dumps(body)
+            modelId=api_model_name, body=json.dumps(body)
         )
         return json.loads(response.get("body").read())

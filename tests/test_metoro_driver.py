@@ -73,11 +73,13 @@ def test_handle_ask_with_optional_params(monkeypatch: pytest.MonkeyPatch) -> Non
 
     monkeypatch.setattr(metoro_main, "make_http_request", fake_make_http_request)
 
-    metoro_main._handle_ask({
-        "question": "latency?",
-        "service": "frontend",
-        "time_range": {"start": "2025-01-01", "end": "2025-01-02"},
-    })
+    metoro_main._handle_ask(
+        {
+            "question": "latency?",
+            "service": "frontend",
+            "time_range": {"start": "2025-01-01", "end": "2025-01-02"},
+        }
+    )
 
     assert captured["body"]["service"] == "frontend"
     assert captured["body"]["time_range"]["start"] == "2025-01-01"
@@ -101,7 +103,8 @@ def test_handle_ask_custom_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_handle_ask_falls_back_to_answer_field(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RUNE_METORO_API_KEY", "key")
     monkeypatch.setattr(
-        metoro_main, "make_http_request",
+        metoro_main,
+        "make_http_request",
         lambda *a, **kw: {"answer": "fallback answer"},
     )
 
@@ -155,16 +158,27 @@ def test_handle_info_returns_driver_metadata() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_main_processes_ask_request(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
-    monkeypatch.setattr(metoro_main, "_handle_ask", lambda p: {"answer": "great answer", "services": None, "traces": None})
+def test_main_processes_ask_request(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    monkeypatch.setattr(
+        metoro_main,
+        "_handle_ask",
+        lambda p: {"answer": "great answer", "services": None, "traces": None},
+    )
     monkeypatch.setattr(
         metoro_main.sys,
         "stdin",
-        io.StringIO(json.dumps({
-            "action": "ask",
-            "params": {"question": "q"},
-            "id": "test-id",
-        }) + "\n"),
+        io.StringIO(
+            json.dumps(
+                {
+                    "action": "ask",
+                    "params": {"question": "q"},
+                    "id": "test-id",
+                }
+            )
+            + "\n"
+        ),
     )
 
     metoro_main.main()
@@ -175,7 +189,9 @@ def test_main_processes_ask_request(monkeypatch: pytest.MonkeyPatch, capsys: pyt
     assert response["id"] == "test-id"
 
 
-def test_main_processes_info_request(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_main_processes_info_request(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     monkeypatch.setattr(
         metoro_main.sys,
         "stdin",
@@ -205,7 +221,9 @@ def test_main_returns_error_for_unknown_action(
     assert "unknown" in response["error"].lower()
 
 
-def test_main_handles_invalid_json(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_main_handles_invalid_json(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     monkeypatch.setattr(metoro_main.sys, "stdin", io.StringIO("not-json\n"))
 
     metoro_main.main()
@@ -214,7 +232,9 @@ def test_main_handles_invalid_json(monkeypatch: pytest.MonkeyPatch, capsys: pyte
     assert response["status"] == "error"
 
 
-def test_main_skips_empty_lines(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_main_skips_empty_lines(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     monkeypatch.setattr(metoro_main.sys, "stdin", io.StringIO("\n\n   \n"))
 
     metoro_main.main()

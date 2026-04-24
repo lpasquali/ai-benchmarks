@@ -87,7 +87,11 @@ def test_handle_ask_searches_semantic_scholar(monkeypatch: pytest.MonkeyPatch) -
     assert "papers" in result
     assert len(result["papers"]) == 2
     assert captured_url[0].startswith("https://api.semanticscholar.org/")
-    assert "deep+learning+NLP" in captured_url[0] or "deep%20learning%20NLP" in captured_url[0] or "deep+learning" in captured_url[0]
+    assert (
+        "deep+learning+NLP" in captured_url[0]
+        or "deep%20learning%20NLP" in captured_url[0]
+        or "deep+learning" in captured_url[0]
+    )
 
 
 def test_handle_ask_parses_paper_fields(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -126,15 +130,19 @@ def test_handle_ask_ollama_synthesis(monkeypatch: pytest.MonkeyPatch) -> None:
         body = json.loads(req.data.decode())
         assert body["model"] == "llama3:8b"
         assert "deep learning" in body["prompt"].lower()
-        return _mock_urlopen_factory({"response": "Synthesized answer from papers."})(req, timeout)
+        return _mock_urlopen_factory({"response": "Synthesized answer from papers."})(
+            req, timeout
+        )
 
     monkeypatch.setattr(consensus_main.urllib.request, "urlopen", mock_urlopen)
 
-    result = consensus_main._handle_ask({
-        "question": "deep learning NLP",
-        "model": "llama3:8b",
-        "backend_url": "http://localhost:11434",
-    })
+    result = consensus_main._handle_ask(
+        {
+            "question": "deep learning NLP",
+            "model": "llama3:8b",
+            "backend_url": "http://localhost:11434",
+        }
+    )
 
     assert result["answer"] == "Synthesized answer from papers."
     assert call_count["n"] == 2  # Semantic Scholar + Ollama
@@ -193,14 +201,19 @@ def test_client_ask_delegates_to_transport() -> None:
     mock_transport.call.return_value = {"answer": "The answer", "papers": []}
 
     client = ConsensusDriverClient(transport=mock_transport)
-    answer = client.ask("What is X?", model="llama3:8b", backend_url="http://ollama:11434")
+    answer = client.ask(
+        "What is X?", model="llama3:8b", backend_url="http://ollama:11434"
+    )
 
     assert answer == "The answer"
-    mock_transport.call.assert_called_once_with("ask", {
-        "question": "What is X?",
-        "model": "llama3:8b",
-        "backend_url": "http://ollama:11434",
-    })
+    mock_transport.call.assert_called_once_with(
+        "ask",
+        {
+            "question": "What is X?",
+            "model": "llama3:8b",
+            "backend_url": "http://ollama:11434",
+        },
+    )
 
 
 def test_client_ask_without_model() -> None:
@@ -246,16 +259,27 @@ def test_client_raises_on_none_answer() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_main_processes_ask_request(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
-    monkeypatch.setattr(consensus_main, "_handle_ask", lambda p: {"answer": "research answer", "papers": []})
+def test_main_processes_ask_request(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    monkeypatch.setattr(
+        consensus_main,
+        "_handle_ask",
+        lambda p: {"answer": "research answer", "papers": []},
+    )
     monkeypatch.setattr(
         consensus_main.sys,
         "stdin",
-        io.StringIO(json.dumps({
-            "action": "ask",
-            "params": {"question": "test question"},
-            "id": "test-id",
-        }) + "\n"),
+        io.StringIO(
+            json.dumps(
+                {
+                    "action": "ask",
+                    "params": {"question": "test question"},
+                    "id": "test-id",
+                }
+            )
+            + "\n"
+        ),
     )
 
     consensus_main.main()
@@ -266,7 +290,9 @@ def test_main_processes_ask_request(monkeypatch: pytest.MonkeyPatch, capsys: pyt
     assert response["id"] == "test-id"
 
 
-def test_main_processes_info_request(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_main_processes_info_request(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     monkeypatch.setattr(
         consensus_main.sys,
         "stdin",
@@ -296,7 +322,9 @@ def test_main_returns_error_for_unknown_action(
     assert "unknown" in response["error"].lower()
 
 
-def test_main_skips_empty_lines(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_main_skips_empty_lines(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     monkeypatch.setattr(consensus_main.sys, "stdin", io.StringIO("\n\n   \n"))
 
     consensus_main.main()

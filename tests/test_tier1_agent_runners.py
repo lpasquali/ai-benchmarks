@@ -33,7 +33,9 @@ def test_comfyui_runner_ask_raises_not_implemented():
     from rune_bench.agents.art.comfyui import ComfyUIRunner
 
     runner = ComfyUIRunner()
-    with pytest.raises(NotImplementedError, match="ComfyUIRunner is not yet implemented"):
+    with pytest.raises(
+        NotImplementedError, match="ComfyUIRunner is not yet implemented"
+    ):
         runner.ask("a cat in space", model="sd-xl")
 
 

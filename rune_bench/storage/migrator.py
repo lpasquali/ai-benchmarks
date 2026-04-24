@@ -31,7 +31,9 @@ class Migrator:
     up-to-date database is a no-op.
     """
 
-    def __init__(self, *, migrations_dir: pathlib.Path | None = None, dialect: str = "sqlite") -> None:
+    def __init__(
+        self, *, migrations_dir: pathlib.Path | None = None, dialect: str = "sqlite"
+    ) -> None:
         self._migrations_dir = (
             migrations_dir
             if migrations_dir is not None
@@ -57,15 +59,15 @@ class Migrator:
             if version in applied:
                 continue
             sql_text = path.read_text(encoding="utf-8")
-            
+
             # Split on ';' and execute each non-empty statement individually.
             # For SQLite we must do this to avoid implicit COMMITs.
             # For Postgres we can execute all at once, but keeping it uniform is simpler.
             statements = [s.strip() for s in sql_text.split(";") if s.strip()]
-            
+
             if self._dialect == "sqlite":
                 conn.execute("BEGIN")
-            
+
             try:
                 for statement in statements:
                     conn.execute(statement)  # nosec

@@ -10,6 +10,7 @@ from rune_bench.api_contracts import RunTelemetry
 @dataclass
 class AgentConfig:
     """Per-agent configuration resolution block."""
+
     api_key: str | None = None
     base_url: str | None = None
     kubeconfig: str | None = None

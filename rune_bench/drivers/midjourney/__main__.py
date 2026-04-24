@@ -66,7 +66,9 @@ def main() -> None:
                 raise RuntimeError(f"Unknown action: {action!r}")
             handler = getattr(current_module, handler_name)
             result = handler(params)
-            print(json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True)
+            print(
+                json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True
+            )
         except Exception as exc:  # noqa: BLE001
             print(
                 json.dumps({"status": "error", "error": str(exc), "id": req_id}),

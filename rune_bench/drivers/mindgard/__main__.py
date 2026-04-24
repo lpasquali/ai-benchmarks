@@ -60,13 +60,18 @@ def _handle_ask(params: dict) -> dict:
 
     if shutil.which("mindgard") is None:
         raise RuntimeError(
-            "mindgard CLI binary not found on PATH. "
-            "Install with: pip install mindgard"
+            "mindgard CLI binary not found on PATH. Install with: pip install mindgard"
         )
 
-    from rune_bench.common.http_client import normalize_url  # local import avoids circular dep
+    from rune_bench.common.http_client import (
+        normalize_url,
+    )  # local import avoids circular dep
 
-    base = normalize_url(backend_url, "Mindgard target") if backend_url else "http://localhost:11434"
+    base = (
+        normalize_url(backend_url, "Mindgard target")
+        if backend_url
+        else "http://localhost:11434"
+    )
     target_url = f"{base.rstrip('/')}/v1"
 
     cmd: list[str] = [
@@ -83,7 +88,11 @@ def _handle_ask(params: dict) -> dict:
 
     timeout = int(os.environ.get("RUNE_MINDGARD_TIMEOUT", "600"))
     proc = subprocess.run(  # noqa: S603
-        cmd, capture_output=True, text=True, check=False, timeout=timeout,
+        cmd,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=timeout,
     )
     if proc.returncode != 0:
         detail = proc.stderr.strip() or proc.stdout.strip() or f"exit {proc.returncode}"
@@ -103,10 +112,12 @@ def _handle_ask(params: dict) -> dict:
     ]
     if question:
         lines.append(f"Red-team objective: {question}")
-    lines.extend([
-        f"Overall risk score: {risk_score:.1f}",
-        "",
-    ])
+    lines.extend(
+        [
+            f"Overall risk score: {risk_score:.1f}",
+            "",
+        ]
+    )
     if vulnerabilities:
         lines.append(f"Vulnerabilities ({len(vulnerabilities)}):")
         for i, vuln in enumerate(vulnerabilities, 1):
@@ -159,7 +170,9 @@ def main() -> None:
             handler = getattr(current_module, handler_name)
 
             result = handler(params)
-            print(json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True)
+            print(
+                json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True
+            )
         except Exception as exc:  # noqa: BLE001
             print(
                 json.dumps({"status": "error", "error": str(exc), "id": req_id}),

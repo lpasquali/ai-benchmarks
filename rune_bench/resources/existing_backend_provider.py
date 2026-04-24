@@ -3,7 +3,10 @@
 
 import asyncio
 from rune_bench.resources.base import ProvisioningResult
-from rune_bench.common.backend_utils import use_existing_backend_server, warmup_backend_model
+from rune_bench.common.backend_utils import (
+    use_existing_backend_server,
+    warmup_backend_model,
+)
 
 
 class ExistingBackendProvider:

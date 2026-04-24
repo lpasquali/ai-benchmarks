@@ -11,6 +11,7 @@ from rich.prompt import Prompt
 
 from rune_bench.debug import debug_log
 
+
 class ManualDriverTransport:
     """Blocks and prompts a human user to provide the driver response via CLI."""
 
@@ -18,19 +19,20 @@ class ManualDriverTransport:
         self._console = console or Console()
 
     def call(self, action: str, params: dict) -> dict:
-        self._console.print(Panel(
-            f"[bold yellow]MANUAL ACTION REQUIRED[/bold yellow]\n\n"
-            f"[bold]Action:[/bold] {action}\n"
-            f"[bold]Params:[/bold]\n{json.dumps(params, indent=2)}\n\n"
-            f"Please perform this action manually and provide the result JSON.",
-            title="RUNE Human-in-the-Loop",
-            border_style="yellow"
-        ))
+        self._console.print(
+            Panel(
+                f"[bold yellow]MANUAL ACTION REQUIRED[/bold yellow]\n\n"
+                f"[bold]Action:[/bold] {action}\n"
+                f"[bold]Params:[/bold]\n{json.dumps(params, indent=2)}\n\n"
+                f"Please perform this action manually and provide the result JSON.",
+                title="RUNE Human-in-the-Loop",
+                border_style="yellow",
+            )
+        )
 
         while True:
             response_str = Prompt.ask(
-                "[bold cyan]Result JSON (or 'abort')[/bold cyan]",
-                console=self._console
+                "[bold cyan]Result JSON (or 'abort')[/bold cyan]", console=self._console
             ).strip()
 
             if response_str.lower() == "abort":
@@ -39,7 +41,9 @@ class ManualDriverTransport:
             try:
                 result = json.loads(response_str)
                 if not isinstance(result, dict):
-                    self._console.print("[red]Error: Result must be a JSON object (dict).[/red]")
+                    self._console.print(
+                        "[red]Error: Result must be a JSON object (dict).[/red]"
+                    )
                     continue
                 return result
             except json.JSONDecodeError as exc:
@@ -47,5 +51,7 @@ class ManualDriverTransport:
 
     async def call_async(self, action: str, params: dict) -> dict:
         """Async variant — currently just delegates to sync call as CLI input is blocking."""
-        debug_log(f"ManualDriverTransport.call_async: delegating to sync call for {action!r}")
+        debug_log(
+            f"ManualDriverTransport.call_async: delegating to sync call for {action!r}"
+        )
         return self.call(action, params)

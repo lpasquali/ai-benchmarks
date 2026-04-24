@@ -42,7 +42,9 @@ def test_holmes_runner_remaining_paths(monkeypatch, tmp_path):
     # _fetch_model_limits returns {} when get_backend raises
     bad_backend = MagicMock()
     bad_backend.normalize_model_name.side_effect = RuntimeError("norm failed")
-    monkeypatch.setattr(holmes_driver_module, "get_backend", lambda *_args, **_kw: bad_backend)
+    monkeypatch.setattr(
+        holmes_driver_module, "get_backend", lambda *_args, **_kw: bad_backend
+    )
     limits = runner2._fetch_model_limits(model="m", backend_url="http://x")
     assert limits == {}
 
@@ -67,15 +69,24 @@ def test_api_client_remaining_paths(monkeypatch):
         def read(self):
             return b""
 
-    monkeypatch.setattr("rune_bench.common.http_client.urlopen", lambda *args, **kwargs: (_ for _ in ()).throw(NoDetailHTTPError()))
+    monkeypatch.setattr(
+        "rune_bench.common.http_client.urlopen",
+        lambda *args, **kwargs: (_ for _ in ()).throw(NoDetailHTTPError()),
+    )
     with pytest.raises(RuntimeError, match="HTTP 500"):
         client._request("GET", "/x")
 
-    monkeypatch.setattr("rune_bench.common.http_client.urlopen", lambda *args, **kwargs: (_ for _ in ()).throw(URLError("boom")))
+    monkeypatch.setattr(
+        "rune_bench.common.http_client.urlopen",
+        lambda *args, **kwargs: (_ for _ in ()).throw(URLError("boom")),
+    )
     with pytest.raises(RuntimeError, match="boom"):
         client._request("GET", "/x")
 
-    monkeypatch.setattr("rune_bench.common.http_client.urlopen", lambda *args, **kwargs: (_ for _ in ()).throw(TimeoutError("late")))
+    monkeypatch.setattr(
+        "rune_bench.common.http_client.urlopen",
+        lambda *args, **kwargs: (_ for _ in ()).throw(TimeoutError("late")),
+    )
     with pytest.raises(RuntimeError, match="late"):
         client._request("GET", "/x")
 
@@ -92,7 +103,9 @@ def test_api_client_remaining_paths(monkeypatch):
         def read(self):
             return self._raw
 
-    monkeypatch.setattr("rune_bench.common.http_client.urlopen", lambda *args, **kwargs: Response(b"[]"))
+    monkeypatch.setattr(
+        "rune_bench.common.http_client.urlopen", lambda *args, **kwargs: Response(b"[]")
+    )
     with pytest.raises(RuntimeError, match="Unexpected JSON payload"):
         client._request("GET", "/x")
 
@@ -102,28 +115,45 @@ def test_api_client_remaining_paths(monkeypatch):
     with pytest.raises(RuntimeError, match="missing 'models' list"):
         client.get_ollama_models("http://x")
 
-    monkeypatch.setattr(client, "_request", lambda *args, **kwargs: {"models": [], "running_models": "bad"})
+    monkeypatch.setattr(
+        client,
+        "_request",
+        lambda *args, **kwargs: {"models": [], "running_models": "bad"},
+    )
     with pytest.raises(RuntimeError, match="missing 'running_models' list"):
         client.get_ollama_models("http://x")
 
     monkeypatch.setattr(client, "_request", lambda *args, **kwargs: {})
-    for submit in (client.submit_agentic_agent_job, client.submit_benchmark_job, client.submit_ollama_instance_job):
+    for submit in (
+        client.submit_agentic_agent_job,
+        client.submit_benchmark_job,
+        client.submit_ollama_instance_job,
+    ):
         with pytest.raises(RuntimeError, match="missing 'job_id'"):
             submit({})
     with pytest.raises(RuntimeError, match="missing 'status'"):
         client.get_job_status("job")
 
     statuses = iter([{"status": "running"}, {"status": "cancelled", "message": "bye"}])
-    monkeypatch.setattr(client, "get_job_status", lambda *_args, **_kwargs: next(statuses))
+    monkeypatch.setattr(
+        client, "get_job_status", lambda *_args, **_kwargs: next(statuses)
+    )
     monkeypatch.setattr(api_client_module.time, "sleep", lambda *_args, **_kwargs: None)
     updates = []
     with pytest.raises(RuntimeError, match="bye"):
-        client.wait_for_job("job", timeout_seconds=5, poll_interval_seconds=0, on_update=lambda status, message: updates.append((status, message)))
+        client.wait_for_job(
+            "job",
+            timeout_seconds=5,
+            poll_interval_seconds=0,
+            on_update=lambda status, message: updates.append((status, message)),
+        )
     assert updates[0] == ("running", None)
 
     values = iter([0.0, 10.0])
     monkeypatch.setattr(api_client_module.time, "monotonic", lambda: next(values))
-    monkeypatch.setattr(client, "get_job_status", lambda *_args, **_kwargs: {"status": "running"})
+    monkeypatch.setattr(
+        client, "get_job_status", lambda *_args, **_kwargs: {"status": "running"}
+    )
     with pytest.raises(RuntimeError, match="Timed out waiting"):
         client.wait_for_job("job", timeout_seconds=1, poll_interval_seconds=0)
 
@@ -145,26 +175,51 @@ async def test_api_server_remaining_paths(monkeypatch, tmp_path):
 
     app = api_server.RuneApiApplication(
         store=store,
-        security=api_server.ApiSecurityConfig(auth_disabled=False, tenant_tokens={"tenant": "token"}),
-        backend_functions={"llm-instance": backend_ollama, "ollama-instance": backend_ollama, "benchmark": backend_bench, "agentic-agent": backend_agentic_agent},
+        security=api_server.ApiSecurityConfig(
+            auth_disabled=False, tenant_tokens={"tenant": "token"}
+        ),
+        backend_functions={
+            "llm-instance": backend_ollama,
+            "ollama-instance": backend_ollama,
+            "benchmark": backend_bench,
+            "agentic-agent": backend_agentic_agent,
+        },
     )
     monkeypatch.setattr(
         api_server,
         "list_backend_models",
-        lambda backend_url, **kw: {"backend_url": backend_url, "backend_type": kw.get("backend_type", "ollama"), "models": [], "running_models": []},
+        lambda backend_url, **kw: {
+            "backend_url": backend_url,
+            "backend_type": kw.get("backend_type", "ollama"),
+            "models": [],
+            "running_models": [],
+        },
     )
     server = api_server.ThreadingHTTPServer(("127.0.0.1", 0), app.create_handler())
     import threading
+
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     host, port = server.server_address
     base = f"http://{host}:{port}"
     try:
-        req = Request(f"{base}/v1/ollama/models?backend_url=http://x", headers={"Authorization": "Bearer token", "X-Tenant-ID": "tenant"})
+        req = Request(
+            f"{base}/v1/ollama/models?backend_url=http://x",
+            headers={"Authorization": "Bearer token", "X-Tenant-ID": "tenant"},
+        )
         with urlopen(req) as response:  # nosec  # test request mock/local execution
             assert response.status == 200
 
-        bad_auth = Request(f"{base}/v1/jobs/whatever", method="POST", data=b"{}", headers={"Authorization": "Bearer wrong", "X-Tenant-ID": "tenant", "Content-Type": "application/json"})
+        bad_auth = Request(
+            f"{base}/v1/jobs/whatever",
+            method="POST",
+            data=b"{}",
+            headers={
+                "Authorization": "Bearer wrong",
+                "X-Tenant-ID": "tenant",
+                "Content-Type": "application/json",
+            },
+        )
         with pytest.raises(Exception):
             urlopen(bad_auth)  # nosec  # test request mock/local execution
 
@@ -181,12 +236,31 @@ async def test_api_server_remaining_paths(monkeypatch, tmp_path):
         with pytest.raises(Exception):
             urlopen(bad_kind)  # nosec  # test request mock/local execution
 
-        req = Request(f"{base}/v1/jobs/ollama-instance", method="POST", data=b'{"provisioning": {"vastai": {"template_hash": "t", "min_dph": 1, "max_dph": 2, "reliability": 0.9}}, "backend_url": "http://x"}', headers={"Authorization": "Bearer token", "X-Tenant-ID": "tenant", "Content-Type": "application/json"})
+        req = Request(
+            f"{base}/v1/jobs/ollama-instance",
+            method="POST",
+            data=b'{"provisioning": {"vastai": {"template_hash": "t", "min_dph": 1, "max_dph": 2, "reliability": 0.9}}, "backend_url": "http://x"}',
+            headers={
+                "Authorization": "Bearer token",
+                "X-Tenant-ID": "tenant",
+                "Content-Type": "application/json",
+            },
+        )
         with urlopen(req) as response:  # nosec  # test request mock/local execution
             payload = response.read().decode("utf-8")
             assert "job_id" in payload
 
-        req = Request(f"{base}/v1/jobs/benchmark", method="POST", data=b'{"provisioning": {"vastai": {"template_hash": "t", "min_dph": 1, "max_dph": 2, "reliability": 0.9, "stop_instance": false}}, "backend_url": null, "question": "q", "model": "m", "backend_warmup": false, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"}', headers={"Authorization": "Bearer token", "X-Tenant-ID": "tenant", "Content-Type": "application/json", "Idempotency-Key": "id1"})
+        req = Request(
+            f"{base}/v1/jobs/benchmark",
+            method="POST",
+            data=b'{"provisioning": {"vastai": {"template_hash": "t", "min_dph": 1, "max_dph": 2, "reliability": 0.9, "stop_instance": false}}, "backend_url": null, "question": "q", "model": "m", "backend_warmup": false, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"}',
+            headers={
+                "Authorization": "Bearer token",
+                "X-Tenant-ID": "tenant",
+                "Content-Type": "application/json",
+                "Idempotency-Key": "id1",
+            },
+        )
         with urlopen(req) as response:  # nosec  # test request mock/local execution
             assert response.status == 202
     finally:
@@ -195,18 +269,72 @@ async def test_api_server_remaining_paths(monkeypatch, tmp_path):
         server.server_close()
         store.close()
 
-    jobs = [store.get_job(job_id) for job_id, _ in [store.create_job(tenant_id="tenant", kind="agentic-agent", request_payload={})]]
+    jobs = [
+        store.get_job(job_id)
+        for job_id, _ in [
+            store.create_job(
+                tenant_id="tenant", kind="agentic-agent", request_payload={}
+            )
+        ]
+    ]
     assert jobs[0] is not None
 
-    job_id, _ = store.create_job(tenant_id="tenant", kind="agentic-agent", request_payload={"question": "q", "model": "m", "backend_url": None, "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"})  # nosec  # test artifact paths
-    await app._execute_job(job_id, app.backend_functions["agentic-agent"], "agentic-agent", {"question": "q", "model": "m", "backend_url": None, "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"})  # nosec  # test artifact paths
+    job_id, _ = store.create_job(
+        tenant_id="tenant",
+        kind="agentic-agent",
+        request_payload={
+            "question": "q",
+            "model": "m",
+            "backend_url": None,
+            "backend_warmup": False,
+            "backend_warmup_timeout": 1,
+            "kubeconfig": "/tmp/k",
+        },
+    )  # nosec  # test artifact paths
+    await app._execute_job(
+        job_id,
+        app.backend_functions["agentic-agent"],
+        "agentic-agent",
+        {
+            "question": "q",
+            "model": "m",
+            "backend_url": None,
+            "backend_warmup": False,
+            "backend_warmup_timeout": 1,
+            "kubeconfig": "/tmp/k",
+        },
+    )  # nosec  # test artifact paths
     assert store.get_job(job_id).status == "failed"
 
-    assert await app._dispatch("llm-instance", {"provisioning": None, "backend_url": "http://x"}) == {"mode": "existing"}
-    assert await app._dispatch("benchmark", {"provisioning": None, "backend_url": None, "question": "qq", "model": "m", "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"}) == {"answer": "qq"}  # nosec  # test artifact paths
+    assert await app._dispatch(
+        "llm-instance", {"provisioning": None, "backend_url": "http://x"}
+    ) == {"mode": "existing"}
+    assert await app._dispatch(
+        "benchmark",
+        {
+            "provisioning": None,
+            "backend_url": None,
+            "question": "qq",
+            "model": "m",
+            "backend_warmup": False,
+            "backend_warmup_timeout": 1,
+            "kubeconfig": "/tmp/k",
+        },
+    ) == {"answer": "qq"}  # nosec  # test artifact paths
 
-    monkeypatch.setattr(api_server, "ThreadingHTTPServer", lambda *args, **kwargs: type("S", (), {"serve_forever": lambda self: None, "server_close": lambda self: None})())
-    api_server.RuneApiApplication(store=store, security=api_server.ApiSecurityConfig(auth_disabled=True, tenant_tokens={})).serve("127.0.0.1", 0)
+    monkeypatch.setattr(
+        api_server,
+        "ThreadingHTTPServer",
+        lambda *args, **kwargs: type(
+            "S",
+            (),
+            {"serve_forever": lambda self: None, "server_close": lambda self: None},
+        )(),
+    )
+    api_server.RuneApiApplication(
+        store=store,
+        security=api_server.ApiSecurityConfig(auth_disabled=True, tenant_tokens={}),
+    ).serve("127.0.0.1", 0)
 
 
 @pytest.mark.asyncio
@@ -218,11 +346,14 @@ async def test_api_server_error_paths(monkeypatch, tmp_path):
     store = ExplodingStore(tmp_path / "jobs.db")
     app = api_server.RuneApiApplication(
         store=store,
-        security=api_server.ApiSecurityConfig(auth_disabled=False, tenant_tokens={"tenant": "token"}),
+        security=api_server.ApiSecurityConfig(
+            auth_disabled=False, tenant_tokens={"tenant": "token"}
+        ),
         backend_functions={"agentic-agent": lambda request: {"answer": "ok"}},
     )
     server = api_server.ThreadingHTTPServer(("127.0.0.1", 0), app.create_handler())
     import threading
+
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     host, port = server.server_address
@@ -232,7 +363,11 @@ async def test_api_server_error_paths(monkeypatch, tmp_path):
             f"{base}/v1/jobs/agentic-agent",
             method="POST",
             data=b"{",
-            headers={"X-API-Key": _COMPREHENSIVE_API_TOKEN, "X-Tenant-ID": "tenant", "Content-Type": "application/json"},
+            headers={
+                "X-API-Key": _COMPREHENSIVE_API_TOKEN,
+                "X-Tenant-ID": "tenant",
+                "Content-Type": "application/json",
+            },
         )
         with pytest.raises(Exception):
             urlopen(req)  # nosec  # test request mock/local execution
@@ -241,7 +376,11 @@ async def test_api_server_error_paths(monkeypatch, tmp_path):
             f"{base}/v1/jobs/agentic-agent",
             method="POST",
             data=b"{}",
-            headers={"X-API-Key": _COMPREHENSIVE_API_TOKEN, "X-Tenant-ID": "tenant", "Content-Type": "application/json"},
+            headers={
+                "X-API-Key": _COMPREHENSIVE_API_TOKEN,
+                "X-Tenant-ID": "tenant",
+                "Content-Type": "application/json",
+            },
         )
         with pytest.raises(Exception):
             urlopen(req)  # nosec  # test request mock/local execution
@@ -271,14 +410,35 @@ async def test_api_server_error_paths(monkeypatch, tmp_path):
     job_id, _ = real_store.create_job(
         tenant_id="default",
         kind="agentic-agent",
-        request_payload={"question": "q", "model": "m", "backend_url": None, "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"},  # nosec  # test artifact paths
+        request_payload={
+            "question": "q",
+            "model": "m",
+            "backend_url": None,
+            "backend_warmup": False,
+            "backend_warmup_timeout": 1,
+            "kubeconfig": "/tmp/k",
+        },  # nosec  # test artifact paths
     )
-    await app._execute_job(job_id, app.backend_functions["agentic-agent"], "agentic-agent", {"question": "q", "model": "m", "backend_url": None, "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"})  # nosec  # test artifact paths
+    await app._execute_job(
+        job_id,
+        app.backend_functions["agentic-agent"],
+        "agentic-agent",
+        {
+            "question": "q",
+            "model": "m",
+            "backend_url": None,
+            "backend_warmup": False,
+            "backend_warmup_timeout": 1,
+            "kubeconfig": "/tmp/k",
+        },
+    )  # nosec  # test artifact paths
     assert real_store.get_job(job_id).status == "succeeded"
 
 
 @pytest.mark.asyncio
-async def test_offer_template_backend_instance_and_workflow_remaining(monkeypatch, tmp_path):
+async def test_offer_template_backend_instance_and_workflow_remaining(
+    monkeypatch, tmp_path
+):
     sdk = MagicMock()
     sdk.search_offers.side_effect = Exception("down")
     with pytest.raises(RuntimeError, match="offer search failed"):
@@ -306,12 +466,15 @@ async def test_offer_template_backend_instance_and_workflow_remaining(monkeypatc
     stopped = []
     kubeconfig = tmp_path / "config"
     kubeconfig.write_text("apiVersion: v1\n")
-    
+
     mock_provider = AsyncMock()
-    mock_provider.provision.return_value = ProvisioningResult(backend_url="http://x", model="m", provider_handle=8)
-    
+    mock_provider.provision.return_value = ProvisioningResult(
+        backend_url="http://x", model="m", provider_handle=8
+    )
+
     async def mock_stop(*a, **k):
         stopped.append(True)
+
     mock_provider.teardown.side_effect = mock_stop
 
     monkeypatch.setattr(
@@ -319,7 +482,7 @@ async def test_offer_template_backend_instance_and_workflow_remaining(monkeypatc
         "_make_resource_provider_for_benchmark",
         lambda req: mock_provider,
     )
-    
+
     mock_agent_run = AsyncMock()
     mock_agent_run.ask_structured.return_value = AgentResult(answer="a")
     monkeypatch.setattr(
@@ -327,14 +490,25 @@ async def test_offer_template_backend_instance_and_workflow_remaining(monkeypatc
         "_make_agent_runner",
         lambda path: mock_agent_run,
     )
-    
-    async def mock_cost(*a, **k): return 0.0
+
+    async def mock_cost(*a, **k):
+        return 0.0
+
     monkeypatch.setattr(api_backend, "calculate_run_cost", mock_cost)
 
     vast_req = api_backend.RunBenchmarkRequest.from_cli(
-        vastai=True, template_hash="t", min_dph=1, max_dph=2, reliability=0.9, 
-        backend_url=None, question="q", model="m", backend_warmup=False, 
-        backend_warmup_timeout=1, kubeconfig=Path(kubeconfig), vastai_stop_instance=True
+        vastai=True,
+        template_hash="t",
+        min_dph=1,
+        max_dph=2,
+        reliability=0.9,
+        backend_url=None,
+        question="q",
+        model="m",
+        backend_warmup=False,
+        backend_warmup_timeout=1,
+        kubeconfig=Path(kubeconfig),
+        vastai_stop_instance=True,
     )
     result = await api_backend.run_benchmark(vast_req)
     assert result["contract_id"] == 8

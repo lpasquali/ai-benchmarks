@@ -22,14 +22,19 @@ class TestCrewAIDriverClient:
         transport.call.return_value = {"answer": "crew result"}
         client = CrewAIDriverClient(transport=transport)
 
-        result = client.ask("What happened?", "llama3.1:8b", backend_url="http://localhost:11434")
+        result = client.ask(
+            "What happened?", "llama3.1:8b", backend_url="http://localhost:11434"
+        )
 
         assert result == "crew result"
-        transport.call.assert_called_once_with("ask", {
-            "question": "What happened?",
-            "model": "llama3.1:8b",
-            "backend_url": "http://localhost:11434",
-        })
+        transport.call.assert_called_once_with(
+            "ask",
+            {
+                "question": "What happened?",
+                "model": "llama3.1:8b",
+                "backend_url": "http://localhost:11434",
+            },
+        )
 
     def test_ask_without_backend_url(self) -> None:
         transport = MagicMock()
@@ -39,10 +44,13 @@ class TestCrewAIDriverClient:
         result = client.ask("q", "m")
 
         assert result == "ok"
-        transport.call.assert_called_once_with("ask", {
-            "question": "q",
-            "model": "m",
-        })
+        transport.call.assert_called_once_with(
+            "ask",
+            {
+                "question": "q",
+                "model": "m",
+            },
+        )
 
     def test_ask_missing_answer_key(self) -> None:
         transport = MagicMock()
@@ -90,14 +98,19 @@ class TestLangGraphDriverClient:
         transport.call.return_value = {"answer": "lg result"}
         client = LangGraphDriverClient(transport=transport)
 
-        result = client.ask("Research topic", "llama3.1:8b", backend_url="http://localhost:11434")
+        result = client.ask(
+            "Research topic", "llama3.1:8b", backend_url="http://localhost:11434"
+        )
 
         assert result == "lg result"
-        transport.call.assert_called_once_with("ask", {
-            "question": "Research topic",
-            "model": "llama3.1:8b",
-            "backend_url": "http://localhost:11434",
-        })
+        transport.call.assert_called_once_with(
+            "ask",
+            {
+                "question": "Research topic",
+                "model": "llama3.1:8b",
+                "backend_url": "http://localhost:11434",
+            },
+        )
 
     def test_ask_without_backend_url(self) -> None:
         transport = MagicMock()
@@ -107,10 +120,13 @@ class TestLangGraphDriverClient:
         result = client.ask("q", "m")
 
         assert result == "ok"
-        transport.call.assert_called_once_with("ask", {
-            "question": "q",
-            "model": "m",
-        })
+        transport.call.assert_called_once_with(
+            "ask",
+            {
+                "question": "q",
+                "model": "m",
+            },
+        )
 
     def test_ask_missing_answer_key(self) -> None:
         transport = MagicMock()
