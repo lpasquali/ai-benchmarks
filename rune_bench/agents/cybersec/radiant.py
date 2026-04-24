@@ -1,36 +1,62 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Radiant Security agentic runner stub.
+"""Radiant Security agentic runner implementation.
 
 Scope:      Cybersec  |  Rank 2  |  Rating 4.5
 Capability: Autonomous SOC incident investigation and response.
 Docs:       https://radiantsecurity.ai/
-            https://radiantsecurity.ai/docs  (API docs, enterprise access)
-Ecosystem:  SOC Automation
-
-Implementation notes:
-- Auth:     RADIANT_API_KEY + RADIANT_API_BASE env vars (enterprise contract required)
-- SDK:      REST API (no public Python SDK)
-- Approach: Submit an alert/incident description; Radiant autonomously
-            investigates across SIEM, EDR, and cloud logs, then returns
-            a full incident report with recommended response actions.
-- Key endpoints (expected):
-    POST /investigations          body: { alert: str, context: dict }
-    GET  /investigations/{id}     poll until status == "complete"
-    Returns: { summary, severity, iocs, recommended_actions }
-- `question` maps to the alert/incident description.
-- `model` and `backend_url` are not used (Radiant uses its own hosted models).
+Ecosystem:  Enterprise SaaS
 """
+
+from __future__ import annotations
+
+import os
+import time
+from typing import Any
+
+import httpx
+
+from rune_bench.debug import debug_log
 
 
 class RadiantSecurityRunner:
     """Cybersec agent: autonomous SOC incident investigation via Radiant Security."""
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, api_key: str | None = None, base_url: str | None = None) -> None:
+        self._api_key = api_key or os.getenv("RADIANT_API_KEY")
+        self._api_base = base_url or os.getenv("RADIANT_API_BASE", "https://api.radiantsecurity.ai/v1")
 
     def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Submit a security incident to Radiant and return the investigation report."""
-        raise NotImplementedError(
-            "RadiantSecurityRunner is not yet implemented. "
-            "See https://radiantsecurity.ai/ for enterprise API access."
-        )
+        if not self._api_key:
+            return "Error: RADIANT_API_KEY not set."
+
+        headers = {"Authorization": f"Bearer {self._api_key}"}
+        
+        with httpx.Client(base_url=self._api_base, headers=headers, timeout=30.0) as client:
+            try:
+                # 1. Create Incident / Alert
+                payload = {"description": question, "source": "RUNE-Bench"}
+                resp = client.post("/incidents", json=payload)
+                resp.raise_for_status()
+                incident_id = resp.json()["id"]
+                debug_log(f"Radiant: Incident created (ID: {incident_id})")
+
+                # 2. Poll for investigation report
+                for _ in range(60):
+                    time.sleep(5)
+                    report_resp = client.get(f"/incidents/{incident_id}/report")
+                    if report_resp.status_code == 200:
+                        report_data = report_resp.json()
+                        status = report_data.get("status", "").lower()
+                        
+                        if status == "completed":
+                            verdict = report_data.get("verdict", "Unknown")
+                            summary = report_data.get("summary", "No summary provided.")
+                            return f"Radiant Investigation: {verdict}. Summary: {summary}"
+                        
+                        if status == "failed":
+                            return f"Radiant: Investigation failed: {report_data.get('error')}"
+
+                return "Radiant: Timeout waiting for investigation."
+            except Exception as exc:
+                return f"Radiant error: {exc}"
