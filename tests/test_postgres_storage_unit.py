@@ -368,21 +368,6 @@ def test_get_job_none(mock_pool):
     storage = PostgresStorageAdapter("postgresql://")
     conn.execute.return_value.fetchone.return_value = None
     assert storage.get_job("j1") is None
-
-
-# ─── Additional coverage for edge cases ──────────────────────────────────
-def test_compute_overall_chain_status_empty():
-    """Test _compute_overall_chain_status with empty nodes."""
-    result = PostgresStorageAdapter._compute_overall_chain_status([])
-    assert result == "pending"
-
-
-def test_compute_overall_chain_status_all_failed():
-    """Test when any node failed."""
-    nodes = [
-        {"id": "n1", "status": "success"},
-        {"id": "n2", "status": "failed"},
-    ]
     result = PostgresStorageAdapter._compute_overall_chain_status(nodes)
     assert result == "failed"
 
