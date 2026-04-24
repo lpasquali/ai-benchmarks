@@ -1,0 +1,18 @@
+# RUNE compliance configuration
+# IEC 62443 SR-2 Quantitative Verification
+---
+version: 1
+
+project:
+  name: "rune"
+  github_org: "lpasquali"
+  repos:
+    - name: "rune"
+
+compliance:
+  standard: "iec-62443-4-1"
+  pack: "builtin://iec-62443-ml4"
+  requirements_override:
+    # SR-Q-026 (SLSA verification) is currently a manual audit item.
+    - id: "SR-Q-026"
+      inspector: "builtin://stub"
