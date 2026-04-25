@@ -14,7 +14,7 @@ def _handle_ask(params: dict) -> dict:
     api_key = os.getenv("RUNE_MIDJOURNEY_API_KEY")
     if not api_key:
         # Re-verify driver-specific env var for tests that expect it
-        raise RuntimeError(f"RUNE_MIDJOURNEY_API_KEY not set")
+        raise RuntimeError("RUNE_MIDJOURNEY_API_KEY not set")
     
     api_base = os.getenv("RUNE_MIDJOURNEY_API_BASE")
     

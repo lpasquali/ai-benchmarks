@@ -7,7 +7,6 @@ and expose the expected public interface.
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock, patch
 
 
