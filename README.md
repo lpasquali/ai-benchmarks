@@ -2,6 +2,12 @@
 
 The core RUNE engine for AI model benchmarking and provisioning.
 
+## ✨ Latest Features
+- **AWS Bedrock Integration**: Native support for Anthropic Claude and other Bedrock models.
+- **Enterprise Agents**: 10+ new API-integrated runners (Midjourney, ComfyUI, Sierra, MultiOn, etc.).
+- **Live Cloud Cost Estimation**: On-demand cost baselines for AWS and GCP.
+- **Hardened Security**: SR-2 quantitative requirement enforcement across the API.
+
 ## 📖 Documentation
 All documentation is consolidated in the **[RUNE Documentation Site](https://lpasquali.github.io/rune-docs/)**.
 
