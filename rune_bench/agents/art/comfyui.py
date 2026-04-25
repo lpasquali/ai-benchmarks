@@ -72,30 +72,33 @@ class ComfyUIRunner:
         }
 
         with httpx.Client(base_url=self._base_url, timeout=30.0) as client:
-            # 1. Queue prompt
-            payload = {"prompt": workflow, "client_id": self._client_id}
-            resp = client.post("/prompt", json=payload)
-            resp.raise_for_status()
-            prompt_id = resp.json()["prompt_id"]
-            debug_log(f"ComfyUI: prompt queued (ID: {prompt_id})")
+            try:
+                # 1. Queue prompt
+                payload = {"prompt": workflow, "client_id": self._client_id}
+                resp = client.post("/prompt", json=payload)
+                resp.raise_for_status()
+                prompt_id = resp.json()["prompt_id"]
+                debug_log(f"ComfyUI: prompt queued (ID: {prompt_id})")
 
-            # 2. Poll for history (max 2 mins)
-            for _ in range(120):
-                time.sleep(1)
-                hist_resp = client.get(f"/history/{prompt_id}")
-                if hist_resp.status_code == 200:
-                    hist_data = hist_resp.json()
-                    if prompt_id in hist_data:
-                        # Success
-                        outputs = hist_data[prompt_id].get("outputs", {})
-                        # Node 9 is our SaveImage node
-                        if "9" in outputs:
-                            image_info = outputs["9"]["images"][0]
-                            filename = image_info["filename"]
-                            subfolder = image_info["subfolder"]
-                            type_ = image_info["type"]
-                            view_url = f"{self._base_url}/view?filename={filename}&subfolder={subfolder}&type={type_}"
-                            return f"Generated image: {view_url}"
-                        return "ComfyUI: Generation finished but no output image found."
+                # 2. Poll for history (max 2 mins)
+                for _ in range(120):
+                    time.sleep(1)
+                    hist_resp = client.get(f"/history/{prompt_id}")
+                    if hist_resp.status_code == 200:
+                        hist_data = hist_resp.json()
+                        if prompt_id in hist_data:
+                            # Success
+                            outputs = hist_data[prompt_id].get("outputs", {})
+                            # Node 9 is our SaveImage node
+                            if "9" in outputs:
+                                image_info = outputs["9"]["images"][0]
+                                filename = image_info["filename"]
+                                subfolder = image_info["subfolder"]
+                                type_ = image_info["type"]
+                                view_url = f"{self._base_url}/view?filename={filename}&subfolder={subfolder}&type={type_}"
+                                return f"Generated image: {view_url}"
+                            return "ComfyUI: Generation finished but no output image found."
 
-            return "ComfyUI: Timeout waiting for generation."
+                return "ComfyUI: Timeout waiting for generation."
+            except Exception as exc:
+                return f"ComfyUI error: {exc}"

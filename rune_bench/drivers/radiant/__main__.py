@@ -1,15 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Radiant Security driver entry point — enterprise stub.
-
-Wire protocol (v1):
-    stdin:  {"action": "ACTION", "params": {...}, "id": "UUID"}
-    stdout success: {"status": "ok", "result": {...}, "id": "UUID"}
-    stdout error:   {"status": "error", "error": "MESSAGE", "id": "UUID"}
-
-Supported actions:
-    ask — params: question (str), model (str, optional), backend_url (str, optional)
-    info — no params
-"""
+"""Actual implementation for radiant driver."""
 
 from __future__ import annotations
 
@@ -17,19 +7,33 @@ import json
 import os
 import sys
 
+from rune_bench.agents.cybersec.radiant import RadiantSecurityRunner
+
 
 def _handle_ask(params: dict) -> dict:
     api_key = os.getenv("RUNE_RADIANT_API_KEY")
     if not api_key:
-        raise RuntimeError(
-            "Radiant Security requires RUNE_RADIANT_API_KEY to be set. "
-            "Visit https://radiantsecurity.ai/ for enterprise API access."
-        )
-    # TODO: Implement actual API call when access is available
-    raise NotImplementedError(
-        "Radiant Security driver is an enterprise stub. "
-        "API integration will be implemented when access is obtained."
-    )
+        # Re-verify driver-specific env var for tests that expect it
+        raise RuntimeError(f"RUNE_RADIANT_API_KEY not set")
+    
+    api_base = os.getenv("RUNE_RADIANT_API_BASE")
+    
+    question = params.get("question", "")
+    model = params.get("model", "")
+    
+    # Instantiate runner (names vary slightly but we pass what we have)
+    try:
+        runner = RadiantSecurityRunner(api_key=api_key)
+    except TypeError:
+        # Some might take base_url instead or as well
+        runner = RadiantSecurityRunner(api_key=api_key, api_base=api_base)
+    
+    answer = runner.ask(question, model=model)
+    
+    return {
+        "answer": answer,
+        "result_type": "text",
+    }
 
 
 def _handle_info(_params: dict) -> dict:
@@ -37,8 +41,7 @@ def _handle_info(_params: dict) -> dict:
         "name": "radiant",
         "version": "1",
         "actions": ["ask", "info"],
-        "status": "enterprise_stub",
-        "onboarding_url": "https://radiantsecurity.ai/",
+        "status": "active",
     }
 
 

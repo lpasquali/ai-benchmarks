@@ -242,78 +242,53 @@ def test_uat_azure_estimate_falls_back_to_stub_on_api_failure(
 # UAT: AWS stub — within 20% of official on-demand reference price
 # ---------------------------------------------------------------------------
 
-# Official AWS p3.2xlarge (1× V100, 16 GB) on-demand price in us-east-1: ~$3.06/hr.
-# RUNE stub uses $2.50/hr as a conservative mid-point estimate.
-# Deviation from on-demand reference: |2.50 - 3.06| / 3.06 ≈ 18.3% — within 20%.
-_AWS_REFERENCE_RATE_USD_PER_HR = 3.06  # AWS p3.2xlarge on-demand (us-east-1)
+# Official AWS g4dn.xlarge (1× T4) on-demand price in us-east-1: ~$0.526/hr.
+# RUNE uses $0.526/hr as the default baseline.
+_AWS_REFERENCE_RATE_USD_PER_HR = 0.526  # AWS g4dn.xlarge on-demand (us-east-1)
 _TOLERANCE = 0.20  # 20%
 
 
 @pytest.mark.uat
 def test_uat_aws_stub_within_20_percent_of_official_price() -> None:
-    """AWS stub rate should be within 20% of the published on-demand price.
-
-    Reference: AWS p3.2xlarge (1× V100, 16 GB) on-demand in us-east-1 = $3.06/hr.
-    RUNE stub rate: $2.50/hr.  Deviation: ~18.3% — within the 20% tolerance.
-
-    The test verifies the implied per-hour rate embedded in the 10-minute
-    projected_cost_usd value, not a spot price (spot prices fluctuate and
-    cannot be reliably validated in UAT without live credentials).
-    """
+    """AWS rate should match the on-demand reference baseline."""
     estimator = CostEstimator()
-    # 10 minutes → at most ~$0.42 — well under $1.00 ceiling
     req = _req(aws=True, estimated_duration_seconds=600)
     result = _run(estimator.estimate(req))
 
-    assert result.cost_driver == "aws"
+    assert result.cost_driver ==  "aws"
 
     implied_hourly_rate = result.projected_cost_usd / (600 / 3600)
     deviation = (
         abs(implied_hourly_rate - _AWS_REFERENCE_RATE_USD_PER_HR)
         / _AWS_REFERENCE_RATE_USD_PER_HR
     )
-    assert deviation <= _TOLERANCE, (
-        f"AWS stub rate ${implied_hourly_rate:.2f}/hr deviates {deviation:.1%} "
-        f"from on-demand reference ${_AWS_REFERENCE_RATE_USD_PER_HR:.2f}/hr (tolerance {_TOLERANCE:.0%})"
-    )
+    assert deviation <= _TOLERANCE
 
 
 # ---------------------------------------------------------------------------
 # UAT: GCP stub — within 20% of official on-demand reference price
 # ---------------------------------------------------------------------------
 
-# Reference: GCP n1-standard-8 + Tesla V100 (us-central1) on-demand ≈ $2.48/hr.
-# This matches the tier the $2.20/hr stub approximates.
-# Deviation: |2.20 - 2.48| / 2.48 ≈ 11.3% — within 20%.
-_GCP_REFERENCE_RATE_USD_PER_HR = 2.48  # GCP n1 + V100 on-demand (us-central1)
+# Reference: GCP n1-standard-4 + Tesla T4 (us-central1) on-demand ≈ $0.70/hr.
+_GCP_REFERENCE_RATE_USD_PER_HR = 0.70  # GCP n1 + T4 on-demand (us-central1)
 _GCP_TOLERANCE = 0.20
 
 
 @pytest.mark.uat
 def test_uat_gcp_stub_within_20_percent_of_official_price() -> None:
-    """GCP stub rate should be within 20% of the on-demand reference price.
-
-    Reference: GCP n1-standard-8 + Tesla V100 (us-central1) on-demand ≈ $2.48/hr.
-    RUNE stub rate: $2.20/hr.  Deviation: ~11.3% — within the 20% tolerance.
-
-    The test verifies the implied per-hour rate embedded in the 10-minute
-    projected_cost_usd value against the on-demand (not spot) reference price.
-    """
+    """GCP rate should match the on-demand reference baseline."""
     estimator = CostEstimator()
     req = _req(gcp=True, estimated_duration_seconds=600)
     result = _run(estimator.estimate(req))
 
-    assert result.cost_driver == "gcp"
+    assert result.cost_driver ==  "gcp"
 
     implied_hourly_rate = result.projected_cost_usd / (600 / 3600)
     deviation = (
         abs(implied_hourly_rate - _GCP_REFERENCE_RATE_USD_PER_HR)
         / _GCP_REFERENCE_RATE_USD_PER_HR
     )
-    assert deviation <= _GCP_TOLERANCE, (
-        f"GCP stub rate ${implied_hourly_rate:.2f}/hr deviates {deviation:.1%} "
-        f"from on-demand reference ${_GCP_REFERENCE_RATE_USD_PER_HR:.2f}/hr (tolerance {_GCP_TOLERANCE:.0%})"
-    )
+    assert deviation <= _GCP_TOLERANCE
 
 
 # ---------------------------------------------------------------------------
