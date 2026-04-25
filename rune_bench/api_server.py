@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import asyncio
 import hmac
+import jsonschema  # noqa: F401
 import inspect
 import json
 import logging
@@ -142,7 +143,6 @@ async def _get_cost_estimate_backend(request: object) -> dict:
     return await get_cost_estimate(request)
 
 
-import jsonschema  # noqa: F401
 
 
 # --- Security Constants (SR-2 Compliance) ---
