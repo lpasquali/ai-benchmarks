@@ -118,7 +118,7 @@ jobs:
   sr2-compliance:
     uses: lpasquali/rune-ci/.github/workflows/sr2-compliance.yml@144ef855dbf0420e5d9a8de2c8d8f89c2e789265
     with:
-      rune-audit-ref: main
+      rune-audit-ref: gemini/epic-112-final-fix
     secrets: inherit
 
   # ─── Shared: Container Build (Multi-arch) ──────────────────────────────────
