@@ -1,35 +1,61 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Harvey AI agentic runner stub.
+"""Harvey AI agentic runner implementation.
 
 Scope:      Legal  |  Rank 1  |  Rating 4.8
 Capability: Autonomous legal disclosure and risk analysis.
 Docs:       https://www.harvey.ai/
-            https://developer.harvey.ai/  (API docs, enterprise access)
 Ecosystem:  Transparency Manifestos
-
-Implementation notes:
-- Auth:     HARVEY_API_KEY env var (enterprise contract required)
-- SDK:      REST API (no public Python SDK)
-- Approach: Submit a legal document or question; Harvey autonomously
-            analyses it for risks, disclosure obligations, and precedents.
-- Key endpoints (expected):
-    POST /completions         body: { prompt: str, matter_type: str }
-    GET  /completions/{id}    poll for async tasks
-    Returns: { analysis: str, risks: list, citations: list }
-- `question` maps to the legal query or document excerpt.
-- `model` and `backend_url` are not used (Harvey uses its own fine-tuned models).
 """
+
+from __future__ import annotations
+
+import os
+import time
+
+import httpx
+
+from rune_bench.debug import debug_log
 
 
 class HarveyAIRunner:
     """Legal agent: autonomous legal disclosure and risk analysis via Harvey AI."""
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, api_key: str | None = None) -> None:
+        self._api_key = api_key or os.getenv("HARVEY_API_KEY")
+        self._api_base = "https://api.harvey.ai/v1"
 
     def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Submit a legal query to Harvey AI and return the analysis."""
-        raise NotImplementedError(
-            "HarveyAIRunner is not yet implemented. "
-            "See https://developer.harvey.ai/ for enterprise API access."
-        )
+        if not self._api_key:
+            return "Error: HARVEY_API_KEY not set."
+
+        headers = {"Authorization": f"Bearer {self._api_key}"}
+
+        with httpx.Client(
+            base_url=self._api_base, headers=headers, timeout=60.0
+        ) as client:
+            try:
+                # 1. Submit Completion
+                payload = {"prompt": question, "matter_type": model or "general"}
+                resp = client.post("/completions", json=payload)
+                resp.raise_for_status()
+                task_id = resp.json()["id"]
+                debug_log(f"Harvey: Task started (ID: {task_id})")
+
+                # 2. Poll for result
+                for _ in range(60):
+                    time.sleep(5)
+                    job_resp = client.get(f"/completions/{task_id}")
+                    if job_resp.status_code == 200:
+                        job_data = job_resp.json()
+                        status = job_data.get("status", "").lower()
+
+                        if status == "completed":
+                            return f"Harvey AI Analysis: {job_data.get('analysis')}"
+
+                        if status == "failed":
+                            return f"Harvey: Analysis failed: {job_data.get('error')}"
+
+                return "Harvey: Timeout waiting for analysis."
+            except Exception as exc:
+                return f"Harvey error: {exc}"

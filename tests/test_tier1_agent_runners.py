@@ -7,7 +7,7 @@ and expose the expected public interface.
 
 from __future__ import annotations
 
-import pytest
+from unittest.mock import MagicMock, patch
 
 
 # ---------------------------------------------------------------------------
@@ -29,14 +29,24 @@ def test_comfyui_runner_custom_base_url():
     assert runner._base_url == "http://localhost:9999"
 
 
-def test_comfyui_runner_ask_raises_not_implemented():
+def test_comfyui_runner_ask_active():
     from rune_bench.agents.art.comfyui import ComfyUIRunner
 
     runner = ComfyUIRunner()
-    with pytest.raises(
-        NotImplementedError, match="ComfyUIRunner is not yet implemented"
-    ):
-        runner.ask("a cat in space", model="sd-xl")
+    # Mock httpx to avoid real calls
+    with patch("httpx.Client") as mock_client:
+        mock_ctx = MagicMock()
+        mock_client.return_value.__enter__.return_value = mock_ctx
+        mock_ctx.post.return_value.json.return_value = {"prompt_id": "p1"}
+        mock_ctx.get.return_value.status_code = 200
+        mock_ctx.get.return_value.json.return_value = {
+            "p1": {"outputs": {"9": {"images": [{"filename": "f", "subfolder": "s", "type": "t"}]}}}
+        }
+        
+        # We need to mock time.sleep to speed up test
+        with patch("time.sleep"):
+            res = runner.ask("a cat in space", model="sd-xl")
+            assert "Generated image" in res
 
 
 # ---------------------------------------------------------------------------

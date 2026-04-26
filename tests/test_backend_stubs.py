@@ -20,16 +20,15 @@ def test_bedrock_backend_requires_region():
 
     with pytest.raises(
         ValueError,
-        match="BedrockBackend requires BackendCredentials.extra\\['region'\\] to be set.",
+        match="BedrockBackend requires a region",
     ):
         BedrockBackend(credentials=credentials)
 
 
-def test_bedrock_backend_stub():
+def test_bedrock_backend_active():
     credentials = BackendCredentials(api_key=None, extra={"region": "us-east-1"})
-    backend = BedrockBackend(credentials=credentials)
-
-    with pytest.raises(
-        NotImplementedError, match="BedrockBackend is not yet implemented"
-    ):
-        backend.get_model_capabilities("anthropic.claude-3-5-sonnet")
+    # Mock boto3 to avoid AWS calls during init
+    import unittest.mock
+    with unittest.mock.patch("boto3.client"):
+        backend = BedrockBackend(credentials=credentials)
+        assert backend.base_url == "us-east-1"

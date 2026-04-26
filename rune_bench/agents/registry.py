@@ -70,7 +70,9 @@ _BUILTIN_AGENTS: dict[str, tuple[str, str, list[str]]] = {
     "dagger": ("rune_bench.agents.ops.dagger", "DaggerRunner", []),
     "crewai": ("rune_bench.agents.ops.crewai", "CrewAIRunner", ["api_key"]),
     "browseruse": ("rune_bench.agents.ops.browseruse", "BrowserUseRunner", ["api_key"]),
+    "multion": ("rune_bench.agents.ops.multion", "MultiOnRunner", ["api_key"]),
     "sierra": ("rune_bench.agents.ops.sierra", "SierraRunner", ["api_key"]),
+    "cleric": ("rune_bench.agents.sre.cleric", "ClericRunner", ["api_key"]),
     "skillfortify": (
         "rune_bench.agents.ops.skillfortify",
         "SkillFortifyRunner",

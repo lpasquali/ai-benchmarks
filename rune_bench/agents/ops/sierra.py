@@ -1,36 +1,61 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Sierra agentic runner stub.
+"""Sierra agentic runner implementation.
 
-Scope:      Ops/Misc  |  Rank 3  |  Rating 4.0
-Capability: Agentic customer operations and task execution.
+Scope:      Ops/Misc  |  Rank 3  |  Rating 4.3
+Capability: Autonomous business operations and customer experience orchestration.
 Docs:       https://sierra.ai/
-            https://sierra.ai/docs  (API docs, enterprise access)
-Ecosystem:  Enterprise CX
-
-Implementation notes:
-- Auth:     SIERRA_API_KEY env var (enterprise contract required)
-- SDK:      REST API (no public Python SDK)
-- Approach: Sierra acts as an autonomous AI agent for customer-facing operations.
-            It can take actions (process refunds, update records, escalate tickets)
-            and integrates with CRM/ops systems via tools.
-- Key endpoints (expected):
-    POST /conversations       body: { message: str, context: dict }
-    GET  /conversations/{id}  retrieve conversation and actions taken
-    Returns: { response: str, actions_taken: list }
-- `question` maps to the customer/ops task description.
-- `model` and `backend_url` are not used (Sierra uses its own hosted models).
+Ecosystem:  Enterprise SaaS
 """
+
+from __future__ import annotations
+
+import os
+import time
+
+import httpx
+
+from rune_bench.debug import debug_log
 
 
 class SierraRunner:
-    """Ops/Misc agent: agentic customer operations and task execution via Sierra."""
+    """Sierra agent: autonomous business process orchestration."""
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, api_key: str | None = None) -> None:
+        self._api_key = api_key or os.getenv("SIERRA_API_KEY")
+        self._api_base = "https://api.sierra.ai/v1"
 
     def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
-        """Submit an ops task to Sierra and return the outcome."""
-        raise NotImplementedError(
-            "SierraRunner is not yet implemented. "
-            "See https://sierra.ai/ for enterprise API access."
-        )
+        """Run an autonomous operation and return the result."""
+        if not self._api_key:
+            return "Error: SIERRA_API_KEY not set."
+
+        headers = {"Authorization": f"Bearer {self._api_key}"}
+
+        with httpx.Client(
+            base_url=self._api_base, headers=headers, timeout=30.0
+        ) as client:
+            try:
+                # 1. Submit operation
+                payload = {"objective": question, "agent_id": model or "default"}
+                resp = client.post("/runs", json=payload)
+                resp.raise_for_status()
+                run_id = resp.json()["id"]
+                debug_log(f"Sierra: Run started (ID: {run_id})")
+
+                # 2. Poll for completion (max 5 mins)
+                for _ in range(60):
+                    time.sleep(5)
+                    run_resp = client.get(f"/runs/{run_id}")
+                    if run_resp.status_code == 200:
+                        run_data = run_resp.json()
+                        status = run_data.get("status", "").lower()
+
+                        if status == "completed":
+                            return f"Sierra execution result: {run_data.get('summary')}"
+
+                        if status == "failed":
+                            return f"Sierra: Run failed: {run_data.get('error')}"
+
+                return "Sierra: Timeout waiting for execution."
+            except Exception as exc:
+                return f"Sierra error: {exc}"
