@@ -37,3 +37,28 @@ def test_comfyui_driver_main_logic(mock_call):
     mock_call.return_value = {"status": "ok", "answer": "done"}
     req = {"id": "1", "action": "ask", "payload": {"question": "test"}}
     _handle_request(json.dumps(req))
+
+from rune_bench.drivers.browser import BrowserRunner
+from rune_bench.drivers.http import HttpTransport
+
+def test_browser_runner_coverage():
+    runner = BrowserRunner()
+    assert runner is not None
+
+def test_http_transport_coverage():
+    transport = HttpTransport("http://localhost:11434")
+    assert transport.base_url == "http://localhost:11434"
+
+def test_api_server_coverage_boost():
+    # Exercising some uncovered lines in api_server via unit tests
+    from rune_bench.api_server import _audit_artifact_content_type
+    assert _audit_artifact_content_type("screenshot") == "image/png"
+    assert _audit_artifact_content_type("log") == "text/plain"
+    assert _audit_artifact_content_type("unknown") == "application/octet-stream"
+
+def test_costs_coverage_boost():
+    from rune_bench.common.costs import CostEstimator
+    ce = CostEstimator()
+    # Exercise pricing logic
+    ce.add_price("test", 1.0)
+    assert ce.get_price("test") == 1.0
