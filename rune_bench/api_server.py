@@ -151,7 +151,7 @@ _SESSION_LIFETIME_SECONDS = 3600
 MAX_BODY_SIZE = 10 * 1024 * 1024
 _HEALTH_CHECK_TIMEOUT_S = 5.0
 _GRACEFUL_SHUTDOWN_TIMEOUT_S = 10.0
-max_workers = 10
+max_workers=10
 
 
 def _enforce_secret_length(secret: str) -> None:
