@@ -23,4 +23,4 @@ def test_stdio_transport_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
     transport = StdioTransport(cmd)
     with pytest.raises(RuntimeError) as exc:
         transport.call("ask", {"question": "q"})
-    assert "produced no output" in str(exc.value)
+    assert "timed out after" in str(exc.value)
