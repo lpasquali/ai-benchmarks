@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from rune_bench.agents.ops.browser_use import BrowserUseRunner
 from rune_bench.agents.art.comfyui import ComfyUIRunner
-from rune_bench.debug_pprof import create_pprof_app
+from rune_bench.debug_pprof import start_background_server_if_configured
 
 def test_browser_use_runner_coverage():
     runner = BrowserUseRunner()
@@ -20,8 +20,8 @@ def test_comfyui_runner_coverage():
     assert runner.name == "comfyui"
 
 def test_pprof_app_coverage():
-    app = create_pprof_app()
-    assert app is not None
+    # Basic smoke test for the server starter
+    start_background_server_if_configured()
 
 @patch("rune_bench.drivers.stdio.StdioTransport.call")
 def test_browser_use_driver_main_logic(mock_call):
