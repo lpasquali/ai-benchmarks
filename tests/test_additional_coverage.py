@@ -38,11 +38,11 @@ def test_comfyui_driver_main_logic(mock_call):
     req = {"id": "1", "action": "ask", "payload": {"question": "test"}}
     _handle_request(json.dumps(req))
 
-from rune_bench.drivers.browser import BrowserRunner
+from rune_bench.drivers.browser import BrowserDriverTransport
 from rune_bench.drivers.http import HttpTransport
 
 def test_browser_runner_coverage():
-    runner = BrowserRunner()
+    runner = BrowserDriverTransport()
     assert runner is not None
 
 def test_http_transport_coverage():
