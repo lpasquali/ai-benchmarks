@@ -21,5 +21,6 @@ def test_stdio_transport_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
     # Sleep longer than timeout; driver must be killed / raise.
     cmd = [sys.executable, "-c", "import time; time.sleep(10)"]
     transport = StdioTransport(cmd)
-    with pytest.raises(RuntimeError, match="SR-Q-011"):
+    with pytest.raises(RuntimeError) as exc:
         transport.call("ask", {"question": "q"})
+    assert "timed out after" in str(exc.value)

@@ -11,19 +11,19 @@ from dataclasses import dataclass
 
 # Ordered largest → smallest so the first match is always the best fit.
 MODELS: list[dict] = [
-    {"name": "llama3.1:405b",       "vram_mb": 260000},
-    {"name": "mixtral:8x22b",       "vram_mb": 95000},
+    {"name": "llama3.1:405b", "vram_mb": 260000},
+    {"name": "mixtral:8x22b", "vram_mb": 95000},
     {"name": "command-r-plus:104b", "vram_mb": 75000},
-    {"name": "qwen2.5-coder:72b",   "vram_mb": 55000},
-    {"name": "llama3.1:70b",        "vram_mb": 50000},
-    {"name": "mixtral:8x7b",        "vram_mb": 32000},
-    {"name": "command-r:35b",       "vram_mb": 28000},
-    {"name": "llama3.1:8b",         "vram_mb": 8000},
+    {"name": "qwen2.5-coder:72b", "vram_mb": 55000},
+    {"name": "llama3.1:70b", "vram_mb": 50000},
+    {"name": "mixtral:8x7b", "vram_mb": 32000},
+    {"name": "command-r:35b", "vram_mb": 28000},
+    {"name": "llama3.1:8b", "vram_mb": 8000},
 ]
 
 # Disk headroom constants
-_VRAM_OVERHEAD_FACTOR = 1.15   # 15 % buffer over the model weight size on disk
-_BASE_DISK_GB = 32             # Fixed OS / container / Ollama daemon buffer
+_VRAM_OVERHEAD_FACTOR = 1.15  # 15 % buffer over the model weight size on disk
+_BASE_DISK_GB = 32  # Fixed OS / container / Ollama daemon buffer
 
 
 @dataclass

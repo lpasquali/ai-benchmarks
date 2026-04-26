@@ -40,11 +40,14 @@ def _vastai_sdk() -> "VastAI":
     return VastAI(api_key=api_key, raw=True)
 
 
-def _make_resource_provider_for_benchmark(request: RunBenchmarkRequest) -> LLMResourceProvider:
+def _make_resource_provider_for_benchmark(
+    request: RunBenchmarkRequest,
+) -> LLMResourceProvider:
     """Factory: return the LLM resource provider for a benchmark run."""
     if request.provisioning and request.provisioning.vastai:
         v = request.provisioning.vastai
         from rune_bench.resources.vastai import VastAIProvider
+
         return VastAIProvider(
             _vastai_sdk(),
             template_hash=v.template_hash,
@@ -62,11 +65,14 @@ def _make_resource_provider_for_benchmark(request: RunBenchmarkRequest) -> LLMRe
     )
 
 
-def _make_resource_provider_for_ollama_instance(request: RunLLMInstanceRequest) -> LLMResourceProvider:
+def _make_resource_provider_for_ollama_instance(
+    request: RunLLMInstanceRequest,
+) -> LLMResourceProvider:
     """Factory: return the LLM resource provider for an Ollama instance run."""
     if request.provisioning and request.provisioning.vastai:
         v = request.provisioning.vastai
         from rune_bench.resources.vastai import VastAIProvider
+
         return VastAIProvider(
             _vastai_sdk(),
             template_hash=v.template_hash,
@@ -81,7 +87,9 @@ def _make_resource_provider_for_ollama_instance(request: RunLLMInstanceRequest) 
     )
 
 
-def _make_agent_runner(agent_name: str | Path = "holmes", *, kubeconfig: Path | None = None) -> Any:
+def _make_agent_runner(
+    agent_name: str | Path = "holmes", *, kubeconfig: Path | None = None
+) -> Any:
     """Lazy factory: resolve an agent via the registry.
 
     Accepts either the new ``(agent_name, *, kubeconfig=...)`` signature or
@@ -113,6 +121,7 @@ def list_vastai_models() -> list[dict]:
 
 def list_backend_models(backend_url: str, *, backend_type: str = "ollama") -> dict:
     from rune_bench.backends import get_backend
+
     backend = get_backend(backend_type, backend_url)
     return {
         "backend_url": backend.base_url,
@@ -125,7 +134,11 @@ def list_backend_models(backend_url: str, *, backend_type: str = "ollama") -> di
 async def run_llm_instance(request: RunLLMInstanceRequest) -> dict:
     provider = _make_resource_provider_for_ollama_instance(request)
     result = await provider.provision()
-    mode = "vastai" if (request.provisioning and request.provisioning.vastai) else "existing"
+    mode = (
+        "vastai"
+        if (request.provisioning and request.provisioning.vastai)
+        else "existing"
+    )
     out: dict = {"mode": mode, "backend_url": result.backend_url}
     if mode == "vastai":
         out["model_name"] = result.model
@@ -144,8 +157,13 @@ async def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
 
     # Validate kubeconfig is provided when the agent requires it.
     from rune_bench.agents.registry import _BUILTIN_AGENTS
+
     builtin_entry = _BUILTIN_AGENTS.get(agent_name)
-    if builtin_entry and "kubeconfig" in builtin_entry[2] and request.kubeconfig is None:
+    if (
+        builtin_entry
+        and "kubeconfig" in builtin_entry[2]
+        and request.kubeconfig is None
+    ):
         raise RuntimeError(
             f"Agent '{agent_name}' requires a kubeconfig path; "
             "set KUBECONFIG or pass --kubeconfig"
@@ -159,6 +177,7 @@ async def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
     start_time = time.perf_counter()
     try:
         from rune_bench.metrics import span as _span
+
         runner = get_agent(agent_name, **agent_kwargs)
         with _span("agent.ask", model=request.model, backend="existing"):
             result = await runner.ask_structured(
@@ -174,7 +193,7 @@ async def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
     # Calculate and attach cost
     backend_mode = getattr(request, "backend_type", "local")
     cost_usd = await calculate_run_cost(backend_mode, request.model, duration_s)
-    
+
     if result.metadata is None:
         result.metadata = {}
     result.metadata["cost"] = cost_usd
@@ -189,7 +208,7 @@ async def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
             new_telemetry = RunTelemetry(
                 tokens=result.telemetry.tokens,
                 latency=result.telemetry.latency,
-                cost_estimate_usd=cost_usd
+                cost_estimate_usd=cost_usd,
             )
             result.telemetry = new_telemetry
     else:
@@ -244,7 +263,11 @@ async def run_benchmark(request: RunBenchmarkRequest) -> dict:
     duration_s = int(time.perf_counter() - start_time)
 
     # Calculate and attach cost
-    mode = "vastai" if (request.provisioning and request.provisioning.vastai) else getattr(request, "backend_type", "local")
+    mode = (
+        "vastai"
+        if (request.provisioning and request.provisioning.vastai)
+        else getattr(request, "backend_type", "local")
+    )
     cost_usd = await calculate_run_cost(mode, effective_model, duration_s)
 
     if agent_result.metadata is None:
@@ -257,7 +280,7 @@ async def run_benchmark(request: RunBenchmarkRequest) -> dict:
             agent_result.telemetry = RunTelemetry(
                 tokens=agent_result.telemetry.tokens,
                 latency=agent_result.telemetry.latency,
-                cost_estimate_usd=cost_usd
+                cost_estimate_usd=cost_usd,
             )
     else:
         agent_result.telemetry = RunTelemetry(cost_estimate_usd=cost_usd)
@@ -267,7 +290,9 @@ async def run_benchmark(request: RunBenchmarkRequest) -> dict:
         "result_type": agent_result.result_type,
         "artifacts": agent_result.artifacts,
         "metadata": agent_result.metadata,
-        "telemetry": agent_result.telemetry.to_dict() if agent_result.telemetry else None,
+        "telemetry": agent_result.telemetry.to_dict()
+        if agent_result.telemetry
+        else None,
         "model_name": effective_model,
         "backend_url": result.backend_url,
         "contract_id": result.provider_handle,
@@ -276,57 +301,25 @@ async def run_benchmark(request: RunBenchmarkRequest) -> dict:
 
 def get_cost_estimate(request: CostEstimationRequest) -> dict:
     """Estimate cost for a benchmark run based on cloud or local hardware parameters."""
-    duration_hours = request.estimated_duration_seconds / 3600
+    from rune_bench.common.costs import CostEstimator
 
-    if request.vastai:
-        # Use max_dph as the hourly rate (worst-case / ceiling estimate) to match
-        # CostEstimator._estimate_vastai() and give consistent spend-gate behaviour
-        # regardless of whether the CLI runs in local or HTTP backend mode.
-        dph = request.max_dph if request.max_dph > 0 else request.min_dph
-        projected_cost_usd = dph * duration_hours
-        local_energy_kwh = 0.0
-        cost_driver = "vastai"
-    elif request.local_hardware:
-        local_energy_kwh = (request.local_tdp_watts * duration_hours) / 1000
-        energy_cost = local_energy_kwh * request.local_energy_rate_kwh
-        depreciation_cost = 0.0
-        if request.local_hardware_lifespan_years > 0:
-            depreciation_cost = (
-                request.local_hardware_purchase_price
-                / (request.local_hardware_lifespan_years * 8760)
-                * duration_hours
-            )
-        projected_cost_usd = energy_cost + depreciation_cost
-        cost_driver = "local"
-    elif request.aws:
-        projected_cost_usd = (request.min_dph + request.max_dph) / 2 * duration_hours
-        local_energy_kwh = 0.0
-        cost_driver = "aws"
-    elif request.gcp:
-        projected_cost_usd = (request.min_dph + request.max_dph) / 2 * duration_hours
-        local_energy_kwh = 0.0
-        cost_driver = "gcp"
-    elif request.azure:
-        projected_cost_usd = (request.min_dph + request.max_dph) / 2 * duration_hours
-        local_energy_kwh = 0.0
-        cost_driver = "azure"
-    else:
-        projected_cost_usd = 0.0
-        local_energy_kwh = 0.0
-        cost_driver = "unknown"
-
-    if projected_cost_usd < 1.0:
-        resource_impact = "low"
-    elif projected_cost_usd < 10.0:
-        resource_impact = "medium"
-    else:
-        resource_impact = "high"
-
-    return {
-        "projected_cost_usd": round(projected_cost_usd, 4),
-        "cost_driver": cost_driver,
-        "resource_impact": resource_impact,
-        "local_energy_kwh": round(local_energy_kwh, 4),
-        "confidence_score": 1.0,
-        "warning": None,
-    }
+    estimator = CostEstimator()
+    try:
+        response = estimator.estimate_sync(request)
+        return {
+            "projected_cost_usd": response.projected_cost_usd,
+            "cost_driver": response.cost_driver,
+            "resource_impact": response.resource_impact,
+            "local_energy_kwh": response.local_energy_kwh,
+            "confidence_score": response.confidence_score,
+            "warning": response.warning,
+        }
+    except Exception as exc:
+        return {
+            "projected_cost_usd": 0.0,
+            "cost_driver": "error",
+            "resource_impact": "low",
+            "local_energy_kwh": 0.0,
+            "confidence_score": 0.0,
+            "warning": f"Cost estimation failed: {exc}",
+        }

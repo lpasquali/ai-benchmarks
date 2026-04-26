@@ -330,10 +330,10 @@ def update_settings(updates: dict[str, Any], profile: str | None = None) -> Path
     """
     raw = get_raw_config()
     section = "profiles" if profile else "defaults"
-    
+
     if section not in raw:
         raw[section] = {}
-    
+
     if profile:
         if profile not in raw["profiles"]:
             raw["profiles"][profile] = {}
@@ -344,8 +344,10 @@ def update_settings(updates: dict[str, Any], profile: str | None = None) -> Path
     # Determine which file to write to. If a project file exists, update it.
     # Otherwise, if a global file exists, update it.
     project_file = _find_config_file(_PROJECT_CANDIDATES)
-    global_config = project_file is None and _find_config_file(_GLOBAL_CANDIDATES) is not None
-    
+    global_config = (
+        project_file is None and _find_config_file(_GLOBAL_CANDIDATES) is not None
+    )
+
     return save_config(raw, global_config=global_config)
 
 
@@ -354,10 +356,12 @@ def create_profile(name: str, settings: dict[str, Any]) -> Path:
     raw = get_raw_config()
     if "profiles" not in raw:
         raw["profiles"] = {}
-    
+
     raw["profiles"][name] = settings
-    
+
     project_file = _find_config_file(_PROJECT_CANDIDATES)
-    global_config = project_file is None and _find_config_file(_GLOBAL_CANDIDATES) is not None
-    
+    global_config = (
+        project_file is None and _find_config_file(_GLOBAL_CANDIDATES) is not None
+    )
+
     return save_config(raw, global_config=global_config)

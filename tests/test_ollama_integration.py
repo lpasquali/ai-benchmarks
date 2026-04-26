@@ -74,16 +74,22 @@ def ollama_manager(ollama_client: OllamaClient) -> OllamaModelManager:
 class TestOllamaClientLive:
     """Exercise OllamaClient against a real Ollama instance."""
 
-    def test_get_available_models_includes_test_model(self, ollama_client: OllamaClient) -> None:
+    def test_get_available_models_includes_test_model(
+        self, ollama_client: OllamaClient
+    ) -> None:
         models = ollama_client.get_available_models()
         assert isinstance(models, list), "get_available_models must return a list"
         assert _model_matches(_OLLAMA_MODEL, models), (
             f"Expected '{_OLLAMA_MODEL}' to be pulled into Ollama; available: {models}"
         )
 
-    def test_get_model_capabilities_returns_context_window(self, ollama_client: OllamaClient) -> None:
+    def test_get_model_capabilities_returns_context_window(
+        self, ollama_client: OllamaClient
+    ) -> None:
         caps = ollama_client.get_model_capabilities(_OLLAMA_MODEL)
-        assert caps.context_window is not None, "context_window must be populated for tinyllama"
+        assert caps.context_window is not None, (
+            "context_window must be populated for tinyllama"
+        )
         assert caps.context_window > 0
         assert caps.max_output_tokens is not None
         assert caps.max_output_tokens > 0
@@ -101,7 +107,9 @@ class TestOllamaClientLive:
             f"Expected '{_OLLAMA_MODEL}' in running models after load; running: {running}"
         )
 
-    def test_unload_model_removes_from_running(self, ollama_client: OllamaClient) -> None:
+    def test_unload_model_removes_from_running(
+        self, ollama_client: OllamaClient
+    ) -> None:
         ollama_client.load_model(_OLLAMA_MODEL, keep_alive="5m")
         ollama_client.unload_model(_OLLAMA_MODEL)
         # Ollama's keep_alive=0 unload is asynchronous: the HTTP 200 is returned
@@ -126,12 +134,16 @@ class TestOllamaClientLive:
 class TestOllamaModelManagerLive:
     """Exercise OllamaModelManager orchestration against a real Ollama instance."""
 
-    def test_list_running_models_returns_sorted_list(self, ollama_manager: OllamaModelManager) -> None:
+    def test_list_running_models_returns_sorted_list(
+        self, ollama_manager: OllamaModelManager
+    ) -> None:
         result = ollama_manager.list_running_models()
         assert isinstance(result, list)
         assert result == sorted(result), "list_running_models must return a sorted list"
 
-    def test_warmup_model_loads_and_confirms(self, ollama_manager: OllamaModelManager) -> None:
+    def test_warmup_model_loads_and_confirms(
+        self, ollama_manager: OllamaModelManager
+    ) -> None:
         loaded = ollama_manager.warmup_model(
             _OLLAMA_MODEL,
             timeout_seconds=120,
@@ -141,7 +153,17 @@ class TestOllamaModelManagerLive:
             f"warmup_model must return the requested model name; got: {loaded!r}"
         )
 
-    def test_normalize_model_name_strips_prefix(self, ollama_manager: OllamaModelManager) -> None:
-        assert ollama_manager.normalize_model_name(f"ollama/{_OLLAMA_MODEL}") == _OLLAMA_MODEL
-        assert ollama_manager.normalize_model_name(f"ollama_chat/{_OLLAMA_MODEL}") == _OLLAMA_MODEL
-        assert ollama_manager.normalize_model_name(f"  {_OLLAMA_MODEL}  ") == _OLLAMA_MODEL
+    def test_normalize_model_name_strips_prefix(
+        self, ollama_manager: OllamaModelManager
+    ) -> None:
+        assert (
+            ollama_manager.normalize_model_name(f"ollama/{_OLLAMA_MODEL}")
+            == _OLLAMA_MODEL
+        )
+        assert (
+            ollama_manager.normalize_model_name(f"ollama_chat/{_OLLAMA_MODEL}")
+            == _OLLAMA_MODEL
+        )
+        assert (
+            ollama_manager.normalize_model_name(f"  {_OLLAMA_MODEL}  ") == _OLLAMA_MODEL
+        )

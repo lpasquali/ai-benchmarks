@@ -60,7 +60,9 @@ class TestMindgardDriverClient:
         transport.call.return_value = {"answer": "security assessment"}
         client = MindgardDriverClient(transport=transport)
 
-        result = client.ask("test the model", "llama3:8b", backend_url="http://target:11434")
+        result = client.ask(
+            "test the model", "llama3:8b", backend_url="http://target:11434"
+        )
         assert result == "security assessment"
         transport.call.assert_called_once()
 

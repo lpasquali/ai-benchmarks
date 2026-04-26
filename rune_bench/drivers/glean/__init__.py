@@ -32,7 +32,9 @@ class GleanDriverClient:
         transport: DriverTransport | None = None,
     ) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("glean")
-        self._async_transport: AsyncDriverTransport = make_async_driver_transport("glean")
+        self._async_transport: AsyncDriverTransport = make_async_driver_transport(
+            "glean"
+        )
 
     def ask(
         self,
@@ -72,9 +74,7 @@ class GleanDriverClient:
             "question": question,
         }
 
-        debug_log(
-            f"GleanDriverClient.ask: question={question!r}"
-        )
+        debug_log(f"GleanDriverClient.ask: question={question!r}")
         result = self._transport.call("ask", params)
 
         if "answer" not in result:
@@ -137,8 +137,6 @@ class GleanDriverClient:
             telemetry=self._parse_telemetry(result.get("telemetry")),
         )
 
-
-
     def _parse_telemetry(self, raw: dict | None) -> RunTelemetry | None:
         """Parse raw telemetry dict into a RunTelemetry object."""
         if not raw:
@@ -156,7 +154,8 @@ class GleanDriverClient:
         latency_raw = raw.get("latency", [])
         latency = [
             LatencyPhase(phase=p.get("phase", "unknown"), ms=p.get("ms", 0))
-            for p in latency_raw if isinstance(p, dict)
+            for p in latency_raw
+            if isinstance(p, dict)
         ]
 
         return RunTelemetry(
@@ -164,5 +163,6 @@ class GleanDriverClient:
             latency=latency,
             cost_estimate_usd=raw.get("cost_estimate_usd"),
         )
+
 
 GleanRunner = GleanDriverClient

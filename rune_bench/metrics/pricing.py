@@ -64,7 +64,9 @@ def _fallback_dph(gpu: str) -> float:
     return 0.50
 
 
-def _extract_tokens_from_result(result: dict[str, Any] | None) -> tuple[float | None, float | None]:
+def _extract_tokens_from_result(
+    result: dict[str, Any] | None,
+) -> tuple[float | None, float | None]:
     """Best-effort prompt/output token counts from nested result payloads."""
 
     if not result:
@@ -193,7 +195,9 @@ def _vast_dph_stats(
     """Return (median_dph, min_dph, max_dph) from live offers filtered by GPU name."""
     query = {"verified": {"eq": "True"}, "reliability": {"gt": "0.85"}}
     try:
-        offers = search_offers(query=query, order="dph+", disable_bundling=True, raw=True)
+        offers = search_offers(
+            query=query, order="dph+", disable_bundling=True, raw=True
+        )
     except Exception:
         offers = []
     if not isinstance(offers, list):
@@ -259,7 +263,7 @@ class PricingSoothSayer:
         raw_rows = []
         if self._store:
             raw_rows = self._store.list_jobs_for_finops(tenant_id=tenant_id, limit=2000)
-        
+
         print(f"DEBUG: simulate tenant={tenant_id} raw_rows={len(raw_rows)}")
         matched: list[dict[str, Any]] = []
         for row in raw_rows:
@@ -291,7 +295,9 @@ class PricingSoothSayer:
             avg_in = hist.avg_input_tokens
             avg_out = hist.avg_output_tokens
             hist_note = "from_history"
-            confidence_str = "high" if hist.n >= 5 and hist.token_samples >= 3 else "medium"
+            confidence_str = (
+                "high" if hist.n >= 5 and hist.token_samples >= 3 else "medium"
+            )
             confidence_val = 0.9 if confidence_str == "high" else 0.7
             historical_match = True
 
@@ -316,7 +322,9 @@ class PricingSoothSayer:
         return {
             "projected_cost_usd": round(total, 4),
             "cost_low_usd": round((dur_low / 3600.0) * dph_low + token_cost * 0.5, 4),
-            "cost_high_usd": round((dur_high / 3600.0) * dph_high + token_cost * 2.0, 4),
+            "cost_high_usd": round(
+                (dur_high / 3600.0) * dph_high + token_cost * 2.0, 4
+            ),
             "confidence": confidence_str,
             "confidence_score": confidence_val,
             "currency": "USD",
@@ -346,6 +354,7 @@ def make_pricing_sooth_sayer(store: StoragePort) -> PricingSoothSayer:
         return PricingSoothSayer(store)
     try:
         from rune_bench.resources.vastai.sdk import VastAI
+
         sdk = VastAI(api_key=vast_key)
         return PricingSoothSayer(store, vast_search_offers=sdk.search_offers)
     except (ImportError, RuntimeError):

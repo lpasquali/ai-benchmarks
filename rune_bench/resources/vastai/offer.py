@@ -41,7 +41,7 @@ class OfferFinder:
         query = {
             "reliability": {"gt": str(reliability)},
             "verified": {"eq": "True"},
-            "dph": {"gte": str(min_dph), "lte": str(max_dph)}
+            "dph": {"gte": str(min_dph), "lte": str(max_dph)},
         }
         try:
             debug_log(

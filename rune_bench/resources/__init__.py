@@ -12,8 +12,10 @@ __all__ = [
     "ExistingOllamaProvider",
 ]
 
+
 def __getattr__(name: str) -> object:
     if name == "VastAIProvider":
         from .vastai import VastAIProvider
+
         return VastAIProvider
     raise AttributeError(f"module 'rune_bench.resources' has no attribute {name!r}")

@@ -48,11 +48,13 @@ SYNTHESIS_PROMPT = (
 
 def _search_semantic_scholar(question: str, *, limit: int = SEARCH_LIMIT) -> list[dict]:
     """Query the Semantic Scholar paper search endpoint."""
-    params = urllib.parse.urlencode({
-        "query": question,
-        "limit": limit,
-        "fields": SEARCH_FIELDS,
-    })
+    params = urllib.parse.urlencode(
+        {
+            "query": question,
+            "limit": limit,
+            "fields": SEARCH_FIELDS,
+        }
+    )
     url = f"{SEMANTIC_SCHOLAR_BASE}/paper/search?{params}"
 
     req = urllib.request.Request(url)
@@ -99,14 +101,18 @@ def _format_abstracts_for_synthesis(papers: list[dict]) -> str:
     return "\n\n".join(parts)
 
 
-def _synthesize_via_ollama(question: str, papers: list[dict], model: str, backend_url: str) -> str:
+def _synthesize_via_ollama(
+    question: str, papers: list[dict], model: str, backend_url: str
+) -> str:
     """Call Ollama to synthesize an answer from the paper abstracts."""
     formatted = _format_abstracts_for_synthesis(papers)
     prompt = SYNTHESIS_PROMPT.format(question=question, formatted_abstracts=formatted)
 
     payload = json.dumps({"model": model, "prompt": prompt, "stream": False}).encode()
     url = f"{backend_url.rstrip('/')}/api/generate"
-    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+    req = urllib.request.Request(
+        url, data=payload, headers={"Content-Type": "application/json"}, method="POST"
+    )
 
     with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
         data = json.loads(resp.read().decode())
@@ -118,14 +124,16 @@ def _simplify_papers(papers: list[dict]) -> list[dict]:
     """Return a simplified list of paper dicts suitable for the result payload."""
     simplified: list[dict] = []
     for p in papers:
-        simplified.append({
-            "title": p.get("title", "Untitled"),
-            "abstract": p.get("abstract") or "",
-            "year": p.get("year"),
-            "authors": [a.get("name", "Unknown") for a in (p.get("authors") or [])],
-            "citationCount": p.get("citationCount", 0),
-            "url": p.get("url", ""),
-        })
+        simplified.append(
+            {
+                "title": p.get("title", "Untitled"),
+                "abstract": p.get("abstract") or "",
+                "year": p.get("year"),
+                "authors": [a.get("name", "Unknown") for a in (p.get("authors") or [])],
+                "citationCount": p.get("citationCount", 0),
+                "url": p.get("url", ""),
+            }
+        )
     return simplified
 
 
@@ -138,14 +146,22 @@ def _handle_ask(params: dict) -> dict:
     papers = _search_semantic_scholar(question, limit=limit)
 
     if not papers:
-        return {"answer": "No papers found for the given query.", "papers": [], "consensus_score": None}
+        return {
+            "answer": "No papers found for the given query.",
+            "papers": [],
+            "consensus_score": None,
+        }
 
     if model and backend_url:
         answer = _synthesize_via_ollama(question, papers, model, backend_url)
     else:
         answer = _format_papers(papers)
 
-    return {"answer": answer, "papers": _simplify_papers(papers), "consensus_score": None}
+    return {
+        "answer": answer,
+        "papers": _simplify_papers(papers),
+        "consensus_score": None,
+    }
 
 
 def _handle_info(_params: dict) -> dict:
@@ -183,7 +199,9 @@ def main() -> None:
             handler = getattr(current_module, handler_name)
 
             result = handler(params)
-            print(json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True)
+            print(
+                json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True
+            )
         except Exception as exc:  # noqa: BLE001
             print(
                 json.dumps({"status": "error", "error": str(exc), "id": req_id}),

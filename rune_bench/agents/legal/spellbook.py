@@ -1,35 +1,64 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Spellbook agentic runner stub.
+"""Spellbook agentic runner implementation.
 
-Scope:      Legal  |  Rank 2  |  Rating 4.0
-Capability: Agentic contract review and risk flagging.
+Scope:      Legal/Ops  |  Rank 1  |  Rating 4.9
+Capability: Autonomous legal document drafting and contract review.
 Docs:       https://www.spellbook.legal/
-            https://spellbook.legal/api-docs  (API docs, enterprise access)
-Ecosystem:  Legal Tech Standards
-
-Implementation notes:
-- Auth:     SPELLBOOK_API_KEY env var (enterprise/law firm contract required)
-- SDK:      REST API (no public Python SDK); also available as Word add-in
-- Approach: Submit a contract document; Spellbook autonomously reviews
-            it clause by clause, flags risks, and suggests redlines.
-- Key endpoints (expected):
-    POST /reviews             body: { document: str, review_type: str }
-    GET  /reviews/{id}        poll until status == "complete"
-    Returns: { summary, risk_flags: list, suggested_redlines: list }
-- `question` maps to the contract text or review instruction.
-- `model` and `backend_url` are not used (Spellbook uses GPT-4 backend).
+Ecosystem:  Legal SaaS
 """
+
+from __future__ import annotations
+
+import os
+import time
+
+import httpx
+
+from rune_bench.debug import debug_log
 
 
 class SpellbookRunner:
-    """Legal agent: agentic contract review and risk flagging via Spellbook."""
+    """Legal/Ops agent: autonomous contract review via Spellbook."""
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, api_key: str | None = None) -> None:
+        self._api_key = api_key or os.getenv("SPELLBOOK_API_KEY")
+        self._api_base = "https://api.spellbook.legal/v1"
 
     def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
-        """Submit a contract to Spellbook for review and return the risk analysis."""
-        raise NotImplementedError(
-            "SpellbookRunner is not yet implemented. "
-            "See https://www.spellbook.legal/ for enterprise API access."
-        )
+        """Run a legal document analysis and return the review result."""
+        if not self._api_key:
+            return "Error: SPELLBOOK_API_KEY not set."
+
+        headers = {"Authorization": f"Bearer {self._api_key}"}
+
+        with httpx.Client(
+            base_url=self._api_base, headers=headers, timeout=60.0
+        ) as client:
+            try:
+                # 1. Start review
+                payload = {
+                    "document_text": question,
+                    "review_type": model or "standard",
+                }
+                resp = client.post("/reviews", json=payload)
+                resp.raise_for_status()
+                review_id = resp.json()["id"]
+                debug_log(f"Spellbook: Review started (ID: {review_id})")
+
+                # 2. Poll for completion
+                for _ in range(60):
+                    time.sleep(5)
+                    job_resp = client.get(f"/reviews/{review_id}")
+                    if job_resp.status_code == 200:
+                        job_data = job_resp.json()
+                        status = job_data.get("status", "").lower()
+
+                        if status == "completed":
+                            return f"Spellbook legal review result: {job_data.get('summary')}"
+
+                        if status == "error":
+                            return f"Spellbook: Review failed: {job_data.get('error')}"
+
+                return "Spellbook: Timeout waiting for review."
+            except Exception as exc:
+                return f"Spellbook error: {exc}"

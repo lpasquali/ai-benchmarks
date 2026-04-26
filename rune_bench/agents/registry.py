@@ -25,26 +25,64 @@ _REGISTRY: dict[str, dict] = {}
 _BUILTIN_AGENTS: dict[str, tuple[str, str, list[str]]] = {
     "holmes": ("rune_bench.agents.sre.holmes", "HolmesRunner", ["kubeconfig"]),
     "k8sgpt": ("rune_bench.agents.sre.k8sgpt", "K8sGPTRunner", ["kubeconfig"]),
-    "metoro": ("rune_bench.agents.sre.metoro", "MetoroRunner", ["kubeconfig", "api_key"]),
-    "pagerduty": ("rune_bench.agents.sre.pagerduty", "PagerDutyAIRunner", ["kubeconfig", "api_key"]),
-    "perplexity": ("rune_bench.agents.research.perplexity", "PerplexityRunner", ["api_key"]),
+    "metoro": (
+        "rune_bench.agents.sre.metoro",
+        "MetoroRunner",
+        ["kubeconfig", "api_key"],
+    ),
+    "pagerduty": (
+        "rune_bench.agents.sre.pagerduty",
+        "PagerDutyAIRunner",
+        ["kubeconfig", "api_key"],
+    ),
+    "perplexity": (
+        "rune_bench.agents.research.perplexity",
+        "PerplexityRunner",
+        ["api_key"],
+    ),
     "glean": ("rune_bench.agents.research.glean", "GleanRunner", ["api_key"]),
     "elicit": ("rune_bench.agents.research.elicit", "ElicitRunner", ["api_key"]),
-    "langgraph": ("rune_bench.agents.research.langgraph", "LangGraphRunner", ["kubeconfig"]),
+    "langgraph": (
+        "rune_bench.agents.research.langgraph",
+        "LangGraphRunner",
+        ["kubeconfig"],
+    ),
     "consensus": ("rune_bench.agents.research.consensus", "ConsensusRunner", []),
-    "pentestgpt": ("rune_bench.agents.cybersec.pentestgpt", "PentestGPTRunner", ["api_key"]),
-    "radiant": ("rune_bench.agents.cybersec.radiant", "RadiantSecurityRunner", ["api_key", "base_url"]),
+    "pentestgpt": (
+        "rune_bench.agents.cybersec.pentestgpt",
+        "PentestGPTRunner",
+        ["api_key"],
+    ),
+    "radiant": (
+        "rune_bench.agents.cybersec.radiant",
+        "RadiantSecurityRunner",
+        ["api_key", "base_url"],
+    ),
     "mindgard": ("rune_bench.agents.cybersec.mindgard", "MindgardRunner", ["api_key"]),
-    "burpgpt": ("rune_bench.agents.cybersec.burpgpt", "BurpGPTRunner", ["api_key", "base_url"]),
+    "burpgpt": (
+        "rune_bench.agents.cybersec.burpgpt",
+        "BurpGPTRunner",
+        ["api_key", "base_url"],
+    ),
     "xbow": ("rune_bench.agents.cybersec.xbow", "XBOWRunner", ["api_key"]),
     "harvey": ("rune_bench.agents.legal.harvey", "HarveyAIRunner", ["api_key"]),
     "spellbook": ("rune_bench.agents.legal.spellbook", "SpellbookRunner", ["api_key"]),
     "dagger": ("rune_bench.agents.ops.dagger", "DaggerRunner", []),
     "crewai": ("rune_bench.agents.ops.crewai", "CrewAIRunner", ["api_key"]),
     "browseruse": ("rune_bench.agents.ops.browseruse", "BrowserUseRunner", ["api_key"]),
+    "multion": ("rune_bench.agents.ops.multion", "MultiOnRunner", ["api_key"]),
     "sierra": ("rune_bench.agents.ops.sierra", "SierraRunner", ["api_key"]),
-    "skillfortify": ("rune_bench.agents.ops.skillfortify", "SkillFortifyRunner", ["api_key"]),
-    "midjourney": ("rune_bench.agents.art.midjourney", "MidjourneyRunner", ["api_key", "base_url"]),
+    "cleric": ("rune_bench.agents.sre.cleric", "ClericRunner", ["api_key"]),
+    "skillfortify": (
+        "rune_bench.agents.ops.skillfortify",
+        "SkillFortifyRunner",
+        ["api_key"],
+    ),
+    "midjourney": (
+        "rune_bench.agents.art.midjourney",
+        "MidjourneyRunner",
+        ["api_key", "base_url"],
+    ),
     "invokeai": ("rune_bench.agents.art.invokeai", "InvokeAIRunner", ["base_url"]),
     "comfyui": ("rune_bench.agents.art.comfyui", "ComfyUIRunner", ["base_url"]),
     "krea": ("rune_bench.agents.art.krea", "KreaRunner", ["api_key"]),
@@ -93,13 +131,11 @@ def get_agent(name: str, **kwargs: Any) -> Any:
         factory = getattr(mod, class_name)
     else:
         available = sorted(set(list(_REGISTRY.keys()) + list(_BUILTIN_AGENTS.keys())))
-        raise ValueError(
-            f"Unknown agent {name!r}. Available: {', '.join(available)}"
-        )
+        raise ValueError(f"Unknown agent {name!r}. Available: {', '.join(available)}")
 
     config = resolve_agent_config(name, kwargs)
     filtered = {}
-    
+
     for req in req_config:
         val = getattr(config, req, None)
         if not val:

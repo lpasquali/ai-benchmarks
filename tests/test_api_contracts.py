@@ -11,6 +11,7 @@ from rune_bench.api_contracts import (
 
 def test_run_llm_instance_request_to_dict():
     from rune_bench.api_contracts import Provisioning, VastAIProvisioning
+
     request = RunLLMInstanceRequest(
         provisioning=Provisioning(
             vastai=VastAIProvisioning(
@@ -110,7 +111,9 @@ def test_benchmark_request_from_cli_vastai():
 
 
 def test_cost_estimation_request_to_dict():
-    req = CostEstimationRequest(vastai=True, min_dph=2.0, max_dph=3.0, estimated_duration_seconds=1800)
+    req = CostEstimationRequest(
+        vastai=True, min_dph=2.0, max_dph=3.0, estimated_duration_seconds=1800
+    )
     d = req.to_dict()
     assert d["vastai"] is True
     assert d["min_dph"] == 2.0

@@ -65,11 +65,13 @@ def test_handle_ask_runs_crew(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setitem(sys.modules, "crewai", mock_crewai)
 
-    result = crewai_main._handle_ask({
-        "question": "Analyze the system",
-        "model": "llama3.1:8b",
-        "backend_url": "http://ollama:11434",
-    })
+    result = crewai_main._handle_ask(
+        {
+            "question": "Analyze the system",
+            "model": "llama3.1:8b",
+            "backend_url": "http://ollama:11434",
+        }
+    )
 
     assert result["answer"] == "crew analysis result"
     mock_agent_cls.assert_called_once_with(
@@ -99,10 +101,12 @@ def test_handle_ask_ollama_model_format(monkeypatch: pytest.MonkeyPatch) -> None
 
     monkeypatch.setitem(sys.modules, "crewai", mock_crewai)
 
-    crewai_main._handle_ask({
-        "question": "q",
-        "model": "mistral:7b",
-    })
+    crewai_main._handle_ask(
+        {
+            "question": "q",
+            "model": "mistral:7b",
+        }
+    )
 
     assert captured["agent_kwargs"]["llm"] == "ollama/mistral:7b"
 
@@ -131,11 +135,13 @@ def test_handle_ask_sets_openai_api_base(monkeypatch: pytest.MonkeyPatch) -> Non
     # Clear the env var first to ensure we see the driver setting it
     monkeypatch.delenv("OPENAI_API_BASE", raising=False)
 
-    crewai_main._handle_ask({
-        "question": "q",
-        "model": "m",
-        "backend_url": "http://ollama:11434",
-    })
+    crewai_main._handle_ask(
+        {
+            "question": "q",
+            "model": "m",
+            "backend_url": "http://ollama:11434",
+        }
+    )
 
     assert captured_api_base[0] == "http://ollama:11434/v1"
 
@@ -156,6 +162,7 @@ def test_handle_ask_without_backend_url(monkeypatch: pytest.MonkeyPatch) -> None
     crewai_main._handle_ask({"question": "q", "model": "m"})
 
     import os
+
     assert os.environ.get("OPENAI_API_BASE") is None
 
 
@@ -185,11 +192,13 @@ def test_main_processes_ask_request(
         crewai_main.sys,
         "stdin",
         io.StringIO(
-            json.dumps({
-                "action": "ask",
-                "params": {"question": "q", "model": "m"},
-                "id": "c-1",
-            })
+            json.dumps(
+                {
+                    "action": "ask",
+                    "params": {"question": "q", "model": "m"},
+                    "id": "c-1",
+                }
+            )
             + "\n"
         ),
     )

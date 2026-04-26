@@ -44,11 +44,18 @@ def _make_urlopen_mock(response_data: dict | list, status: int = 200):
 
 def test_handle_ask_returns_formatted_papers(monkeypatch: pytest.MonkeyPatch) -> None:
     papers = [
-        {"title": "Paper A", "abstract": "Abstract A", "authors": "Smith", "year": "2024"},
+        {
+            "title": "Paper A",
+            "abstract": "Abstract A",
+            "authors": "Smith",
+            "year": "2024",
+        },
         {"title": "Paper B", "abstract": "Abstract B", "authors": "", "year": ""},
     ]
     monkeypatch.setenv("RUNE_ELICIT_API_KEY", "test-key-123")
-    monkeypatch.setattr(elicit_main.urllib.request, "urlopen", _make_urlopen_mock({"papers": papers}))
+    monkeypatch.setattr(
+        elicit_main.urllib.request, "urlopen", _make_urlopen_mock({"papers": papers})
+    )
 
     result = elicit_main._handle_ask({"question": "What is X?", "model": "unused"})
 
@@ -62,7 +69,9 @@ def test_handle_ask_returns_formatted_papers(monkeypatch: pytest.MonkeyPatch) ->
 def test_handle_ask_handles_list_response(monkeypatch: pytest.MonkeyPatch) -> None:
     papers = [{"title": "Only Paper", "abstract": "The abstract"}]
     monkeypatch.setenv("RUNE_ELICIT_API_KEY", "key")
-    monkeypatch.setattr(elicit_main.urllib.request, "urlopen", _make_urlopen_mock(papers))
+    monkeypatch.setattr(
+        elicit_main.urllib.request, "urlopen", _make_urlopen_mock(papers)
+    )
 
     result = elicit_main._handle_ask({"question": "q", "model": "m"})
 
@@ -72,7 +81,9 @@ def test_handle_ask_handles_list_response(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_handle_ask_empty_results(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RUNE_ELICIT_API_KEY", "key")
-    monkeypatch.setattr(elicit_main.urllib.request, "urlopen", _make_urlopen_mock({"papers": []}))
+    monkeypatch.setattr(
+        elicit_main.urllib.request, "urlopen", _make_urlopen_mock({"papers": []})
+    )
 
     result = elicit_main._handle_ask({"question": "q", "model": "m"})
 
@@ -94,7 +105,11 @@ def test_handle_ask_raises_on_http_error(monkeypatch: pytest.MonkeyPatch) -> Non
 
     def fake_urlopen(req, **kwargs):
         raise urllib.error.HTTPError(
-            url=req.full_url, code=401, msg="Unauthorized", hdrs={}, fp=io.BytesIO(b"bad key")
+            url=req.full_url,
+            code=401,
+            msg="Unauthorized",
+            hdrs={},
+            fp=io.BytesIO(b"bad key"),
         )
 
     monkeypatch.setattr(elicit_main.urllib.request, "urlopen", fake_urlopen)
@@ -134,16 +149,25 @@ def test_handle_info_returns_driver_metadata() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_main_processes_ask_request(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
-    monkeypatch.setattr(elicit_main, "_handle_ask", lambda p: {"answer": "synthesis", "papers": []})
+def test_main_processes_ask_request(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    monkeypatch.setattr(
+        elicit_main, "_handle_ask", lambda p: {"answer": "synthesis", "papers": []}
+    )
     monkeypatch.setattr(
         elicit_main.sys,
         "stdin",
-        io.StringIO(json.dumps({
-            "action": "ask",
-            "params": {"question": "q", "model": "m"},
-            "id": "test-id",
-        }) + "\n"),
+        io.StringIO(
+            json.dumps(
+                {
+                    "action": "ask",
+                    "params": {"question": "q", "model": "m"},
+                    "id": "test-id",
+                }
+            )
+            + "\n"
+        ),
     )
 
     elicit_main.main()
@@ -154,7 +178,9 @@ def test_main_processes_ask_request(monkeypatch: pytest.MonkeyPatch, capsys: pyt
     assert response["id"] == "test-id"
 
 
-def test_main_processes_info_request(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_main_processes_info_request(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     monkeypatch.setattr(
         elicit_main.sys,
         "stdin",
@@ -184,7 +210,9 @@ def test_main_returns_error_for_unknown_action(
     assert "unknown" in response["error"].lower()
 
 
-def test_main_handles_invalid_json(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_main_handles_invalid_json(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     monkeypatch.setattr(elicit_main.sys, "stdin", io.StringIO("not-json\n"))
 
     elicit_main.main()
@@ -193,7 +221,9 @@ def test_main_handles_invalid_json(monkeypatch: pytest.MonkeyPatch, capsys: pyte
     assert response["status"] == "error"
 
 
-def test_main_skips_empty_lines(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_main_skips_empty_lines(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     monkeypatch.setattr(elicit_main.sys, "stdin", io.StringIO("\n\n   \n"))
 
     elicit_main.main()
@@ -205,5 +235,6 @@ def test_main_entrypoint(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify that calling main() as a script works (module-level coverage)."""
     # We just want to make sure it doesn't crash and returns after EOF on stdin.
     import io
+
     monkeypatch.setattr("sys.stdin", io.StringIO(""))
     elicit_main.main()

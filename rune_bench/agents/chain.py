@@ -11,17 +11,21 @@ from typing import Any, Protocol
 from rune_bench.agents.base import AgentResult, AgentRunner
 from rune_bench.debug import debug_log
 
+
 @dataclass
 class ChainStep:
     """A single step in a multi-agent chain."""
+
     name: str
     agent: AgentRunner
     question_template: str
     dependencies: list[str] = field(default_factory=list)
 
+
 @dataclass
 class ChainResult:
     """The outcome of a chain execution."""
+
     steps: dict[str, AgentResult]
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -35,8 +39,9 @@ class ChainStateRecorder(Protocol):
     asyncio task; implementations are responsible for thread-safety.
     """
 
-    def initialize(self, *, job_id: str, nodes: list[dict], edges: list[dict]) -> None:
-        ...
+    def initialize(
+        self, *, job_id: str, nodes: list[dict], edges: list[dict]
+    ) -> None: ...
 
     def transition(
         self,
@@ -47,8 +52,7 @@ class ChainStateRecorder(Protocol):
         started_at: float | None = None,
         finished_at: float | None = None,
         error: str | None = None,
-    ) -> None:
-        ...
+    ) -> None: ...
 
 
 class ChainExecutionEngine:
@@ -70,7 +74,9 @@ class ChainExecutionEngine:
         nodes = [
             {
                 "id": name,
-                "agent_name": getattr(step.agent, "__class__", type(step.agent)).__name__,
+                "agent_name": getattr(
+                    step.agent, "__class__", type(step.agent)
+                ).__name__,
                 "status": "pending",
                 "started_at": None,
                 "finished_at": None,
@@ -137,8 +143,12 @@ class ChainExecutionEngine:
             try:
                 question = step.question_template.format(**context)
             except KeyError as exc:
-                self._notify(step_name, status="failed", error=str(exc), finished_at=time.time())
-                raise RuntimeError(f"Step '{step_name}' template missing context: {exc}")
+                self._notify(
+                    step_name, status="failed", error=str(exc), finished_at=time.time()
+                )
+                raise RuntimeError(
+                    f"Step '{step_name}' template missing context: {exc}"
+                )
 
             debug_log(f"ChainEngine: running step '{step_name}'")
             self._notify(step_name, status="running", started_at=time.time())
@@ -149,7 +159,9 @@ class ChainExecutionEngine:
                     backend_url=backend_url,
                 )
             except Exception as exc:  # noqa: BLE001 — record then re-raise
-                self._notify(step_name, status="failed", error=str(exc), finished_at=time.time())
+                self._notify(
+                    step_name, status="failed", error=str(exc), finished_at=time.time()
+                )
                 raise
             self._notify(step_name, status="success", finished_at=time.time())
             return result

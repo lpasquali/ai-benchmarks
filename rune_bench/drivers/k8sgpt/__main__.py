@@ -30,12 +30,27 @@ import subprocess
 import sys
 
 
-_K8S_KINDS: frozenset[str] = frozenset({
-    "pod", "service", "deployment", "replicaset", "statefulset",
-    "daemonset", "job", "cronjob", "ingress", "node",
-    "persistentvolumeclaim", "pvc", "configmap", "secret",
-    "networkpolicy", "hpa", "horizontalpodautoscaler",
-})
+_K8S_KINDS: frozenset[str] = frozenset(
+    {
+        "pod",
+        "service",
+        "deployment",
+        "replicaset",
+        "statefulset",
+        "daemonset",
+        "job",
+        "cronjob",
+        "ingress",
+        "node",
+        "persistentvolumeclaim",
+        "pvc",
+        "configmap",
+        "secret",
+        "networkpolicy",
+        "hpa",
+        "horizontalpodautoscaler",
+    }
+)
 
 
 def _format_findings(results: list[dict]) -> str:
@@ -58,7 +73,9 @@ def _format_findings(results: list[dict]) -> str:
             lines.append(f"  Parent: {parent}")
         if errors:
             for err in errors:
-                err_text = err.get("text", str(err)) if isinstance(err, dict) else str(err)
+                err_text = (
+                    err.get("text", str(err)) if isinstance(err, dict) else str(err)
+                )
                 lines.append(f"  Error: {err_text}")
         if details:
             lines.append(f"  Details: {details}")
@@ -155,7 +172,9 @@ def main() -> None:
             handler = getattr(current_module, handler_name)
 
             result = handler(params)
-            print(json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True)
+            print(
+                json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True
+            )
         except Exception as exc:  # noqa: BLE001
             print(
                 json.dumps({"status": "error", "error": str(exc), "id": req_id}),

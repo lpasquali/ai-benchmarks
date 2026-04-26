@@ -13,6 +13,7 @@ except ImportError:
 
 from rune_bench.debug import debug_log
 
+
 class BrowserDriverTransport:
     """Automates a browser via Playwright to interact with web-only agents."""
 
@@ -44,31 +45,29 @@ class BrowserDriverTransport:
             if not url:
                 raise ValueError(
                     f"Browser 'ask' action requires a URL. Set RUNE_{self._driver_name.upper()}_DRIVER_URL "
-                    "or pass 'url' in params." if self._driver_name else "Browser 'ask' action requires a 'url' parameter."
+                    "or pass 'url' in params."
+                    if self._driver_name
+                    else "Browser 'ask' action requires a 'url' parameter."
                 )
-            
+
             return await self._run_browser_task(url, question)
-        
-        raise NotImplementedError(f"Action {action!r} not implemented in BrowserDriverTransport.")
+
+        raise NotImplementedError(
+            f"Action {action!r} not implemented in BrowserDriverTransport."
+        )
 
     async def _run_browser_task(self, url: str, question: str | None) -> dict:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=self._headless)
             page = await browser.new_page()
-            
+
             debug_log(f"BrowserDriverTransport: navigating to {url}")
             await page.goto(url)
-            
+
             # Basic implementation: extract text
             # Future: Use 'question' to drive interactions via LLM (browser-use)
             text = await page.evaluate("() => document.body.innerText")
-            
+
             await browser.close()
-            
-            return {
-                "answer": text,
-                "metadata": {
-                    "url": url,
-                    "automated": True
-                }
-            }
+
+            return {"answer": text, "metadata": {"url": url, "automated": True}}

@@ -8,6 +8,7 @@ import pytest
 from rune_bench.api_server import RuneApiApplication, ApiSecurityConfig
 from rune_bench.storage.sqlite import SQLiteStorageAdapter
 
+
 @pytest.fixture
 def temp_config():
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -22,9 +23,12 @@ profiles:
     model: llama3.1:70b
 """)
         # Mock the candidates in rune_bench.common.config
-        with patch("rune_bench.common.config._PROJECT_CANDIDATES", [config_path]), \
-             patch("rune_bench.common.config._GLOBAL_CANDIDATES", []):
+        with (
+            patch("rune_bench.common.config._PROJECT_CANDIDATES", [config_path]),
+            patch("rune_bench.common.config._GLOBAL_CANDIDATES", []),
+        ):
             yield config_path
+
 
 @pytest.fixture
 def api_app():
@@ -33,6 +37,7 @@ def api_app():
         security = ApiSecurityConfig(auth_disabled=True, tenant_tokens={})
         app = RuneApiApplication(store=storage, security=security)
         yield app
+
 
 class MockRequest:
     def __init__(self, path, headers=None, body=None):
@@ -56,138 +61,158 @@ class MockRequest:
     def end_headers(self):
         pass
 
+
 def test_get_settings(api_app, temp_config):
     handler_class = api_app.create_handler()
     mock_req = MockRequest("/v1/settings")
-    
+
     handler = handler_class.__new__(handler_class)
     handler.path = mock_req.path
     handler.headers = mock_req.headers
     handler.rfile = mock_req.rfile
     handler.wfile = mock_req.wfile
     handler.client_address = mock_req.client_address
-    handler.server = type('Server', (), {'app': api_app})
+    handler.server = type("Server", (), {"app": api_app})
     # Inject helper methods from BaseHTTPRequestHandler or mock them
     handler.send_response = mock_req.send_response
     handler.send_header = mock_req.send_header
     handler.end_headers = mock_req.end_headers
 
     handler.do_GET()
-    
+
     mock_req.wfile.seek(0)
     response_body = json.loads(mock_req.wfile.read().decode("utf-8"))
-    
+
     assert mock_req.status_code == 200
     assert response_body["defaults"]["model"] == "llama3.1:8b"
     assert "test" in response_body["profiles"]
     assert response_body["effective_config"]["model"] == "llama3.1:8b"
 
+
 def test_patch_settings(api_app, temp_config):
     handler_class = api_app.create_handler()
-    update_payload = json.dumps({
-        "settings": {"model": "llama3.1:405b"},
-        "profile": "test"
-    }).encode("utf-8")
-    mock_req = MockRequest("/v1/settings", headers={"Content-Length": str(len(update_payload))}, body=update_payload)
-    
+    update_payload = json.dumps(
+        {"settings": {"model": "llama3.1:405b"}, "profile": "test"}
+    ).encode("utf-8")
+    mock_req = MockRequest(
+        "/v1/settings",
+        headers={"Content-Length": str(len(update_payload))},
+        body=update_payload,
+    )
+
     handler = handler_class.__new__(handler_class)
     handler.path = mock_req.path
     handler.headers = mock_req.headers
     handler.rfile = mock_req.rfile
     handler.wfile = mock_req.wfile
     handler.client_address = mock_req.client_address
-    handler.server = type('Server', (), {'app': api_app})
+    handler.server = type("Server", (), {"app": api_app})
     handler.send_response = mock_req.send_response
     handler.send_header = mock_req.send_header
     handler.end_headers = mock_req.end_headers
 
     handler.do_PATCH()
-    
+
     assert mock_req.status_code == 200
-    
+
     # Verify file was updated
     with open(temp_config, "r") as f:
         import yaml
+
         data = yaml.safe_load(f)
         assert data["profiles"]["test"]["model"] == "llama3.1:405b"
 
+
 def test_post_profile(api_app, temp_config):
     handler_class = api_app.create_handler()
-    profile_payload = json.dumps({
-        "name": "new-profile",
-        "settings": {"vastai": True}
-    }).encode("utf-8")
-    mock_req = MockRequest("/v1/settings/profiles", headers={"Content-Length": str(len(profile_payload))}, body=profile_payload)
-    
+    profile_payload = json.dumps(
+        {"name": "new-profile", "settings": {"vastai": True}}
+    ).encode("utf-8")
+    mock_req = MockRequest(
+        "/v1/settings/profiles",
+        headers={"Content-Length": str(len(profile_payload))},
+        body=profile_payload,
+    )
+
     handler = handler_class.__new__(handler_class)
     handler.path = mock_req.path
     handler.headers = mock_req.headers
     handler.rfile = mock_req.rfile
     handler.wfile = mock_req.wfile
     handler.client_address = mock_req.client_address
-    handler.server = type('Server', (), {'app': api_app})
+    handler.server = type("Server", (), {"app": api_app})
     handler.send_response = mock_req.send_response
     handler.send_header = mock_req.send_header
     handler.end_headers = mock_req.end_headers
 
     handler.do_POST()
-    
+
     assert mock_req.status_code == 201
-    
+
+
 def test_put_settings_defaults(api_app, temp_config):
     handler_class = api_app.create_handler()
-    update_payload = json.dumps({
-        "settings": {"new_default": "value"},
-        "profile": None
-    }).encode("utf-8")
-    mock_req = MockRequest("/v1/settings", headers={"Content-Length": str(len(update_payload))}, body=update_payload)
-    
+    update_payload = json.dumps(
+        {"settings": {"new_default": "value"}, "profile": None}
+    ).encode("utf-8")
+    mock_req = MockRequest(
+        "/v1/settings",
+        headers={"Content-Length": str(len(update_payload))},
+        body=update_payload,
+    )
+
     handler = handler_class.__new__(handler_class)
     handler.path = mock_req.path
     handler.headers = mock_req.headers
     handler.rfile = mock_req.rfile
     handler.wfile = mock_req.wfile
     handler.client_address = mock_req.client_address
-    handler.server = type('Server', (), {'app': api_app})
+    handler.server = type("Server", (), {"app": api_app})
     handler.send_response = mock_req.send_response
     handler.send_header = mock_req.send_header
     handler.end_headers = mock_req.end_headers
 
     handler.do_PUT()
-    
+
     assert mock_req.status_code == 200
-    
+
     # Verify file was updated
     with open(temp_config, "r") as f:
         import yaml
+
         data = yaml.safe_load(f)
         assert data["defaults"]["new_default"] == "value"
 
+
 def test_put_settings_new_profile(api_app, temp_config):
     handler_class = api_app.create_handler()
-    update_payload = json.dumps({
-        "settings": {"foo": "bar"},
-        "profile": "nonexistent"
-    }).encode("utf-8")
-    mock_req = MockRequest("/v1/settings", headers={"Content-Length": str(len(update_payload))}, body=update_payload)
-    
+    update_payload = json.dumps(
+        {"settings": {"foo": "bar"}, "profile": "nonexistent"}
+    ).encode("utf-8")
+    mock_req = MockRequest(
+        "/v1/settings",
+        headers={"Content-Length": str(len(update_payload))},
+        body=update_payload,
+    )
+
     handler = handler_class.__new__(handler_class)
     handler.path = mock_req.path
     handler.headers = mock_req.headers
     handler.rfile = mock_req.rfile
     handler.wfile = mock_req.wfile
     handler.client_address = mock_req.client_address
-    handler.server = type('Server', (), {'app': api_app})
+    handler.server = type("Server", (), {"app": api_app})
     handler.send_response = mock_req.send_response
     handler.send_header = mock_req.send_header
     handler.end_headers = mock_req.end_headers
 
     handler.do_PUT()
-    
+
     assert mock_req.status_code == 200
-    
+
     # Verify file was updated
     with open(temp_config, "r") as f:
         import yaml
+
         data = yaml.safe_load(f)
         assert data["profiles"]["nonexistent"]["foo"] == "bar"

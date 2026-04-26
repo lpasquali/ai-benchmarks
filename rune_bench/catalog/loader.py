@@ -63,6 +63,7 @@ _COL_MODEL = "Ollama Model (2026)"  # present in chains.csv only
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _read_csv(path: Path) -> list[dict[str, str]]:
     """Read CSV rows, skipping blank rows."""
     with open(path, newline="", encoding="utf-8") as f:
@@ -123,6 +124,7 @@ def _build_scope_from_rows(
 # CSV loader
 # ---------------------------------------------------------------------------
 
+
 def load_from_csv(csv_path: Path | None = None) -> Catalog:
     """Load the agent catalog from a CSV file.
 
@@ -169,10 +171,12 @@ def load_from_csv(csv_path: Path | None = None) -> Catalog:
 # YAML loaders
 # ---------------------------------------------------------------------------
 
+
 def _require_yaml() -> object:
     """Import and return the yaml module, raising a clear error if missing."""
     try:
         import yaml  # type: ignore[import-untyped, import-not-found]
+
         return yaml
     except ImportError as exc:
         raise ImportError(
@@ -218,13 +222,15 @@ def merge_chains(catalog: Catalog, chains_yaml_path: Path) -> Catalog:
     upgraded: list[ScopeSpec] = []
     for scope in catalog.scopes:
         if scope.name in chain_specs:
-            upgraded.append(ScopeSpec(
-                name=scope.name,
-                model=scope.model,
-                mode="chain",
-                agents=scope.agents,
-                chain=chain_specs[scope.name],
-            ))
+            upgraded.append(
+                ScopeSpec(
+                    name=scope.name,
+                    model=scope.model,
+                    mode="chain",
+                    agents=scope.agents,
+                    chain=chain_specs[scope.name],
+                )
+            )
         else:
             upgraded.append(scope)
 
@@ -267,12 +273,14 @@ def load_from_yaml(
             )
             for a in scope_data.get("agents", [])
         ]
-        scopes.append(ScopeSpec(
-            name=scope_data["name"],
-            model=scope_data.get("model", _DEFAULT_MODEL),
-            mode=scope_data.get("mode", "atomic"),
-            agents=agents,
-        ))
+        scopes.append(
+            ScopeSpec(
+                name=scope_data["name"],
+                model=scope_data.get("model", _DEFAULT_MODEL),
+                mode=scope_data.get("mode", "atomic"),
+                agents=agents,
+            )
+        )
 
     catalog = Catalog(scopes=scopes)
     if chains_yaml_path and chains_yaml_path.exists():
@@ -283,6 +291,7 @@ def load_from_yaml(
 # ---------------------------------------------------------------------------
 # Auto-detecting entry point
 # ---------------------------------------------------------------------------
+
 
 def load(catalog_dir: Path | None = None) -> Catalog:
     """Auto-detect and load the RUNE benchmark catalog.
@@ -314,7 +323,11 @@ def load(catalog_dir: Path | None = None) -> Catalog:
                     chains_yaml if chains_yaml.exists() else None,
                 )
 
-            primary_csv = chains_csv if chains_csv.exists() else (scopes_csv if scopes_csv.exists() else None)
+            primary_csv = (
+                chains_csv
+                if chains_csv.exists()
+                else (scopes_csv if scopes_csv.exists() else None)
+            )
             if primary_csv is not None:
                 catalog = load_from_csv(primary_csv)
                 if chains_yaml.exists():
@@ -340,7 +353,11 @@ def load(catalog_dir: Path | None = None) -> Catalog:
                 chains_yaml if chains_yaml.exists() else None,
             )
 
-        primary_csv = chains_csv if chains_csv.exists() else (scopes_csv if scopes_csv.exists() else None)
+        primary_csv = (
+            chains_csv
+            if chains_csv.exists()
+            else (scopes_csv if scopes_csv.exists() else None)
+        )
         if primary_csv is not None:
             catalog = load_from_csv(primary_csv)
             if chains_yaml.exists():

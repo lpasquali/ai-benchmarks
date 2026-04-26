@@ -10,10 +10,16 @@ from rune_bench.resources.vastai.instance import InstanceManager
 import rune_bench.api_server as api_server
 from rune_bench.job_store import JobStore
 
+
 def test_instance_manager_details_parsing():
     details = InstanceManager.build_connection_details(
         1,
-        {"state": "running", "ports": {"svc": [{"HostIp": "1.2.3.4", "HostPort": "8080"}]}, "ssh_host": "h1", "ssh_port": 2222},
+        {
+            "state": "running",
+            "ports": {"svc": [{"HostIp": "1.2.3.4", "HostPort": "8080"}]},
+            "ssh_host": "h1",
+            "ssh_port": 2222,
+        },
     )
     assert details.status == "running"
     assert details.ssh_host == "h1"
@@ -23,7 +29,12 @@ def test_instance_manager_details_parsing():
 
     details = InstanceManager.build_connection_details(
         1,
-        {"state": "created", "ports": {"svc": [{"HostIp": "1.2.3.4", "HostPort": "8080"}]}, "ssh_host": None, "ssh_port": None},
+        {
+            "state": "created",
+            "ports": {"svc": [{"HostIp": "1.2.3.4", "HostPort": "8080"}]},
+            "ssh_host": None,
+            "ssh_port": None,
+        },
     )
     assert details.status == "created"
     assert details.service_urls[0]["proxy"] is None
@@ -64,6 +75,7 @@ def test_api_security_from_env(monkeypatch):
     cfg = api_server.ApiSecurityConfig.from_env()
     assert cfg.tenant_tokens["tenant-b"] == long_b
 
+
 def test_api_server_misc_paths(misc_server):
     base_url, app = misc_server
 
@@ -71,7 +83,6 @@ def test_api_server_misc_paths(misc_server):
         payload = json.loads(response.read().decode("utf-8"))
     assert isinstance(payload, list)
     assert any(m["name"] == "llama3.1:8b" for m in payload)
-
 
     req = Request(f"{base_url}/v1/catalog/models")
     with pytest.raises(HTTPError) as exc:
@@ -93,7 +104,9 @@ def test_api_server_misc_paths(misc_server):
         urlopen(unknown_req)  # nosec
     assert exc.value.code == 404
 
-    job = app.store.create_job(tenant_id="default", kind="agentic-agent", request_payload={})[0]
+    job = app.store.create_job(
+        tenant_id="default", kind="agentic-agent", request_payload={}
+    )[0]
 
     with urlopen(f"{base_url}/v1/jobs/{job}") as response:  # nosec  # test request mock/local execution
         payload = json.loads(response.read().decode("utf-8"))
@@ -133,7 +146,19 @@ async def test_api_server_internal_dispatch_and_failures(tmp_path):
             )
 
         handler = app.backend_functions["agentic-agent"]
-        await app._execute_job("missing", handler, "agentic-agent", {"question": "q", "model": "m", "backend_url": None, "backend_warmup": False, "backend_warmup_timeout": 1, "kubeconfig": "/tmp/k"})  # nosec
+        await app._execute_job(
+            "missing",
+            handler,
+            "agentic-agent",
+            {
+                "question": "q",
+                "model": "m",
+                "backend_url": None,
+                "backend_warmup": False,
+                "backend_warmup_timeout": 1,
+                "kubeconfig": "/tmp/k",
+            },
+        )  # nosec
         assert store.get_job("missing") is None
     finally:
         store.close()
@@ -142,7 +167,9 @@ async def test_api_server_internal_dispatch_and_failures(tmp_path):
 def test_job_to_payload_fields(tmp_path):
     store = JobStore(tmp_path / "jobs.db")
     try:
-        job_id, _ = store.create_job(tenant_id="t", kind="agentic-agent", request_payload={"x": 1})
+        job_id, _ = store.create_job(
+            tenant_id="t", kind="agentic-agent", request_payload={"x": 1}
+        )
         store.update_job(job_id, status="failed", error="boom", message="bad")
         job = store.get_job(job_id)
         payload = api_server._job_to_payload(job)

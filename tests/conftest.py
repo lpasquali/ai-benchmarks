@@ -12,4 +12,3 @@ except ImportError:
     _vastai_stub = MagicMock()
     _vastai_stub.VastAI = MagicMock
     sys.modules["vastai"] = _vastai_stub
-

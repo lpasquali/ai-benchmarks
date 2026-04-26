@@ -120,7 +120,9 @@ def _parse_bind_addr(raw: str) -> tuple[str, int]:
         return "", int(s[1:])
     host, _, port_s = s.rpartition(":")
     if not host or not port_s:
-        raise ValueError(f"invalid RUNE_PPROF_BIND_ADDRESS (use host:port or :port): {raw!r}")
+        raise ValueError(
+            f"invalid RUNE_PPROF_BIND_ADDRESS (use host:port or :port): {raw!r}"
+        )
     return host, int(port_s)
 
 
@@ -145,7 +147,9 @@ def start_background_server_if_configured() -> None:
         try:
             httpd = ThreadingHTTPServer((host, port), _PprofHandler)
         except OSError as exc:
-            _logger.warning("RUNE pprof diagnostics server failed to bind %r: %s", raw, exc)
+            _logger.warning(
+                "RUNE pprof diagnostics server failed to bind %r: %s", raw, exc
+            )
             return
 
         diag_server = httpd

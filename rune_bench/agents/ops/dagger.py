@@ -22,8 +22,6 @@ Implementation notes:
 - Returns pipeline stdout/result as the answer string.
 """
 
-
-
 from rune_bench.drivers.dagger import DaggerDriverClient
 
 DaggerRunner = DaggerDriverClient

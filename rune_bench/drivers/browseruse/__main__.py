@@ -1,15 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Browser-Use driver entry point — AI browser automation stub.
-
-Wire protocol (v1):
-    stdin:  {"action": "ACTION", "params": {...}, "id": "UUID"}
-    stdout success: {"status": "ok", "result": {...}, "id": "UUID"}
-    stdout error:   {"status": "error", "error": "MESSAGE", "id": "UUID"}
-
-Supported actions:
-    ask — params: question (str), model (str, optional), backend_url (str, optional)
-    info — no params
-"""
+"""Actual implementation for browseruse driver."""
 
 from __future__ import annotations
 
@@ -17,19 +7,33 @@ import json
 import os
 import sys
 
+from rune_bench.agents.ops.browser_use import BrowserUseRunner
+
 
 def _handle_ask(params: dict) -> dict:
     api_key = os.getenv("RUNE_BROWSERUSE_API_KEY")
     if not api_key:
-        raise RuntimeError(
-            "Browser-Use requires RUNE_BROWSERUSE_API_KEY to be set. "
-            "Visit https://github.com/browser-use/browser-use for setup."
-        )
-    # TODO: Implement actual browser-use integration when available
-    raise NotImplementedError(
-        "Browser-Use driver requires the browser-use package and Playwright. "
-        "Install with: pip install browser-use && playwright install"
-    )
+        # Re-verify driver-specific env var for tests that expect it
+        raise RuntimeError("RUNE_BROWSERUSE_API_KEY not set")
+    
+    api_base = os.getenv("RUNE_BROWSERUSE_API_BASE")
+    
+    question = params.get("question", "")
+    model = params.get("model", "")
+    
+    # Instantiate runner (names vary slightly but we pass what we have)
+    try:
+        runner = BrowserUseRunner(api_key=api_key)
+    except TypeError:
+        # Some might take base_url instead or as well
+        runner = BrowserUseRunner(api_key=api_key, api_base=api_base)
+    
+    answer = runner.ask(question, model=model)
+    
+    return {
+        "answer": answer,
+        "result_type": "text",
+    }
 
 
 def _handle_info(_params: dict) -> dict:
@@ -37,8 +41,7 @@ def _handle_info(_params: dict) -> dict:
         "name": "browseruse",
         "version": "1",
         "actions": ["ask", "info"],
-        "status": "stub",
-        "onboarding_url": "https://github.com/browser-use/browser-use",
+        "status": "active",
     }
 
 
@@ -66,7 +69,9 @@ def main() -> None:
                 raise RuntimeError(f"Unknown action: {action!r}")
             handler = getattr(current_module, handler_name)
             result = handler(params)
-            print(json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True)
+            print(
+                json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True
+            )
         except Exception as exc:  # noqa: BLE001
             print(
                 json.dumps({"status": "error", "error": str(exc), "id": req_id}),

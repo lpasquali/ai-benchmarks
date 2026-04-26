@@ -6,7 +6,10 @@ from rune_bench.common.http_client import normalize_url
 
 @pytest.mark.regression
 def test_regression_normalize_url_keeps_https_scheme() -> None:
-    assert normalize_url("https://example.com:11434", "ollama") == "https://example.com:11434"
+    assert (
+        normalize_url("https://example.com:11434", "ollama")
+        == "https://example.com:11434"
+    )
 
 
 @pytest.mark.regression

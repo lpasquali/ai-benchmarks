@@ -7,7 +7,12 @@ import os
 import sys
 
 
-_DEBUG_ENABLED = os.environ.get("RUNE_DEBUG", "").strip().lower() in {"1", "true", "yes", "on"}
+_DEBUG_ENABLED = os.environ.get("RUNE_DEBUG", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 
 def set_debug(enabled: bool) -> None:

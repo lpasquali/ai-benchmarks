@@ -17,7 +17,9 @@ class ReflectionAgentRunner:
     def __init__(self, max_reflections: int = 1) -> None:
         self.max_reflections = max_reflections
 
-    def _generate_draft(self, question: str, model: str, backend_url: str | None) -> str:
+    def _generate_draft(
+        self, question: str, model: str, backend_url: str | None
+    ) -> str:
         """Simulate generating an initial draft."""
         # In a real implementation, this would call the LLM backend.
         logger.info(f"Generating draft for: {question}")
@@ -32,23 +34,25 @@ class ReflectionAgentRunner:
     def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
         """Run an investigation query with a self-reflection loop."""
         draft = self._generate_draft(question, model, backend_url)
-        
+
         current_response = draft
         for i in range(self.max_reflections):
             current_response = self._reflect(current_response, model, backend_url)
-            
+
         return current_response
 
-    def ask_structured(self, question: str, model: str, backend_url: str | None = None) -> AgentResult:
+    def ask_structured(
+        self, question: str, model: str, backend_url: str | None = None
+    ) -> AgentResult:
         """Run an investigation query and return structured results including reflection metadata."""
         draft = self._generate_draft(question, model, backend_url)
-        
+
         reflections = []
         current_response = draft
         for i in range(self.max_reflections):
             current_response = self._reflect(current_response, model, backend_url)
             reflections.append(current_response)
-            
+
         return AgentResult(
             answer=current_response,
             result_type="text",
@@ -56,5 +60,5 @@ class ReflectionAgentRunner:
                 "draft": draft,
                 "reflections": reflections,
                 "reflection_count": self.max_reflections,
-            }
+            },
         )

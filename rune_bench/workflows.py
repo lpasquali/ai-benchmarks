@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Application workflows used by the RUNE CLI."""
+
 from __future__ import annotations
 
 import os
@@ -101,6 +102,7 @@ warmup_existing_ollama_model = warmup_backend_model
 # Vast.ai provisioning workflow
 # ---------------------------------------------------------------------------
 
+
 def provision_vastai_backend(
     sdk: VastAI,
     *,
@@ -139,7 +141,9 @@ def provision_vastai_backend(
             contract_id: int | str = reusable_contract_id
             instance_info = reusable
             reused_existing_instance = True
-            offer_id = int(float(reusable.get("ask_contract_id", reusable.get("id", 0))))
+            offer_id = int(
+                float(reusable.get("ask_contract_id", reusable.get("id", 0)))
+            )
             debug_log(
                 f"Workflow reusing instance: contract_id={contract_id} total_vram_mb={total_vram_mb} model={selected_model.name}"
             )
@@ -148,7 +152,12 @@ def provision_vastai_backend(
 
     if reusable is None:
         debug_log("Workflow provisioning new Vast.ai instance")
-        with span("vastai.offer_search", min_dph=min_dph, max_dph=max_dph, reliability=reliability):
+        with span(
+            "vastai.offer_search",
+            min_dph=min_dph,
+            max_dph=max_dph,
+            reliability=reliability,
+        ):
             offer = OfferFinder(sdk).find_best(
                 min_dph=min_dph,
                 max_dph=max_dph,
@@ -188,7 +197,9 @@ def provision_vastai_backend(
         if api_model not in running:
             if api_model not in available:
                 with span("vastai.model.pull", model=selected_model.name):
-                    manager.pull_model(contract_id, selected_model.name, backend_url=backend_url)
+                    manager.pull_model(
+                        contract_id, selected_model.name, backend_url=backend_url
+                    )
 
             warmup_backend_model(
                 backend_url,
@@ -204,7 +215,9 @@ def provision_vastai_backend(
         model_name=selected_model.name,
         model_vram_mb=selected_model.vram_mb,
         required_disk_gb=selected_model.required_disk_gb,
-        template_env=(template.env if template is not None else "<reused-running-instance>"),
+        template_env=(
+            template.env if template is not None else "<reused-running-instance>"
+        ),
         contract_id=contract_id,
         details=details,
         backend_url=backend_url,

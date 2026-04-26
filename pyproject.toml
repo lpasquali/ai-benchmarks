@@ -41,8 +41,13 @@ holmes = [
     # supabase<2.29 — relaxed upper bound per Dependabot bump
     "supabase>=2.5,<2.29",
 ]
+aws = [
+    "boto3>=1.34",
+    "aioboto3>=12.3",
+]
 vastai = [
     "httpx>=0.27.0",
+    "jsonschema>=4.20.0",
 ]
 catalog = [
     "pyyaml>=6.0",
@@ -51,7 +56,10 @@ all = [
     "holmesgpt>=0.23.0",
     "supabase>=2.5,<2.29",
     "httpx>=0.27.0",
+    "jsonschema>=4.20.0",
     "pyyaml>=6.0",
+    "boto3>=1.34",
+    "aioboto3>=12.3",
 ]
 dev = [
     "pytest>=8",
@@ -63,6 +71,7 @@ dev = [
     "types-PyYAML>=6.0.12",
     "respx>=0.22.0",
     "httpx>=0.27.0",
+    "jsonschema>=4.20.0",
 ]
 pg = [
     "psycopg[binary,pool]>=3.2",

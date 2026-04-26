@@ -32,6 +32,7 @@ class VastAIProvider:
 
     async def provision(self) -> ProvisioningResult:
         from rune_bench.workflows import provision_vastai_backend
+
         result = await asyncio.to_thread(
             provision_vastai_backend,
             self._sdk,
@@ -50,6 +51,7 @@ class VastAIProvider:
     async def teardown(self, result: ProvisioningResult) -> None:
         if self._stop_on_teardown and result.provider_handle is not None:
             from rune_bench.workflows import stop_vastai_instance
+
             await asyncio.to_thread(
                 stop_vastai_instance,
                 self._sdk,

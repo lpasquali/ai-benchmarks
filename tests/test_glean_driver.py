@@ -91,10 +91,14 @@ def test_handle_ask_returns_answer_and_sources(monkeypatch: pytest.MonkeyPatch) 
         captured["url"] = req.full_url
         captured["headers"] = dict(req.headers)
         captured["body"] = json.loads(req.data.decode())
-        return _FakeResponse({
-            "answer": "PTO is 20 days per year.",
-            "sources": [{"title": "HR Handbook", "url": "https://wiki.acme.com/pto"}],
-        })
+        return _FakeResponse(
+            {
+                "answer": "PTO is 20 days per year.",
+                "sources": [
+                    {"title": "HR Handbook", "url": "https://wiki.acme.com/pto"}
+                ],
+            }
+        )
 
     monkeypatch.setattr(glean_main.urllib.request, "urlopen", fake_urlopen)
 
@@ -107,11 +111,14 @@ def test_handle_ask_returns_answer_and_sources(monkeypatch: pytest.MonkeyPatch) 
     assert captured["body"]["messages"][0]["content"] == "What is our PTO policy?"
 
 
-def test_handle_ask_falls_back_to_content_field(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_handle_ask_falls_back_to_content_field(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("RUNE_GLEAN_API_TOKEN", "tok")
     monkeypatch.setenv("RUNE_GLEAN_INSTANCE", "co")
     monkeypatch.setattr(
-        glean_main.urllib.request, "urlopen",
+        glean_main.urllib.request,
+        "urlopen",
         lambda *a, **kw: _FakeResponse({"content": "fallback content"}),
     )
 
@@ -119,7 +126,9 @@ def test_handle_ask_falls_back_to_content_field(monkeypatch: pytest.MonkeyPatch)
     assert result["answer"] == "fallback content"
 
 
-def test_handle_ask_search_mode_uses_search_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_handle_ask_search_mode_uses_search_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("RUNE_GLEAN_API_TOKEN", "tok")
     monkeypatch.setenv("RUNE_GLEAN_INSTANCE", "acme")
     captured: dict = {}
@@ -151,7 +160,8 @@ def test_handle_ask_citations_field(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RUNE_GLEAN_API_TOKEN", "tok")
     monkeypatch.setenv("RUNE_GLEAN_INSTANCE", "co")
     monkeypatch.setattr(
-        glean_main.urllib.request, "urlopen",
+        glean_main.urllib.request,
+        "urlopen",
         lambda *a, **kw: _FakeResponse({"answer": "a", "citations": [{"ref": "1"}]}),
     )
 
@@ -172,7 +182,11 @@ def test_handle_ask_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
 
     def fake_urlopen(req, **_kw):  # noqa: ANN001, ANN003
         raise urllib.error.HTTPError(
-            req.full_url, 401, "Unauthorized", {}, io.BytesIO(b"bad token"),
+            req.full_url,
+            401,
+            "Unauthorized",
+            {},
+            io.BytesIO(b"bad token"),
         )
 
     monkeypatch.setattr(glean_main.urllib.request, "urlopen", fake_urlopen)
@@ -213,16 +227,25 @@ def test_handle_info_returns_driver_metadata() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_main_processes_ask_request(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
-    monkeypatch.setattr(glean_main, "_handle_ask", lambda p: {"answer": "the answer", "sources": None})
+def test_main_processes_ask_request(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    monkeypatch.setattr(
+        glean_main, "_handle_ask", lambda p: {"answer": "the answer", "sources": None}
+    )
     monkeypatch.setattr(
         glean_main.sys,
         "stdin",
-        io.StringIO(json.dumps({
-            "action": "ask",
-            "params": {"question": "q"},
-            "id": "test-id",
-        }) + "\n"),
+        io.StringIO(
+            json.dumps(
+                {
+                    "action": "ask",
+                    "params": {"question": "q"},
+                    "id": "test-id",
+                }
+            )
+            + "\n"
+        ),
     )
 
     glean_main.main()
@@ -233,7 +256,9 @@ def test_main_processes_ask_request(monkeypatch: pytest.MonkeyPatch, capsys: pyt
     assert response["id"] == "test-id"
 
 
-def test_main_processes_info_request(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_main_processes_info_request(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     monkeypatch.setattr(
         glean_main.sys,
         "stdin",
@@ -263,7 +288,9 @@ def test_main_returns_error_for_unknown_action(
     assert "unknown" in response["error"].lower()
 
 
-def test_main_handles_invalid_json(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_main_handles_invalid_json(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     monkeypatch.setattr(glean_main.sys, "stdin", io.StringIO("not-json\n"))
 
     glean_main.main()
@@ -272,7 +299,9 @@ def test_main_handles_invalid_json(monkeypatch: pytest.MonkeyPatch, capsys: pyte
     assert response["status"] == "error"
 
 
-def test_main_skips_empty_lines(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_main_skips_empty_lines(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     monkeypatch.setattr(glean_main.sys, "stdin", io.StringIO("\n\n   \n"))
 
     glean_main.main()

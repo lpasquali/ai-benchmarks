@@ -168,6 +168,7 @@ def test_load_from_chains_csv_extracts_model(tmp_chains_csv: Path):
 
 def test_load_from_scopes_csv_uses_default_model(tmp_csv: Path):
     from rune_bench.catalog.loader import _DEFAULT_MODEL
+
     catalog = load_from_csv(tmp_csv)
     assert catalog.scopes[0].model == _DEFAULT_MODEL
 
@@ -250,6 +251,7 @@ def test_merge_chains_missing_yaml_raises(tmp_csv: Path, tmp_path: Path):
 def test_load_from_yaml_scope(tmp_scopes_yaml: Path):
     pytest.importorskip("yaml", reason="pyyaml not installed")
     from rune_bench.catalog import load_from_yaml
+
     catalog = load_from_yaml(tmp_scopes_yaml)
     assert len(catalog.scopes) == 1
     scope = catalog.scopes[0]
@@ -261,6 +263,7 @@ def test_load_from_yaml_scope(tmp_scopes_yaml: Path):
 def test_load_from_yaml_agent(tmp_scopes_yaml: Path):
     pytest.importorskip("yaml", reason="pyyaml not installed")
     from rune_bench.catalog import load_from_yaml
+
     catalog = load_from_yaml(tmp_scopes_yaml)
     agent = catalog.scopes[0].agents[0]
     assert agent.name == "YamlAgent"
@@ -271,6 +274,7 @@ def test_load_from_yaml_agent(tmp_scopes_yaml: Path):
 def test_load_from_yaml_with_chain(tmp_scopes_yaml: Path, tmp_path: Path):
     pytest.importorskip("yaml", reason="pyyaml not installed")
     from rune_bench.catalog import load_from_yaml
+
     chain_yaml = tmp_path / "chains.yaml"
     chain_yaml.write_text(
         textwrap.dedent("""\
@@ -481,6 +485,7 @@ def test_chain_spec_step_by_id_none_when_missing(tmp_csv: Path, tmp_chain_yaml: 
 
 def test_rune_bench_getattr_lazy_loads_vastai():
     import rune_bench
+
     # Should return the class without error
     klass = rune_bench.OfferFinder
     assert klass.__name__ == "OfferFinder"
@@ -488,17 +493,20 @@ def test_rune_bench_getattr_lazy_loads_vastai():
 
 def test_rune_bench_getattr_raises_for_unknown():
     import rune_bench
+
     with pytest.raises(AttributeError):
         _ = rune_bench.NonExistentThing
 
 
 def test_resources_getattr_lazy_loads_vastai_provider():
     import rune_bench.resources as resources_pkg
+
     klass = resources_pkg.VastAIProvider
     assert klass.__name__ == "VastAIProvider"
 
 
 def test_resources_getattr_raises_for_unknown():
     import rune_bench.resources as resources_pkg
+
     with pytest.raises(AttributeError):
         _ = resources_pkg.NonExistentThing

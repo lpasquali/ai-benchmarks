@@ -20,7 +20,9 @@ import rune_bench.drivers.perplexity.__main__ as perplexity_main
 # ---------------------------------------------------------------------------
 
 
-def test_handle_ask_returns_answer_and_citations(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_handle_ask_returns_answer_and_citations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     citations = ["https://example.com/a", "https://example.com/b"]
     monkeypatch.setenv("RUNE_PERPLEXITY_API_KEY", "test-key")
 
@@ -38,7 +40,9 @@ def test_handle_ask_returns_answer_and_citations(monkeypatch: pytest.MonkeyPatch
     assert result["citations"] == citations
 
 
-def test_handle_ask_defaults_model_to_sonar_pro(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_handle_ask_defaults_model_to_sonar_pro(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     captured: dict = {}
 
     def fake_request(url, *, method=None, payload=None, action=None, headers=None):
@@ -85,13 +89,12 @@ def test_handle_ask_citations_absent(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result["citations"] == []
 
 
-
-
 def test_handle_ask_empty_model_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     """When model is empty string, raise RuntimeError."""
     monkeypatch.setenv("RUNE_PERPLEXITY_API_KEY", "test-key")
     with pytest.raises(RuntimeError, match="non-empty string"):
         perplexity_main._handle_ask({"question": "q", "model": "   "})
+
 
 # ---------------------------------------------------------------------------
 # _handle_ask — missing API key
@@ -124,15 +127,22 @@ def test_handle_info_returns_driver_metadata() -> None:
 def test_main_processes_ask_request(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:
-    monkeypatch.setattr(perplexity_main, "_handle_ask", lambda p: {"answer": "great", "citations": []})
+    monkeypatch.setattr(
+        perplexity_main, "_handle_ask", lambda p: {"answer": "great", "citations": []}
+    )
     monkeypatch.setattr(
         perplexity_main.sys,
         "stdin",
-        io.StringIO(json.dumps({
-            "action": "ask",
-            "params": {"question": "q"},
-            "id": "test-id",
-        }) + "\n"),
+        io.StringIO(
+            json.dumps(
+                {
+                    "action": "ask",
+                    "params": {"question": "q"},
+                    "id": "test-id",
+                }
+            )
+            + "\n"
+        ),
     )
 
     perplexity_main.main()

@@ -23,6 +23,7 @@ from rune_bench.common.config import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _write_yaml(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content)
@@ -31,6 +32,7 @@ def _write_yaml(path: Path, content: str) -> None:
 # ---------------------------------------------------------------------------
 # load_config — no config files
 # ---------------------------------------------------------------------------
+
 
 class TestLoadConfigNoFiles:
     def test_returns_empty_dict_when_no_files(self, tmp_path, monkeypatch):
@@ -49,17 +51,21 @@ class TestLoadConfigNoFiles:
 # load_config — defaults only
 # ---------------------------------------------------------------------------
 
+
 class TestLoadConfigDefaults:
     def test_injects_defaults_into_env(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         monkeypatch.delenv("RUNE_MODEL", raising=False)
         monkeypatch.delenv("RUNE_VASTAI", raising=False)
-        _write_yaml(tmp_path / "rune.yaml", """\
+        _write_yaml(
+            tmp_path / "rune.yaml",
+            """\
 version: "1"
 defaults:
   model: mixtral:8x7b
   vastai: false
-""")
+""",
+        )
         result = load_config()
         assert result["model"] == "mixtral:8x7b"
         assert os.environ["RUNE_MODEL"] == "mixtral:8x7b"
@@ -68,33 +74,42 @@ defaults:
     def test_bool_true_becomes_1(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         monkeypatch.delenv("RUNE_BACKEND_WARMUP", raising=False)
-        _write_yaml(tmp_path / "rune.yaml", """\
+        _write_yaml(
+            tmp_path / "rune.yaml",
+            """\
 version: "1"
 defaults:
   backend_warmup: true
-""")
+""",
+        )
         load_config()
         assert os.environ["RUNE_BACKEND_WARMUP"] == "1"
 
     def test_bool_false_becomes_0(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         monkeypatch.delenv("RUNE_VASTAI", raising=False)
-        _write_yaml(tmp_path / "rune.yaml", """\
+        _write_yaml(
+            tmp_path / "rune.yaml",
+            """\
 version: "1"
 defaults:
   vastai: false
-""")
+""",
+        )
         load_config()
         assert os.environ["RUNE_VASTAI"] == "0"
 
     def test_numeric_value_is_stringified(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         monkeypatch.delenv("RUNE_VASTAI_MAX_DPH", raising=False)
-        _write_yaml(tmp_path / "rune.yaml", """\
+        _write_yaml(
+            tmp_path / "rune.yaml",
+            """\
 version: "1"
 defaults:
   max_dph: 3.5
-""")
+""",
+        )
         load_config()
         assert os.environ["RUNE_VASTAI_MAX_DPH"] == "3.5"
 
@@ -102,6 +117,7 @@ defaults:
 # ---------------------------------------------------------------------------
 # load_config — profile activation
 # ---------------------------------------------------------------------------
+
 
 class TestLoadConfigProfiles:
     _CONFIG = """\
@@ -153,15 +169,19 @@ profiles:
 # Precedence — env vars beat YAML
 # ---------------------------------------------------------------------------
 
+
 class TestPrecedence:
     def test_existing_env_var_wins_over_yaml(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("RUNE_MODEL", "llama3.1:405b")
-        _write_yaml(tmp_path / "rune.yaml", """\
+        _write_yaml(
+            tmp_path / "rune.yaml",
+            """\
 version: "1"
 defaults:
   model: llama3.1:8b
-""")
+""",
+        )
         load_config()
         # Env var was already set — yaml must not override it.
         assert os.environ["RUNE_MODEL"] == "llama3.1:405b"
@@ -169,14 +189,17 @@ defaults:
     def test_profile_env_var_still_wins_over_yaml_profile(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("RUNE_VASTAI_MAX_DPH", "99.0")
-        _write_yaml(tmp_path / "rune.yaml", """\
+        _write_yaml(
+            tmp_path / "rune.yaml",
+            """\
 version: "1"
 defaults:
   max_dph: 3.0
 profiles:
   prod:
     max_dph: 5.0
-""")
+""",
+        )
         load_config("prod")
         assert os.environ["RUNE_VASTAI_MAX_DPH"] == "99.0"
 
@@ -185,6 +208,7 @@ profiles:
 # Global vs project config file merging
 # ---------------------------------------------------------------------------
 
+
 class TestConfigFileMerging:
     def test_project_overrides_global(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -192,17 +216,23 @@ class TestConfigFileMerging:
 
         global_dir = tmp_path / ".rune"
         global_cfg = global_dir / "config.yaml"
-        _write_yaml(global_cfg, """\
+        _write_yaml(
+            global_cfg,
+            """\
 version: "1"
 defaults:
   model: llama3.1:70b
-""")
+""",
+        )
 
-        _write_yaml(tmp_path / "rune.yaml", """\
+        _write_yaml(
+            tmp_path / "rune.yaml",
+            """\
 version: "1"
 defaults:
   model: mixtral:8x7b
-""")
+""",
+        )
 
         with patch("rune_bench.common.config._GLOBAL_CANDIDATES", [global_cfg]):
             result = load_config()
@@ -215,11 +245,14 @@ defaults:
 
         global_dir = tmp_path / ".rune"
         global_cfg = global_dir / "config.yaml"
-        _write_yaml(global_cfg, """\
+        _write_yaml(
+            global_cfg,
+            """\
 version: "1"
 defaults:
   model: command-r:35b
-""")
+""",
+        )
 
         with patch("rune_bench.common.config._GLOBAL_CANDIDATES", [global_cfg]):
             result = load_config()
@@ -230,6 +263,7 @@ defaults:
 # ---------------------------------------------------------------------------
 # Error handling
 # ---------------------------------------------------------------------------
+
 
 class TestErrorHandling:
     def test_invalid_yaml_raises_value_error(self, tmp_path, monkeypatch):
@@ -261,9 +295,12 @@ class TestErrorHandling:
 # peek_profile_from_argv
 # ---------------------------------------------------------------------------
 
+
 class TestPeekProfileFromArgv:
     def test_reads_profile_from_argv_space_separated(self, monkeypatch):
-        monkeypatch.setattr("sys.argv", ["rune", "--profile", "production", "run-benchmark"])
+        monkeypatch.setattr(
+            "sys.argv", ["rune", "--profile", "production", "run-benchmark"]
+        )
         monkeypatch.delenv("RUNE_PROFILE", raising=False)
         assert peek_profile_from_argv() == "production"
 
@@ -298,6 +335,7 @@ class TestPeekProfileFromArgv:
 # get_loaded_config_files
 # ---------------------------------------------------------------------------
 
+
 class TestGetLoadedConfigFiles:
     def test_returns_existing_project_file(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -314,6 +352,7 @@ class TestGetLoadedConfigFiles:
 # ---------------------------------------------------------------------------
 # _to_env_str helper
 # ---------------------------------------------------------------------------
+
 
 class TestToEnvStr:
     def test_bool_true(self):
@@ -336,9 +375,11 @@ class TestToEnvStr:
 # INIT_TEMPLATE sanity
 # ---------------------------------------------------------------------------
 
+
 class TestInitTemplate:
     def test_template_is_valid_yaml(self):
         import yaml
+
         data = yaml.safe_load(INIT_TEMPLATE)
         assert isinstance(data, dict)
         assert "defaults" in data
@@ -346,6 +387,7 @@ class TestInitTemplate:
 
     def test_template_has_expected_profiles(self):
         import yaml
+
         data = yaml.safe_load(INIT_TEMPLATE)
         profiles = data["profiles"]
         for expected in ("production", "staging", "local", "ci", "test"):
@@ -353,11 +395,26 @@ class TestInitTemplate:
 
     def test_field_env_map_covers_all_known_keys(self):
         known_keys = {
-            "backend", "api_base_url", "api_tenant", "debug", "insecure",
-            "api_host", "api_port",
-            "vastai", "template_hash", "max_dph", "min_dph", "reliability", "vastai_stop_instance",
-            "backend_type", "backend_url", "backend_warmup", "backend_warmup_timeout",
-            "question", "model", "kubeconfig",
+            "backend",
+            "api_base_url",
+            "api_tenant",
+            "debug",
+            "insecure",
+            "api_host",
+            "api_port",
+            "vastai",
+            "template_hash",
+            "max_dph",
+            "min_dph",
+            "reliability",
+            "vastai_stop_instance",
+            "backend_type",
+            "backend_url",
+            "backend_warmup",
+            "backend_warmup_timeout",
+            "question",
+            "model",
+            "kubeconfig",
         }
         assert set(_FIELD_ENV_MAP.keys()) == known_keys
 
@@ -366,12 +423,14 @@ class TestInitTemplate:
 # CLI commands: rune init / rune config
 # ---------------------------------------------------------------------------
 
+
 class TestCliInitConfig:
     """Integration tests for the rune init and rune config CLI commands."""
 
     def test_init_creates_rune_yaml(self, tmp_path, monkeypatch):
         from typer.testing import CliRunner
         import rune
+
         runner = CliRunner()
         monkeypatch.chdir(tmp_path)
         result = runner.invoke(rune.app, ["init"])
@@ -382,6 +441,7 @@ class TestCliInitConfig:
     def test_init_refuses_to_overwrite_without_force(self, tmp_path, monkeypatch):
         from typer.testing import CliRunner
         import rune
+
         runner = CliRunner()
         monkeypatch.chdir(tmp_path)
         (tmp_path / "rune.yaml").write_text("# existing\n")
@@ -394,6 +454,7 @@ class TestCliInitConfig:
     def test_init_force_overwrites(self, tmp_path, monkeypatch):
         from typer.testing import CliRunner
         import rune
+
         runner = CliRunner()
         monkeypatch.chdir(tmp_path)
         (tmp_path / "rune.yaml").write_text("# old\n")
@@ -406,6 +467,7 @@ class TestCliInitConfig:
     def test_config_no_yaml_prints_defaults(self, tmp_path, monkeypatch):
         from typer.testing import CliRunner
         import rune
+
         runner = CliRunner()
         monkeypatch.chdir(tmp_path)
         result = runner.invoke(rune.app, ["config"])
@@ -416,11 +478,14 @@ class TestCliInitConfig:
     def test_config_with_yaml_shows_values(self, tmp_path, monkeypatch):
         from typer.testing import CliRunner
         import rune
+
         runner = CliRunner()
         monkeypatch.chdir(tmp_path)
         (tmp_path / "rune.yaml").write_text(
             "defaults:\n  model: llama3.1:70b\n  question: test-q\n"
         )
-        with patch("rune_bench.common.config._GLOBAL_CANDIDATES", [tmp_path / "rune.yaml"]):
+        with patch(
+            "rune_bench.common.config._GLOBAL_CANDIDATES", [tmp_path / "rune.yaml"]
+        ):
             result = runner.invoke(rune.app, ["config"])
         assert result.exit_code == 0, result.output

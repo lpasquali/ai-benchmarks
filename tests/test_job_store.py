@@ -2,11 +2,13 @@
 import pytest
 from rune_bench.job_store import JobStore
 
+
 @pytest.fixture
 def store(tmp_path):
     storage = JobStore(tmp_path / "jobs.db")
     yield storage
     storage.close()
+
 
 def test_job_store_idempotency_is_tenant_scoped(store):
     job_id_1, created_1 = store.create_job(
@@ -140,8 +142,12 @@ def test_chain_state_transition_propagates_failure_to_overall(store):
 def test_chain_state_transition_all_success_overall_success(store):
     nodes, edges = _two_node_chain()
     store.record_chain_initialized(job_id="job-1", nodes=nodes, edges=edges)
-    store.record_chain_node_transition(job_id="job-1", node_id="draft", status="success")
-    store.record_chain_node_transition(job_id="job-1", node_id="review", status="success")
+    store.record_chain_node_transition(
+        job_id="job-1", node_id="draft", status="success"
+    )
+    store.record_chain_node_transition(
+        job_id="job-1", node_id="review", status="success"
+    )
     state = store.get_chain_state("job-1")
     assert state is not None
     assert state["overall_status"] == "success"
@@ -150,8 +156,12 @@ def test_chain_state_transition_all_success_overall_success(store):
 def test_chain_state_transition_all_skipped_overall_skipped(store):
     nodes, edges = _two_node_chain()
     store.record_chain_initialized(job_id="job-1", nodes=nodes, edges=edges)
-    store.record_chain_node_transition(job_id="job-1", node_id="draft", status="skipped")
-    store.record_chain_node_transition(job_id="job-1", node_id="review", status="skipped")
+    store.record_chain_node_transition(
+        job_id="job-1", node_id="draft", status="skipped"
+    )
+    store.record_chain_node_transition(
+        job_id="job-1", node_id="review", status="skipped"
+    )
     state = store.get_chain_state("job-1")
     assert state is not None
     assert state["overall_status"] == "skipped"

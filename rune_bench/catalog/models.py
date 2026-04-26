@@ -24,12 +24,14 @@ class AgentSpec:
     """One agent entry within a scope."""
 
     name: str
-    rank: int              # 1 = best in scope
-    rating: float          # 0.0–5.0 community rating
-    capability: str        # one-line description of the agent's agentic ability
-    questions: list[QuestionSpec]  # Q1 (technical), Q2 (investigation), Q3 (optimisation)
-    github: str            # link to docs / repo
-    ecosystem: str         # e.g. "CNCF Sandbox", "OSS Framework"
+    rank: int  # 1 = best in scope
+    rating: float  # 0.0–5.0 community rating
+    capability: str  # one-line description of the agent's agentic ability
+    questions: list[
+        QuestionSpec
+    ]  # Q1 (technical), Q2 (investigation), Q3 (optimisation)
+    github: str  # link to docs / repo
+    ecosystem: str  # e.g. "CNCF Sandbox", "OSS Framework"
 
 
 @dataclass
@@ -42,9 +44,9 @@ class ChainStep:
     """
 
     id: str
-    agent: str             # must match an AgentSpec.name in the same scope
-    role: str              # human label, e.g. "Legal Analyst", "Orchestrator"
-    question: str          # question asked at this step in the chain context
+    agent: str  # must match an AgentSpec.name in the same scope
+    role: str  # human label, e.g. "Legal Analyst", "Orchestrator"
+    question: str  # question asked at this step in the chain context
     input_from: str | None = None  # predecessor step id; None = entry point
 
 
@@ -52,9 +54,9 @@ class ChainStep:
 class ChainSpec:
     """Full pipeline definition for a chain-mode scope."""
 
-    scope: str             # must match a ScopeSpec.name
-    name: str              # human name, e.g. "NDA Processing Pipeline"
-    trigger: str           # the top-level task description that kicks off the chain
+    scope: str  # must match a ScopeSpec.name
+    name: str  # human name, e.g. "NDA Processing Pipeline"
+    trigger: str  # the top-level task description that kicks off the chain
     steps: list[ChainStep]
 
     def entry_point(self) -> ChainStep:
@@ -62,7 +64,9 @@ class ChainSpec:
         for step in self.steps:
             if step.input_from is None:
                 return step
-        raise ValueError(f"Chain {self.name!r} has no entry point (no step with input_from=null)")
+        raise ValueError(
+            f"Chain {self.name!r} has no entry point (no step with input_from=null)"
+        )
 
     def step_by_id(self, step_id: str) -> ChainStep | None:
         return next((s for s in self.steps if s.id == step_id), None)
@@ -86,9 +90,9 @@ class ScopeSpec:
     three questions) or ``"chain"`` (agents collaborate in a pipeline).
     """
 
-    name: str              # e.g. "SRE", "Legal/Ops"
-    model: str             # default Ollama model for this scope
-    mode: str              # "atomic" | "chain"
+    name: str  # e.g. "SRE", "Legal/Ops"
+    model: str  # default Ollama model for this scope
+    mode: str  # "atomic" | "chain"
     agents: list[AgentSpec]
     chain: ChainSpec | None = None  # populated when mode="chain"
 

@@ -45,7 +45,9 @@ class OllamaClient:
                 "Expected format like http://host:11434"
             )
 
-    def _make_request(self, endpoint: str, *, method: str, payload: dict | None, action: str) -> dict:
+    def _make_request(
+        self, endpoint: str, *, method: str, payload: dict | None, action: str
+    ) -> dict:
         url = self.base_url.rstrip("/") + endpoint
         return make_http_request(
             url,
@@ -58,19 +60,31 @@ class OllamaClient:
 
     def get_available_models(self) -> list[str]:
         """List all models available on the Ollama server."""
-        data = self._make_request("/api/tags", method="GET", payload=None, action="query available models")
+        data = self._make_request(
+            "/api/tags", method="GET", payload=None, action="query available models"
+        )
         models = data.get("models")
         if not isinstance(models, list):
-            raise RuntimeError(f"Ollama server at {self.base_url} returned an unexpected /api/tags payload")
-        names = [name for item in models if isinstance(item, dict) and isinstance((name := item.get("name")), str)]
+            raise RuntimeError(
+                f"Ollama server at {self.base_url} returned an unexpected /api/tags payload"
+            )
+        names = [
+            name
+            for item in models
+            if isinstance(item, dict) and isinstance((name := item.get("name")), str)
+        ]
         return sorted(names)
 
     def get_running_models(self) -> set[str]:
         """List all models currently loaded in memory on the Ollama server."""
-        data = self._make_request("/api/ps", method="GET", payload=None, action="list running models")
+        data = self._make_request(
+            "/api/ps", method="GET", payload=None, action="list running models"
+        )
         models = data.get("models")
         if not isinstance(models, list):
-            raise RuntimeError(f"Ollama server at {self.base_url} returned an unexpected /api/ps payload")
+            raise RuntimeError(
+                f"Ollama server at {self.base_url} returned an unexpected /api/ps payload"
+            )
         names = set()
         for item in models:
             if isinstance(item, dict) and isinstance(item.get("name"), str):
@@ -115,13 +129,28 @@ class OllamaClient:
 
     def load_model(self, model_name: str, *, keep_alive: str = "30m") -> None:
         """Load a model into memory on the Ollama server."""
-        payload = {"model": model_name, "prompt": "", "stream": False, "keep_alive": keep_alive}
-        self._make_request("/api/generate", method="POST", payload=payload, action=f"load model {model_name}")
+        payload = {
+            "model": model_name,
+            "prompt": "",
+            "stream": False,
+            "keep_alive": keep_alive,
+        }
+        self._make_request(
+            "/api/generate",
+            method="POST",
+            payload=payload,
+            action=f"load model {model_name}",
+        )
 
     def unload_model(self, model_name: str) -> None:
         """Unload a model from memory on the Ollama server."""
         payload = {"model": model_name, "prompt": "", "stream": False, "keep_alive": 0}
-        self._make_request("/api/generate", method="POST", payload=payload, action=f"unload model {model_name}")
+        self._make_request(
+            "/api/generate",
+            method="POST",
+            payload=payload,
+            action=f"unload model {model_name}",
+        )
 
 
 @dataclass
@@ -168,7 +197,9 @@ class OllamaModelManager:
 
     def _unload_conflicting_models(self, target_model: str) -> None:
         running = self.client.get_running_models()
-        for model in sorted(name for name in running if not self._model_in_running(target_model, {name})):
+        for model in sorted(
+            name for name in running if not self._model_in_running(target_model, {name})
+        ):
             self.client.unload_model(model)
 
     @staticmethod
@@ -237,7 +268,7 @@ class OllamaBackend:
                 val = str(svc.get(key, "")) if svc.get(key) else ""
                 if not val:
                     continue
-                
+
                 url_to_parse = val if "://" in val else f"http://{val}"
                 try:
                     if urlparse(url_to_parse).port == 11434:

@@ -50,7 +50,9 @@ _SAMPLE_ALERTS = [
 # ---------------------------------------------------------------------------
 
 
-def test_handle_ask_raises_when_api_key_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_handle_ask_raises_when_api_key_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("RUNE_PAGERDUTY_API_KEY", raising=False)
     with pytest.raises(RuntimeError, match="RUNE_PAGERDUTY_API_KEY"):
         pd_main._handle_ask({"question": "triage", "model": "m"})
@@ -69,11 +71,13 @@ def test_handle_ask_fetches_incidents(monkeypatch: pytest.MonkeyPatch) -> None:
         "/incidents/P1234/alerts": {"alerts": _SAMPLE_ALERTS},
         "/incidents/P5678/alerts": {"alerts": []},
     }
+
     def fake_request(url, **kwargs):
         for key, payload in responses.items():
             if key in url:
                 return payload
         raise RuntimeError(f"Unmocked URL: {url}")
+
     monkeypatch.setattr(pd_main, "make_http_request", fake_request)
 
     result = pd_main._handle_ask({"question": "triage", "model": ""})
@@ -99,18 +103,22 @@ def test_handle_ask_calls_ollama_for_synthesis(monkeypatch: pytest.MonkeyPatch) 
         "/incidents/P5678/alerts": {"alerts": []},
         "/api/generate": {"response": "Triage: CPU incident is P1, disk is P2."},
     }
+
     def fake_request(url, **kwargs):
         for key, payload in responses.items():
             if key in url:
                 return payload
         raise RuntimeError(f"Unmocked URL: {url}")
+
     monkeypatch.setattr(pd_main, "make_http_request", fake_request)
 
-    result = pd_main._handle_ask({
-        "question": "what should I fix first?",
-        "model": "llama3.1:8b",
-        "backend_url": "http://ollama:11434",
-    })
+    result = pd_main._handle_ask(
+        {
+            "question": "what should I fix first?",
+            "model": "llama3.1:8b",
+            "backend_url": "http://ollama:11434",
+        }
+    )
 
     assert result["answer"] == "Triage: CPU incident is P1, disk is P2."
     assert len(result["incidents"]) == 2
@@ -121,7 +129,9 @@ def test_handle_ask_calls_ollama_for_synthesis(monkeypatch: pytest.MonkeyPatch) 
 # ---------------------------------------------------------------------------
 
 
-def test_handle_ask_returns_raw_data_without_llm(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_handle_ask_returns_raw_data_without_llm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("RUNE_PAGERDUTY_API_KEY", "test-token")
 
     responses = {
@@ -129,11 +139,13 @@ def test_handle_ask_returns_raw_data_without_llm(monkeypatch: pytest.MonkeyPatch
         "/incidents/P1234/alerts": {"alerts": _SAMPLE_ALERTS},
         "/incidents/P5678/alerts": {"alerts": []},
     }
+
     def fake_request(url, **kwargs):
         for key, payload in responses.items():
             if key in url:
                 return payload
         raise RuntimeError(f"Unmocked URL: {url}")
+
     monkeypatch.setattr(pd_main, "make_http_request", fake_request)
 
     # No model or backend_url — should return formatted raw data
@@ -157,6 +169,7 @@ def test_handle_ask_no_incidents(monkeypatch: pytest.MonkeyPatch) -> None:
         if "/incidents" in url:
             return {"incidents": []}
         raise RuntimeError(f"Unmocked URL: {url}")
+
     monkeypatch.setattr(pd_main, "make_http_request", fake_request)
 
     result = pd_main._handle_ask({"question": "any issues?", "model": ""})
@@ -182,16 +195,25 @@ def test_handle_info_returns_driver_metadata() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_main_processes_ask_request(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
-    monkeypatch.setattr(pd_main, "_handle_ask", lambda p: {"answer": "triage done", "incidents": []})
+def test_main_processes_ask_request(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    monkeypatch.setattr(
+        pd_main, "_handle_ask", lambda p: {"answer": "triage done", "incidents": []}
+    )
     monkeypatch.setattr(
         pd_main.sys,
         "stdin",
-        io.StringIO(json.dumps({
-            "action": "ask",
-            "params": {"question": "q", "model": "m"},
-            "id": "test-id",
-        }) + "\n"),
+        io.StringIO(
+            json.dumps(
+                {
+                    "action": "ask",
+                    "params": {"question": "q", "model": "m"},
+                    "id": "test-id",
+                }
+            )
+            + "\n"
+        ),
     )
 
     pd_main.main()

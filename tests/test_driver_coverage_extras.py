@@ -27,19 +27,25 @@ def test_pentestgpt_normalize_model_strips_prefix() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_pentestgpt_authorization_blocks_unlisted_target(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_pentestgpt_authorization_blocks_unlisted_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("RUNE_PENTESTGPT_ALLOWED_TARGETS", "example.com")
     with pytest.raises(RuntimeError, match="not in RUNE_PENTESTGPT_ALLOWED_TARGETS"):
         ptgpt_main._check_authorization("scan https://evil.com/path")
 
 
-def test_pentestgpt_authorization_allows_listed_target(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_pentestgpt_authorization_allows_listed_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("RUNE_PENTESTGPT_ALLOWED_TARGETS", "example.com")
     # Should not raise
     ptgpt_main._check_authorization("scan https://example.com/path")
 
 
-def test_pentestgpt_authorization_skips_when_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_pentestgpt_authorization_skips_when_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("RUNE_PENTESTGPT_ALLOWED_TARGETS", raising=False)
     # Should not raise
     ptgpt_main._check_authorization("scan https://evil.com")
@@ -76,7 +82,9 @@ def test_dagger_load_pipeline_missing() -> None:
         dagger_main._load_pipeline_command("nonexistent_pipeline", "test")
 
 
-def test_dagger_main_loop_info(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_dagger_main_loop_info(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     monkeypatch.setattr(
         dagger_main.sys,
         "stdin",
@@ -88,7 +96,9 @@ def test_dagger_main_loop_info(monkeypatch: pytest.MonkeyPatch, capsys: pytest.C
     assert resp["result"]["name"] == "dagger"
 
 
-def test_dagger_main_loop_error(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+def test_dagger_main_loop_error(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
     monkeypatch.setattr(
         dagger_main.sys,
         "stdin",

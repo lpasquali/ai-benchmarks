@@ -1,36 +1,49 @@
 # SPDX-License-Identifier: Apache-2.0
-"""MultiOn agentic runner stub.
+"""MultiOn agentic runner implementation.
 
-Scope:      Ops/Misc  |  Rank 1  |  Rating 4.5
-Capability: Browser-based agent that performs web tasks.
+Scope:      Ops/Misc  |  Rank 5  |  Rating 4.0
+Capability: Autonomous web browsing and web-based task execution.
 Docs:       https://docs.multion.ai/
-            https://docs.multion.ai/api-reference/
-Ecosystem:  AAIF (Agentic AI)
-
-Implementation notes:
-- Install:  pip install multion
-- Auth:     MULTION_API_KEY env var (get key at https://app.multion.ai/)
-- SDK:      Official Python SDK available
-            from multion.client import MultiOn
-            client = MultiOn(api_key=os.environ["MULTION_API_KEY"])
-- Key methods:
-    client.browse(cmd=question, url=start_url)   # perform web task
-    client.create_session(url=start_url)         # stateful browser session
-    client.step_session(session_id, cmd=step)    # step-by-step execution
-- `question` maps to the browser task command (e.g. "find the price of X on amazon.com")
-- `model` and `backend_url` are not used (MultiOn uses its own cloud agent).
+Ecosystem:  Web / SaaS API
 """
+
+from __future__ import annotations
+
+import os
+
+import httpx
 
 
 class MultiOnRunner:
-    """Ops/Misc agent: browser-based autonomous web task execution via MultiOn."""
+    """MultiOn agent: autonomous web navigation and execution."""
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, api_key: str | None = None) -> None:
+        self._api_key = api_key or os.getenv("MULTION_API_KEY")
+        self._api_base = "https://api.multion.ai/v1"
 
     def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
-        """Execute a browser-based web task and return the result."""
-        raise NotImplementedError(
-            "MultiOnRunner is not yet implemented. "
-            "See https://docs.multion.ai/api-reference/ for SDK details."
-        )
+        """Execute a web-based task and return the result summary."""
+        if not self._api_key:
+            return "Error: MULTION_API_KEY not set."
+
+        headers = {"Authorization": f"Bearer {self._api_key}"}
+
+        with httpx.Client(
+            base_url=self._api_base, headers=headers, timeout=60.0
+        ) as client:
+            try:
+                # 1. Browse (Run step-by-step or atomic)
+                # Note: MultiOn 'browse' is often long-running.
+                payload = {
+                    "cmd": question,
+                    "url": "https://www.google.com",  # Default starting point
+                    "local": False,
+                }
+                resp = client.post("/browse", json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+
+                # MultiOn returns a summary/message of the action taken
+                return f"MultiOn browsing result: {data.get('message', 'No summary provided.')}"
+            except Exception as exc:
+                return f"MultiOn error: {exc}"

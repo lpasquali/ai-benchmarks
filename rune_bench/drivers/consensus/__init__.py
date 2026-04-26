@@ -34,8 +34,12 @@ class ConsensusDriverClient:
         *,
         transport: DriverTransport | None = None,
     ) -> None:
-        self._transport: DriverTransport = transport or make_driver_transport("consensus")
-        self._async_transport: AsyncDriverTransport = make_async_driver_transport("consensus")
+        self._transport: DriverTransport = transport or make_driver_transport(
+            "consensus"
+        )
+        self._async_transport: AsyncDriverTransport = make_async_driver_transport(
+            "consensus"
+        )
 
     def ask(
         self,
@@ -151,8 +155,6 @@ class ConsensusDriverClient:
             telemetry=self._parse_telemetry(result.get("telemetry")),
         )
 
-
-
     def _parse_telemetry(self, raw: dict | None) -> RunTelemetry | None:
         """Parse raw telemetry dict into a RunTelemetry object."""
         if not raw:
@@ -170,7 +172,8 @@ class ConsensusDriverClient:
         latency_raw = raw.get("latency", [])
         latency = [
             LatencyPhase(phase=p.get("phase", "unknown"), ms=p.get("ms", 0))
-            for p in latency_raw if isinstance(p, dict)
+            for p in latency_raw
+            if isinstance(p, dict)
         ]
 
         return RunTelemetry(
@@ -178,5 +181,6 @@ class ConsensusDriverClient:
             latency=latency,
             cost_estimate_usd=raw.get("cost_estimate_usd"),
         )
+
 
 ConsensusRunner = ConsensusDriverClient

@@ -32,9 +32,7 @@ from rune_bench.common.http_client import make_http_request
 def _handle_ask(params: dict) -> dict:
     api_key = os.environ.get("RUNE_PERPLEXITY_API_KEY", "")
     if not api_key:
-        raise RuntimeError(
-            "RUNE_PERPLEXITY_API_KEY environment variable is not set"
-        )
+        raise RuntimeError("RUNE_PERPLEXITY_API_KEY environment variable is not set")
 
     model = params.get("model", "sonar-pro").strip()
     if not model:
@@ -90,7 +88,9 @@ def main() -> None:
             handler = getattr(current_module, handler_name)
 
             result = handler(params)
-            print(json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True)
+            print(
+                json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True
+            )
         except Exception as exc:  # noqa: BLE001
             print(
                 json.dumps({"status": "error", "error": str(exc), "id": req_id}),

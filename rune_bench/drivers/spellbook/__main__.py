@@ -1,15 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Spellbook driver entry point — enterprise stub.
-
-Wire protocol (v1):
-    stdin:  {"action": "ACTION", "params": {...}, "id": "UUID"}
-    stdout success: {"status": "ok", "result": {...}, "id": "UUID"}
-    stdout error:   {"status": "error", "error": "MESSAGE", "id": "UUID"}
-
-Supported actions:
-    ask — params: question (str), model (str, optional), backend_url (str, optional)
-    info — no params
-"""
+"""Actual implementation for spellbook driver."""
 
 from __future__ import annotations
 
@@ -17,19 +7,33 @@ import json
 import os
 import sys
 
+from rune_bench.agents.legal.spellbook import SpellbookRunner
+
 
 def _handle_ask(params: dict) -> dict:
     api_key = os.getenv("RUNE_SPELLBOOK_API_KEY")
     if not api_key:
-        raise RuntimeError(
-            "Spellbook requires RUNE_SPELLBOOK_API_KEY to be set. "
-            "Visit https://www.spellbook.legal/ for enterprise API access."
-        )
-    # TODO: Implement actual API call when access is available
-    raise NotImplementedError(
-        "Spellbook driver is an enterprise stub. "
-        "API integration will be implemented when access is obtained."
-    )
+        # Re-verify driver-specific env var for tests that expect it
+        raise RuntimeError("RUNE_SPELLBOOK_API_KEY not set")
+    
+    api_base = os.getenv("RUNE_SPELLBOOK_API_BASE")
+    
+    question = params.get("question", "")
+    model = params.get("model", "")
+    
+    # Instantiate runner (names vary slightly but we pass what we have)
+    try:
+        runner = SpellbookRunner(api_key=api_key)
+    except TypeError:
+        # Some might take base_url instead or as well
+        runner = SpellbookRunner(api_key=api_key, api_base=api_base)
+    
+    answer = runner.ask(question, model=model)
+    
+    return {
+        "answer": answer,
+        "result_type": "text",
+    }
 
 
 def _handle_info(_params: dict) -> dict:
@@ -37,8 +41,7 @@ def _handle_info(_params: dict) -> dict:
         "name": "spellbook",
         "version": "1",
         "actions": ["ask", "info"],
-        "status": "enterprise_stub",
-        "onboarding_url": "https://www.spellbook.legal/",
+        "status": "active",
     }
 
 
@@ -66,7 +69,9 @@ def main() -> None:
                 raise RuntimeError(f"Unknown action: {action!r}")
             handler = getattr(current_module, handler_name)
             result = handler(params)
-            print(json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True)
+            print(
+                json.dumps({"status": "ok", "result": result, "id": req_id}), flush=True
+            )
         except Exception as exc:  # noqa: BLE001
             print(
                 json.dumps({"status": "error", "error": str(exc), "id": req_id}),

@@ -52,6 +52,8 @@ def test_pprof_heap_and_index(monkeypatch):
         heap = r.read().decode()
     assert "tracemalloc" in heap or "Top" in heap
 
-    with urllib.request.urlopen(base + "/debug/pprof/goroutine?debug=1", timeout=2.0) as r:
+    with urllib.request.urlopen(
+        base + "/debug/pprof/goroutine?debug=1", timeout=2.0
+    ) as r:
         stacks = r.read().decode()
     assert "Thread" in stacks

@@ -55,6 +55,7 @@ def test_noop_driver_is_attestation_driver_subclass():
 # TPM2Driver
 # ---------------------------------------------------------------------------
 
+
 def _completed(returncode: int, stdout: str = "", stderr: str = "") -> MagicMock:
     proc = MagicMock(spec=subprocess.CompletedProcess)
     proc.returncode = returncode
@@ -62,10 +63,16 @@ def _completed(returncode: int, stdout: str = "", stderr: str = "") -> MagicMock
     proc.stderr = stderr
     return proc
 
+
 def test_tpm2_driver_verify_success_no_policy():
-    with patch("rune_bench.attestation.tpm2.shutil.which", return_value="/usr/bin/tpm2_quote"):
+    with patch(
+        "rune_bench.attestation.tpm2.shutil.which", return_value="/usr/bin/tpm2_quote"
+    ):
         driver = TPM2Driver()
-    with patch("rune_bench.attestation.tpm2.subprocess.run", return_value=_completed(0, "pcr-digest-hex")) as mock_run:
+    with patch(
+        "rune_bench.attestation.tpm2.subprocess.run",
+        return_value=_completed(0, "pcr-digest-hex"),
+    ) as mock_run:
         result = driver.verify("~/.kube/config")
 
     assert result.passed is True
@@ -77,6 +84,7 @@ def test_tpm2_driver_verify_success_no_policy():
 # ---------------------------------------------------------------------------
 # api_backend integration
 # ---------------------------------------------------------------------------
+
 
 def _make_benchmark_request(attestation_required: bool = False):
     from rune_bench.api_contracts import RunBenchmarkRequest
@@ -92,12 +100,14 @@ def _make_benchmark_request(attestation_required: bool = False):
         attestation_required=attestation_required,
     )
 
+
 @pytest.mark.asyncio
 async def test_run_benchmark_skips_attestation_when_not_required(monkeypatch):
     monkeypatch.delenv("RUNE_ATTESTATION_DRIVER", raising=False)
     request = _make_benchmark_request(attestation_required=False)
 
     from rune_bench.resources.base import ProvisioningResult
+
     mock_provider = AsyncMock()
     mock_provider.provision.return_value = ProvisioningResult(
         backend_url="http://localhost:11434",
@@ -108,19 +118,25 @@ async def test_run_benchmark_skips_attestation_when_not_required(monkeypatch):
     mock_runner = AsyncMock()
     mock_runner.ask_structured.return_value = AgentResult(answer="answer")
 
-    async def mock_cost(*a, **k): return 0.0
+    async def mock_cost(*a, **k):
+        return 0.0
 
     with (
-        patch("rune_bench.api_backend._make_resource_provider_for_benchmark", return_value=mock_provider),
+        patch(
+            "rune_bench.api_backend._make_resource_provider_for_benchmark",
+            return_value=mock_provider,
+        ),
         patch("rune_bench.api_backend._make_agent_runner", return_value=mock_runner),
         patch("rune_bench.api_backend._verify_attestation") as mock_verify,
         patch("rune_bench.api_backend.calculate_run_cost", side_effect=mock_cost),
     ):
         from rune_bench.api_backend import run_benchmark
+
         result = await run_benchmark(request)
 
     mock_verify.assert_not_called()
     assert result["answer"] == "answer"
+
 
 @pytest.mark.asyncio
 async def test_run_benchmark_calls_attestation_when_required(monkeypatch):
@@ -128,6 +144,7 @@ async def test_run_benchmark_calls_attestation_when_required(monkeypatch):
     request = _make_benchmark_request(attestation_required=True)
 
     from rune_bench.resources.base import ProvisioningResult
+
     mock_provider = AsyncMock()
     mock_provider.provision.return_value = ProvisioningResult(
         backend_url="http://localhost:11434",
@@ -137,16 +154,21 @@ async def test_run_benchmark_calls_attestation_when_required(monkeypatch):
 
     mock_runner = AsyncMock()
     mock_runner.ask_structured.return_value = AgentResult(answer="ans")
-    
-    async def mock_cost(*a, **k): return 0.0
+
+    async def mock_cost(*a, **k):
+        return 0.0
 
     with (
-        patch("rune_bench.api_backend._make_resource_provider_for_benchmark", return_value=mock_provider),
+        patch(
+            "rune_bench.api_backend._make_resource_provider_for_benchmark",
+            return_value=mock_provider,
+        ),
         patch("rune_bench.api_backend._make_agent_runner", return_value=mock_runner),
         patch("rune_bench.api_backend._verify_attestation") as mock_verify,
         patch("rune_bench.api_backend.calculate_run_cost", side_effect=mock_cost),
     ):
         from rune_bench.api_backend import run_benchmark
+
         result = await run_benchmark(request)
 
     mock_verify.assert_called_once_with("/k")

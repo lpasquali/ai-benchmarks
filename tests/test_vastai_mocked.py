@@ -86,7 +86,9 @@ def test_instance_manager_reuse_selects_best_running_candidate():
 
 def test_instance_manager_pull_model_requires_backend_url():
     with pytest.raises(RuntimeError, match="missing backend URL"):
-        InstanceManager(MagicMock()).pull_model(contract_id=123, model_name="foo:1", backend_url=None)
+        InstanceManager(MagicMock()).pull_model(
+            contract_id=123, model_name="foo:1", backend_url=None
+        )
 
 
 def test_instance_manager_pull_model_wraps_backend_errors(monkeypatch):
@@ -97,10 +99,14 @@ def test_instance_manager_pull_model_wraps_backend_errors(monkeypatch):
         backend.warmup.side_effect = RuntimeError("boom")
         return backend
 
-    monkeypatch.setattr("rune_bench.resources.vastai.instance.get_backend", _failing_get_backend)
+    monkeypatch.setattr(
+        "rune_bench.resources.vastai.instance.get_backend", _failing_get_backend
+    )
 
     with pytest.raises(RuntimeError, match="Model pull.*failed"):
-        manager.pull_model(contract_id=999, model_name="foo:1", backend_url="http://fake:11434")
+        manager.pull_model(
+            contract_id=999, model_name="foo:1", backend_url="http://fake:11434"
+        )
 
 
 def test_build_connection_details_extracts_direct_and_proxy_urls():
@@ -140,10 +146,18 @@ def test_destroy_instance_and_related_storage_is_fully_mockable(monkeypatch):
     destroyed_instances = []
     destroyed_volumes = []
 
-    monkeypatch.setattr(manager, "_destroy_instance", lambda cid: destroyed_instances.append(str(cid)))
-    monkeypatch.setattr(manager, "_destroy_volume", lambda vid: destroyed_volumes.append(str(vid)))
+    monkeypatch.setattr(
+        manager, "_destroy_instance", lambda cid: destroyed_instances.append(str(cid))
+    )
+    monkeypatch.setattr(
+        manager, "_destroy_volume", lambda vid: destroyed_volumes.append(str(vid))
+    )
     monkeypatch.setattr(manager, "_wait_until_instance_absent", lambda _cid: True)
-    monkeypatch.setattr(manager, "_verify_volumes_deleted", lambda vids: (True, f"deleted: {', '.join(vids)}"))
+    monkeypatch.setattr(
+        manager,
+        "_verify_volumes_deleted",
+        lambda vids: (True, f"deleted: {', '.join(vids)}"),
+    )
 
     result = manager.destroy_instance_and_related_storage(contract_id=123)
 

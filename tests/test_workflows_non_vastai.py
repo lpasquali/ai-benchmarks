@@ -5,7 +5,9 @@ import rune_bench.workflows as workflows
 
 
 def test_use_existing_backend_server(monkeypatch):
-    monkeypatch.setattr(workflows, "normalize_backend_url", lambda _: "http://localhost:11434")
+    monkeypatch.setattr(
+        workflows, "normalize_backend_url", lambda _: "http://localhost:11434"
+    )
     server = workflows.use_existing_backend_server("localhost:11434", "model:1")
     assert server.url == "http://localhost:11434"
     assert server.model_name == "model:1"
@@ -18,7 +20,9 @@ def test_list_backend_models(monkeypatch):
     mock_backend_class = MagicMock()
     mock_backend_class.return_value = fake_backend
     mock_backend_class.normalize_url.side_effect = lambda u: u
-    monkeypatch.setattr("rune_bench.common.backend_utils.OllamaBackend", mock_backend_class)
+    monkeypatch.setattr(
+        "rune_bench.common.backend_utils.OllamaBackend", mock_backend_class
+    )
     assert workflows.list_backend_models("http://localhost:11434") == ["a", "b"]
 
 
@@ -29,7 +33,9 @@ def test_list_running_backend_models(monkeypatch):
     mock_backend_class = MagicMock()
     mock_backend_class.return_value = fake_backend
     mock_backend_class.normalize_url.side_effect = lambda u: u
-    monkeypatch.setattr("rune_bench.common.backend_utils.OllamaBackend", mock_backend_class)
+    monkeypatch.setattr(
+        "rune_bench.common.backend_utils.OllamaBackend", mock_backend_class
+    )
     assert workflows.list_running_backend_models("http://localhost:11434") == ["a"]
 
 
@@ -40,7 +46,9 @@ def test_warmup_backend_model_normalizes_before_warmup(monkeypatch):
     mock_backend_class = MagicMock()
     mock_backend_class.return_value = fake_backend
     mock_backend_class.normalize_url.side_effect = lambda u: u
-    monkeypatch.setattr("rune_bench.common.backend_utils.OllamaBackend", mock_backend_class)
+    monkeypatch.setattr(
+        "rune_bench.common.backend_utils.OllamaBackend", mock_backend_class
+    )
 
     out = workflows.warmup_backend_model("http://localhost:11434", "ollama_chat/foo:1")
 
@@ -61,7 +69,11 @@ def test_extract_ollama_service_url_prefers_direct_then_proxy():
         ssh_port=None,
         machine_id=None,
         service_urls=[
-            {"name": "something", "direct": "http://x:8080", "proxy": "https://proxy/x/8080"},
+            {
+                "name": "something",
+                "direct": "http://x:8080",
+                "proxy": "https://proxy/x/8080",
+            },
             {"name": "ollama", "direct": "http://x:11434", "proxy": None},
         ],
     )
@@ -74,7 +86,11 @@ def test_extract_ollama_service_url_prefers_direct_then_proxy():
         ssh_port=None,
         machine_id=None,
         service_urls=[
-            {"name": "ollama", "direct": "http://x:8080", "proxy": "https://proxy:11434/x"},
+            {
+                "name": "ollama",
+                "direct": "http://x:8080",
+                "proxy": "https://proxy:11434/x",
+            },
         ],
     )
     assert workflows._extract_ollama_service_url(details2) == "https://proxy:11434/x"
@@ -153,7 +169,12 @@ def test_run_chain_workflow_persists_full_state_via_store(tmp_path):
         agent.ask_async = AsyncMock(return_value=AgentResult(answer="ok"))
         steps = [
             ChainStep(name="draft", agent=agent, question_template="{topic}"),
-            ChainStep(name="review", agent=agent, question_template="{draft}", dependencies=["draft"]),
+            ChainStep(
+                name="review",
+                agent=agent,
+                question_template="{draft}",
+                dependencies=["draft"],
+            ),
         ]
 
         result = asyncio.run(
@@ -190,7 +211,9 @@ def test_run_chain_workflow_records_failure_in_store(tmp_path):
     try:
         failing_agent = MagicMock()
         failing_agent.ask_async = AsyncMock(side_effect=RuntimeError("boom"))
-        steps = [ChainStep(name="only", agent=failing_agent, question_template="{topic}")]
+        steps = [
+            ChainStep(name="only", agent=failing_agent, question_template="{topic}")
+        ]
 
         with _pytest.raises(RuntimeError, match="boom"):
             asyncio.run(

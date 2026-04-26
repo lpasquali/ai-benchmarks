@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+
 try:
     import psycopg  # noqa: F401
 except ImportError:

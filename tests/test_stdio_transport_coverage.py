@@ -5,41 +5,44 @@ import json
 from unittest.mock import MagicMock, patch, AsyncMock
 from rune_bench.drivers.stdio import AsyncStdioTransport, StdioTransport
 
+
 @pytest.mark.asyncio
 async def test_async_stdio_transport_timeout():
     transport = AsyncStdioTransport(["python", "-c", "import time; time.sleep(10)"])
-    
+
     mock_proc = MagicMock()
     mock_proc.communicate = AsyncMock(side_effect=asyncio.TimeoutError())
     mock_proc.kill = MagicMock()
-    
+
     with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
         with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError()):
             with pytest.raises(RuntimeError, match="timed out"):
                 await transport.call_async("ask", {"q": 1})
             assert mock_proc.kill.called
+
 
 @pytest.mark.asyncio
 async def test_async_stdio_transport_timeout_process_gone():
     transport = AsyncStdioTransport(["python", "-c", "exit(0)"])
-    
+
     mock_proc = MagicMock()
     mock_proc.communicate = AsyncMock(side_effect=asyncio.TimeoutError())
     mock_proc.kill = MagicMock(side_effect=ProcessLookupError())
-    
+
     with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
         with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError()):
             with pytest.raises(RuntimeError, match="timed out"):
                 await transport.call_async("ask", {"q": 1})
             assert mock_proc.kill.called
 
+
 @pytest.mark.asyncio
 async def test_async_stdio_transport_error_cases():
     transport = AsyncStdioTransport(["test"])
-    
+
     mock_proc = MagicMock()
     mock_proc.returncode = 1
-    
+
     # 1. Non-zero return code (line 108)
     with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
         mock_proc.communicate = AsyncMock(return_value=(b"", b"fail"))
@@ -61,9 +64,15 @@ async def test_async_stdio_transport_error_cases():
 
     # 4. Error status (line 123)
     with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-        mock_proc.communicate = AsyncMock(return_value=(json.dumps({"status": "error", "error": "detailed err"}).encode(), b""))
+        mock_proc.communicate = AsyncMock(
+            return_value=(
+                json.dumps({"status": "error", "error": "detailed err"}).encode(),
+                b"",
+            )
+        )
         with pytest.raises(RuntimeError, match="detailed err"):
             await transport.call_async("ask", {})
+
 
 def test_stdio_transport_call_os_error():
     # Hit line 44 in stdio.py
