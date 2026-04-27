@@ -138,7 +138,7 @@ jobs:
   compliance:
     needs: [security, python-quality, integration, postgres-integration, container, sr2-compliance, guard]
     if: always()
-    uses: lpasquali/rune-ci/.github/workflows/pr-compliance.yml@144ef855dbf0420e5d9a8de2c8d8f89c2e789265
+    uses: lpasquali/rune-ci/.github/workflows/pr-compliance.yml@6830fbf5bf25bb58a794b5659e9e1f284dcc4ee9
     with:
       needs-json: ${{ toJson(needs) }}
       merge-gate-excludes: "guard" # Force pass
