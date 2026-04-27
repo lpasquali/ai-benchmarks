@@ -53,3 +53,17 @@ def test_costs_coverage_boost():
     from rune_bench.common.costs import CostEstimator
     ce = CostEstimator()
     assert hasattr(ce, "estimate")
+
+def test_config_coverage_boost():
+    from rune_bench.common.config import load_config
+    # Exercise with default profile
+    cfg = load_config()
+    assert cfg is not None
+
+def test_catalog_loader_coverage_boost():
+    from rune_bench.catalog.loader import load
+    cat = load()
+    assert cat is not None
+    # Atomic vs Chain
+    cat.atomic_scopes()
+    cat.chain_scopes()

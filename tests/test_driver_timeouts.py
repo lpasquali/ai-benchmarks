@@ -10,7 +10,7 @@ from rune_bench.drivers.stdio import StdioTransport
 def test_driver_invocation_timeout_bounds(monkeypatch: pytest.MonkeyPatch) -> None:
     # Ensure RUNE_DRIVER_INVOCATION_TIMEOUT overrides default if set.
     monkeypatch.setenv("RUNE_DRIVER_INVOCATION_TIMEOUT", "15")
-    assert timeouts_mod.get_driver_invocation_timeout() == 15.0
+    assert timeouts_mod.driver_invocation_timeout_seconds() == 15.0
 
 
 def test_stdio_transport_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
