@@ -41,11 +41,11 @@ async def test_sooth_sayer_no_history_uses_defaults_and_range():
     out = await sayer.simulate(tenant_id="t1", gpu="RTX 4090", model="gpt-4o")
     assert out["historical_sample_count"] == 0
     assert out["confidence"] == "low"
-    assert out["historical_basis"] == "no_matching_history"
+    assert out["historical_basis"] == "scope_heuristic"
     assert out["cost_low_usd"] < out["projected_cost_usd"] < out["cost_high_usd"]
     assert out["components_usd"]["gpu_compute"] >= 0
     assert out["components_usd"]["llm_tokens"] >= 0
-    assert out["vast_pricing_source"] == "fallback"
+    assert out["vast_pricing_source"] == "on_demand_baseline"
 
 
 @pytest.mark.asyncio
@@ -188,7 +188,7 @@ async def test_model_llm_rates_empty_and_named_models():
 @pytest.mark.asyncio
 async def test_fallback_dph_unknown_uses_default():
     assert _fallback_dph("unknown-gpu") == 0.50
-    assert _fallback_dph("NVIDIA A100 80GB") == 1.40
+    assert _fallback_dph("NVIDIA A100 80GB") == 3.67
 
 
 @pytest.mark.asyncio
@@ -318,7 +318,7 @@ async def test_sooth_sayer_high_confidence_and_live_vast():
     sayer = PricingSoothSayer(store, vast_search_offers=_vast)
     out = await sayer.simulate(tenant_id="t1", agent="holmes", model="m", gpu="4090")
     assert out["confidence"] == "high"
-    assert out["vast_pricing_source"] == "live"
+    assert out["vast_pricing_source"] == "vast_live"
 
 
 @patch("rune_bench.resources.vastai.sdk.VastAI")
@@ -330,7 +330,7 @@ async def test_make_pricing_sooth_sayer_wires_vast_when_env_set(mock_vast, monke
     store = _MemStore([])
     sayer = make_pricing_sooth_sayer(store)
     out = await sayer.simulate(tenant_id="t", gpu="4090")
-    assert out["vast_pricing_source"] == "live"
+    assert out["vast_pricing_source"] == "vast_live"
     mock_vast.assert_called_once()
 
 
@@ -343,4 +343,4 @@ async def test_make_pricing_sooth_sayer_falls_back_when_vast_import_fails(
     store = _MemStore([])
     sayer = make_pricing_sooth_sayer(store)
     out = await sayer.simulate(tenant_id="t", gpu="4090")
-    assert out["vast_pricing_source"] == "fallback"
+    assert out["vast_pricing_source"] == "on_demand_baseline"
