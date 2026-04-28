@@ -412,6 +412,8 @@ class RuneApiApplication:
                     model = query.get("model", [""])[0]
                     gpu = query.get("gpu", ["RTX 4090"])[0]
                     suite = query.get("suite", [""])[0]
+                    runs_per_period = int(query.get("runs_per_period", ["1"])[0])
+                    period_days = int(query.get("period_days", ["1"])[0])
 
                     try:
                         soothsayer = PricingSoothSayer(store=app.store)
@@ -424,8 +426,11 @@ class RuneApiApplication:
                                 model=model,
                                 gpu=gpu,
                                 suite=suite,
+                                runs_per_period=runs_per_period,
+                                period_days=period_days,
                             )
                         )
+
                         loop.close()
                         self._write_json(200, projection)
                     except Exception as exc:
