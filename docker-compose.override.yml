@@ -1,0 +1,24 @@
+# RUNE — Docker Compose Local Build Override
+#
+# This file tells docker compose to build images from your local source
+# directories instead of pulling them from GHCR.
+#
+# Usage:
+#   docker compose up --build -d
+
+services:
+
+  rune-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+  rune-ui:
+    build:
+      context: ../rune-ui
+      dockerfile: Dockerfile
+
+  rune-docs:
+    build:
+      context: ../rune-docs
+      dockerfile: Dockerfile
