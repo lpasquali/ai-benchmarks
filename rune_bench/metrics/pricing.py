@@ -19,22 +19,37 @@ _LLM_USD_PER_MILLION: dict[str, tuple[float, float]] = {
     "claude-3-5-sonnet-20241022": (3.00, 15.00),
     "claude-3-opus": (15.00, 75.00),
     "claude-3-haiku": (0.25, 1.25),
+    "llama-3.1-405b": (5.00, 15.00),
+    "llama-3.1-70b": (0.60, 0.80),
+    "llama-3.1-8b": (0.10, 0.20),
 }
 
 _DEFAULT_LLM_PER_MILLION = (0.50, 1.50)
 
 # Fallback $/hour when Vast.ai is unavailable or no matching offer (by substring).
+# Baselines derived from AWS/GCP/Azure on-demand GPU instances.
 _FALLBACK_GPU_DPH_USD: dict[str, float] = {
     "4090": 0.40,
-    "a100": 1.40,
-    "h100": 3.50,
+    "a100": 3.67,  # AWS p4d / GCP a2 baseline
+    "h100": 12.00, # AWS p5 baseline
     "3090": 0.25,
-    "l40": 0.80,
+    "l40": 1.20,
+    "v100": 3.06,  # Azure NC6s_v3 baseline
+    "t4": 0.52,    # AWS g4dn baseline
 }
 
-_DEFAULT_ASSUMED_DURATION_S = 120.0
-_DEFAULT_INPUT_TOKENS = 2048.0
-_DEFAULT_OUTPUT_TOKENS = 512.0
+_DEFAULT_ASSUMED_DURATION_S = 180.0
+_DEFAULT_INPUT_TOKENS = 4096.0
+_DEFAULT_OUTPUT_TOKENS = 1024.0
+
+# Base duration/tokens per scope if no history found
+_SCOPE_DEFAULTS: dict[str, tuple[float, float, float]] = {
+    "SRE": (300.0, 8192.0, 2048.0),
+    "Research": (600.0, 16384.0, 4096.0),
+    "Cybersec": (450.0, 12288.0, 2048.0),
+    "Legal/Ops": (200.0, 8192.0, 1024.0),
+    "Creative": (120.0, 2048.0, 512.0),
+}
 
 
 @dataclass(frozen=True)
@@ -42,8 +57,37 @@ class PricingProjection:
     total_cost_usd: float
     gpu_cost_usd: float
     token_cost_usd: float
-    confidence: float
+    confidence: str
+    confidence_score: float
     historical_match: bool
+
+
+async def _get_live_cloud_rate(gpu: str) -> float | None:
+    """Best-effort live retail price fetch for known cloud GPUs."""
+    g = gpu.lower()
+    sku = None
+    if "a100" in g:
+        sku = "Standard_ND96asr_v4"  # A100 baseline
+    elif "v100" in g:
+        sku = "Standard_NC6s_v3"
+    elif "t4" in g:
+        sku = "Standard_NC4as_T4_v3"
+
+    if not sku:
+        return None
+
+    url = f"https://prices.azure.com/api/retail/prices?$filter=serviceName eq 'Virtual Machines' and armRegionName eq 'eastus' and armSkuName eq '{sku}'"
+    try:
+        import httpx
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(url, timeout=5.0)
+            items = resp.json().get("Items", [])
+            if items:
+                return float(items[0].get("retailPrice", 0.0))
+    except Exception:
+        pass
+    return None
 
 
 def _model_llm_rates(model: str) -> tuple[float, float]:
@@ -254,6 +298,8 @@ class PricingSoothSayer:
         suite: str = "",
         gpu: str = "RTX 4090",
         model: str = "",
+        runs_per_period: int = 1,
+        period_days: int = 1,
     ) -> dict[str, Any]:
         agent = agent.strip()
         suite = suite.strip()
@@ -279,12 +325,24 @@ class PricingSoothSayer:
         print(f"DEBUG: matched size={len(matched)}")
         hist = _aggregate(matched)
         if hist.n == 0:
-            dur_mid = _DEFAULT_ASSUMED_DURATION_S
-            dur_low = _DEFAULT_ASSUMED_DURATION_S * 0.25
-            dur_high = _DEFAULT_ASSUMED_DURATION_S * 3.0
-            avg_in = _DEFAULT_INPUT_TOKENS
-            avg_out = _DEFAULT_OUTPUT_TOKENS
-            hist_note = "no_matching_history"
+            # Fallback to scope-aware defaults if no history found
+            from rune_bench.catalog import load_catalog
+
+            catalog = load_catalog()
+            scope_found = None
+            if agent:
+                for scope in catalog:
+                    if scope.get_agent(agent):
+                        scope_found = scope.name
+                        break
+
+            dur_mid, avg_in, avg_out = _SCOPE_DEFAULTS.get(
+                scope_found or "SRE",
+                (_DEFAULT_ASSUMED_DURATION_S, _DEFAULT_INPUT_TOKENS, _DEFAULT_OUTPUT_TOKENS),
+            )
+            dur_low = dur_mid * 0.25
+            dur_high = dur_mid * 3.0
+            hist_note = "scope_heuristic"
             confidence_str = "low"
             confidence_val = 0.4
             historical_match = False
@@ -307,20 +365,32 @@ class PricingSoothSayer:
             return (inp / 1_000_000.0) * in_per_m + (out / 1_000_000.0) * out_per_m
 
         # Live or fallback GPU pricing
-        if self._vast_search_offers:
+        live_cloud_rate = await _get_live_cloud_rate(gpu)
+        if live_cloud_rate is not None:
+            dph_mid = live_cloud_rate
+            dph_low = live_cloud_rate * 0.8
+            dph_high = live_cloud_rate * 1.2
+            vast_source = "azure_retail_live"
+        elif self._vast_search_offers:
             dph_mid, dph_low, dph_high = _vast_dph_stats(self._vast_search_offers, gpu)
-            vast_source = "live"
+            vast_source = "vast_live"
         else:
             fb = _fallback_dph(gpu)
             dph_mid, dph_low, dph_high = fb, fb * 0.7, fb * 1.5
-            vast_source = "fallback"
+            vast_source = "on_demand_baseline"
 
         gpu_cost = (dur_mid / 3600.0) * dph_mid
         token_cost = _llm_cost(avg_in, avg_out)
-        total = gpu_cost + token_cost
+        total_single = gpu_cost + token_cost
+        
+        # Scale to period
+        total_period = total_single * runs_per_period * period_days
 
         return {
-            "projected_cost_usd": round(total, 4),
+            "projected_cost_usd": round(total_single, 4),
+            "projected_total_usd": round(total_period, 4),
+            "runs_per_period": runs_per_period,
+            "period_days": period_days,
             "cost_low_usd": round((dur_low / 3600.0) * dph_low + token_cost * 0.5, 4),
             "cost_high_usd": round(
                 (dur_high / 3600.0) * dph_high + token_cost * 2.0, 4
@@ -340,7 +410,7 @@ class PricingSoothSayer:
                 "llm_tokens": round(token_cost, 4),
             },
             # Compatibility with UI expectations
-            "total_cost_usd": round(total, 4),
+            "total_cost_usd": round(total_single, 4),
             "gpu_cost_usd": round(gpu_cost, 4),
             "token_cost_usd": round(token_cost, 4),
             "historical_match": historical_match,
