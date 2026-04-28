@@ -214,3 +214,111 @@ def test_driver_client_raises_on_empty_answer() -> None:
             client.ask_structured("q", "m", "http://b:11434")
     finally:
         del os.environ["RUNE_BROWSERUSE_API_KEY"]
+
+@pytest.mark.asyncio
+async def test_driver_client_ask_async():
+    class MockAsyncTransport:
+        async def call_async(self, method, params):
+            return {"answer": "test result", "result_type": "text"}
+
+    from rune_bench.drivers.browseruse import BrowserUseDriverClient
+    client = BrowserUseDriverClient()
+    client._async_transport = MockAsyncTransport()
+    
+    os.environ["RUNE_BROWSERUSE_API_KEY"] = "test-key"
+    try:
+        result = await client.ask_async("q", "m", "http://b:11434")
+        assert result.answer == "test result"
+    finally:
+        del os.environ["RUNE_BROWSERUSE_API_KEY"]
+
+@pytest.mark.asyncio
+async def test_driver_client_ask_async_missing_answer():
+    class MockAsyncTransport:
+        async def call_async(self, method, params):
+            return {}
+
+    from rune_bench.drivers.browseruse import BrowserUseDriverClient
+    client = BrowserUseDriverClient()
+    client._async_transport = MockAsyncTransport()
+    
+    os.environ["RUNE_BROWSERUSE_API_KEY"] = "test-key"
+    try:
+        with pytest.raises(RuntimeError, match="not include an answer"):
+            await client.ask_async("q", "m", "http://b:11434")
+    finally:
+        del os.environ["RUNE_BROWSERUSE_API_KEY"]
+
+@pytest.mark.asyncio
+async def test_driver_client_ask_async_empty_answer():
+    class MockAsyncTransport:
+        async def call_async(self, method, params):
+            return {"answer": ""}
+
+    from rune_bench.drivers.browseruse import BrowserUseDriverClient
+    client = BrowserUseDriverClient()
+    client._async_transport = MockAsyncTransport()
+    
+    os.environ["RUNE_BROWSERUSE_API_KEY"] = "test-key"
+    try:
+        with pytest.raises(RuntimeError, match="empty answer"):
+            await client.ask_async("q", "m", "http://b:11434")
+    finally:
+        del os.environ["RUNE_BROWSERUSE_API_KEY"]
+
+def test_fetch_model_limits_success():
+    from rune_bench.drivers.browseruse import BrowserUseDriverClient
+    from unittest.mock import patch, Mock
+    
+    client = BrowserUseDriverClient()
+    mock_backend = Mock()
+    mock_caps = Mock()
+    mock_caps.context_window = 4096
+    mock_caps.max_output_tokens = 1024
+    mock_backend.normalize_model_name.return_value = "gpt-4o"
+    mock_backend.get_model_capabilities.return_value = mock_caps
+    
+    with patch("rune_bench.backends.get_backend", return_value=mock_backend):
+        limits = client._fetch_model_limits(model="gpt-4o", backend_url="http://test")
+        assert limits == {"context_window": 4096, "max_output_tokens": 1024}
+
+def test_fetch_model_limits_error():
+    from rune_bench.drivers.browseruse import BrowserUseDriverClient
+    from unittest.mock import patch
+    
+    client = BrowserUseDriverClient()
+    with patch("rune_bench.backends.get_backend", side_effect=Exception("err")):
+        limits = client._fetch_model_limits(model="gpt-4o", backend_url="http://test")
+        assert limits == {}
+
+def test_parse_telemetry_none():
+    from rune_bench.drivers.browseruse import BrowserUseDriverClient
+    client = BrowserUseDriverClient()
+    assert client._parse_telemetry(None) is None
+
+def test_handle_ask_success(monkeypatch):
+    monkeypatch.setenv("RUNE_BROWSERUSE_API_KEY", "test-key")
+    
+    mock_runner = MagicMock()
+    mock_runner.ask.return_value = "success"
+    
+    from unittest.mock import patch
+    with patch("rune_bench.drivers.browseruse.__main__.BrowserUseRunner", return_value=mock_runner):
+        result = bu_main._handle_ask({"question": "q", "model": "m"})
+        assert result["answer"] == "success"
+
+def test_handle_ask_typeerror(monkeypatch):
+    monkeypatch.setenv("RUNE_BROWSERUSE_API_KEY", "test-key")
+    
+    mock_runner = MagicMock()
+    mock_runner.ask.return_value = "success"
+    
+    def mock_init(*args, **kwargs):
+        if "api_base" not in kwargs:
+            raise TypeError("missing api_base")
+        return mock_runner
+        
+    from unittest.mock import patch
+    with patch("rune_bench.drivers.browseruse.__main__.BrowserUseRunner", side_effect=mock_init):
+        result = bu_main._handle_ask({"question": "q", "model": "m"})
+        assert result["answer"] == "success"

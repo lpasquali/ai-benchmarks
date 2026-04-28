@@ -392,7 +392,7 @@ class RuneApiApplication:
                                 )
                                 return
                             payload = list_backend_models(
-                                backend_url, backend_type=backend_type
+                                backend_url
                             )
                     except (RuntimeError, ValueError) as exc:
                         self._write_json(400, {"error": str(exc)})
