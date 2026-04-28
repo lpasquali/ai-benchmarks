@@ -653,6 +653,18 @@ class RuneApiApplication:
                     self._write_json(201, {"status": "created"})
                     return
 
+                if path == "/v1/estimates":
+                    try:
+                        req = CostEstimationRequest(**data)
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        result = loop.run_until_complete(_get_cost_estimate_backend(req))
+                        loop.close()
+                        self._write_json(200, result)
+                    except Exception as e:
+                        self._write_json(400, {"error": str(e)})
+                    return
+
                 if path.startswith("/v1/jobs/"):
                     kind = path.split("/")[-1]
                     handler = app.backend_functions.get(kind)
