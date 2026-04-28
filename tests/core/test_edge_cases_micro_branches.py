@@ -297,14 +297,14 @@ async def test_rune_remaining_branches(monkeypatch, tmp_path):
 
 
 def test_rune_main_guard_executes(monkeypatch):
-    rune_path = Path(__file__).resolve().parents[1] / "rune" / "__main__.py"
+    rune_path = Path(__file__).resolve().parents[2] / "rune" / "__main__.py"
     monkeypatch.setattr(sys, "argv", [str(rune_path), "--help"])
     with pytest.raises(SystemExit):
         runpy.run_path(str(rune_path), run_name="__main__")
 
 
 def test_rune_init_main_guard_executes(monkeypatch):
-    init_path = Path(__file__).resolve().parents[1] / "rune" / "__init__.py"
+    init_path = Path(__file__).resolve().parents[2] / "rune" / "__init__.py"
     monkeypatch.setattr(sys, "argv", [str(init_path), "--help"])
     with pytest.raises(SystemExit):
         runpy.run_path(str(init_path), run_name="__main__")
@@ -422,7 +422,7 @@ def test_rune_api_entrypoint_main_and_guard(monkeypatch):
     rune_api_module.main()
     assert calls == {"host": "127.0.0.1", "port": 18080}
 
-    api_path = Path(__file__).resolve().parents[1] / "rune" / "api.py"
+    api_path = Path(__file__).resolve().parents[2] / "rune" / "api.py"
     monkeypatch.setattr(sys, "argv", [str(api_path)])
     runpy.run_path(str(api_path), run_name="__main__")
 

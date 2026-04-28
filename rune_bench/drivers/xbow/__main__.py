@@ -20,6 +20,8 @@ def _handle_ask(params: dict) -> dict:
     
     question = params.get("question", "")
     model = params.get("model", "")
+    backend_url = params.get("backend_url")
+    backend_type = params.get("backend_type", "ollama")
     
     # Instantiate runner (names vary slightly but we pass what we have)
     try:
@@ -28,7 +30,7 @@ def _handle_ask(params: dict) -> dict:
         # Some might take base_url instead or as well
         runner = XBOWRunner(api_key=api_key, api_base=api_base)
     
-    answer = runner.ask(question, model=model)
+    answer = runner.ask(question, model=model, backend_url=backend_url, backend_type=backend_type)
     
     return {
         "answer": answer,

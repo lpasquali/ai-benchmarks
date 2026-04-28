@@ -26,7 +26,7 @@ class MidjourneyRunner:
         )
         self._api_key = api_key or os.getenv("MIDJOURNEY_API_KEY")
 
-    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
         """Generate an image from the prompt and return the result URL."""
         if not self._api_key:
             return "Error: MIDJOURNEY_API_KEY not set. Unofficial Midjourney API requires a proxy key."

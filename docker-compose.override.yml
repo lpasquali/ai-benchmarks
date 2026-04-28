@@ -1,0 +1,27 @@
+# RUNE — Local Development Overrides
+#
+# Mounts local source code into the containers for hot-reloading and
+# faster development cycles.
+#
+# Usage:
+#   docker compose up -d
+
+services:
+
+  rune-api:
+    volumes:
+      - .:/app
+    environment:
+      RUNE_DEBUG: "true"
+      # Watch for changes in the current directory
+      WATCHFILES_FORCE_COLORS: "true"
+
+  rune-ui:
+    volumes:
+      - ../rune-ui:/app
+    environment:
+      RUNE_DEBUG: "true"
+
+  rune-docs:
+    volumes:
+      - ../rune-docs:/app

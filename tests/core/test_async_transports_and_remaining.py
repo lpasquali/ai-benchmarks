@@ -244,9 +244,10 @@ class TestBrowserUseDriverClient:
         with pytest.raises(RuntimeError, match="API key"):
             client.ask_structured("q", "m")
 
-    def test_ask_async(self) -> None:
+    def test_ask_async(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from rune_bench.drivers.browseruse import BrowserUseDriverClient
 
+        monkeypatch.setenv("RUNE_BROWSERUSE_API_KEY", "test-key")
         transport = MagicMock()
         async_transport = AsyncMock()
         async_transport.call_async.return_value = {"answer": "async-browse"}
@@ -257,9 +258,10 @@ class TestBrowserUseDriverClient:
         assert isinstance(result, AgentResult)
         assert result.answer == "async-browse"
 
-    def test_ask_async_missing_answer(self) -> None:
+    def test_ask_async_missing_answer(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from rune_bench.drivers.browseruse import BrowserUseDriverClient
 
+        monkeypatch.setenv("RUNE_BROWSERUSE_API_KEY", "test-key")
         transport = MagicMock()
         async_transport = AsyncMock()
         async_transport.call_async.return_value = {}
@@ -269,9 +271,10 @@ class TestBrowserUseDriverClient:
         with pytest.raises(RuntimeError, match="did not include an answer"):
             asyncio.run(client.ask_async("q", "m"))
 
-    def test_ask_async_none_answer(self) -> None:
+    def test_ask_async_none_answer(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from rune_bench.drivers.browseruse import BrowserUseDriverClient
 
+        monkeypatch.setenv("RUNE_BROWSERUSE_API_KEY", "test-key")
         transport = MagicMock()
         async_transport = AsyncMock()
         async_transport.call_async.return_value = {"answer": None}
@@ -281,9 +284,10 @@ class TestBrowserUseDriverClient:
         with pytest.raises(RuntimeError, match="empty answer"):
             asyncio.run(client.ask_async("q", "m"))
 
-    def test_ask_async_empty_answer(self) -> None:
+    def test_ask_async_empty_answer(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from rune_bench.drivers.browseruse import BrowserUseDriverClient
 
+        monkeypatch.setenv("RUNE_BROWSERUSE_API_KEY", "test-key")
         transport = MagicMock()
         async_transport = AsyncMock()
         async_transport.call_async.return_value = {"answer": ""}

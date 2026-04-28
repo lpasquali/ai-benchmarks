@@ -28,7 +28,7 @@ class XBOWRunner:
     def __init__(self) -> None:
         pass
 
-    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
         """Run an XBOW scan and return discovered vulnerabilities."""
         raise NotImplementedError(
             "XBOWRunner is not yet implemented. "

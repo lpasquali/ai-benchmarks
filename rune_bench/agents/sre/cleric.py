@@ -26,7 +26,7 @@ class ClericRunner:
             "CLERIC_API_BASE", "http://localhost:8080/v1"
         )
 
-    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
         """Run a Cleric investigation and return the findings."""
         if not self._api_key and "localhost" not in self._api_base:
             return "Error: CLERIC_API_KEY not set (required for remote API)."

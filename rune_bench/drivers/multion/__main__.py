@@ -13,22 +13,20 @@ from rune_bench.agents.ops.multion import MultiOnRunner
 def _handle_ask(params: dict) -> dict:
     api_key = os.getenv("RUNE_MULTION_API_KEY")
     if not api_key:
-        # Re-verify driver-specific env var for tests that expect it
         raise RuntimeError("RUNE_MULTION_API_KEY not set")
-    
-    api_base = os.getenv("RUNE_MULTION_API_BASE")
     
     question = params.get("question", "")
     model = params.get("model", "")
+    backend_url = params.get("backend_url")
+    backend_type = params.get("backend_type", "ollama")
     
-    # Instantiate runner (names vary slightly but we pass what we have)
-    try:
-        runner = MultiOnRunner(api_key=api_key)
-    except TypeError:
-        # Some might take base_url instead or as well
-        runner = MultiOnRunner(api_key=api_key, api_base=api_base)
-    
-    answer = runner.ask(question, model=model)
+    runner = MultiOnRunner(api_key=api_key)
+    answer = runner.ask(
+        question, 
+        model=model, 
+        backend_url=backend_url, 
+        backend_type=backend_type
+    )
     
     return {
         "answer": answer,
