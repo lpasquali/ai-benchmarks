@@ -132,7 +132,7 @@ jobs:
 
   # ─── Infrastructure guard (nginx / ingress-nginx regression lint) ──────────
   guard:
-    uses: lpasquali/rune-ci/.github/workflows/nginx-ingress-guard.yml@144ef855dbf0420e5d9a8de2c8d8f89c2e789265
+    uses: lpasquali/rune-ci/.github/workflows/nginx-ingress-guard.yml@23b84477724ddf4c91fbbe1535657639f921d18c
 
   # ─── Compliance/Merge Gate ──────────────────────────────────────────────────
   compliance:
