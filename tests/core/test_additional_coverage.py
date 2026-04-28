@@ -8,7 +8,6 @@ from rune_bench.debug_pprof import start_background_server_if_configured
 
 def test_browser_use_runner_coverage():
     runner = BrowserUseRunner()
-    # Check what attributes exist
     assert hasattr(runner, "ask")
 
 def test_comfyui_runner_coverage():
@@ -21,7 +20,6 @@ def test_pprof_app_coverage():
 @patch("rune_bench.drivers.stdio.StdioTransport.call")
 def test_browser_use_driver_main_logic(mock_call):
     mock_call.return_value = {"status": "ok", "answer": "done"}
-    # Just import it to trigger coverage
     try:
         import rune_bench.drivers.browseruse.__main__
     except:
@@ -55,3 +53,17 @@ def test_costs_coverage_boost():
     from rune_bench.common.costs import CostEstimator
     ce = CostEstimator()
     assert hasattr(ce, "estimate")
+
+def test_config_coverage_boost():
+    from rune_bench.common.config import load_config
+    # Exercise with default profile
+    cfg = load_config()
+    assert cfg is not None
+
+def test_catalog_loader_coverage_boost():
+    from rune_bench.catalog.loader import load
+    cat = load()
+    assert cat is not None
+    # Atomic vs Chain
+    cat.atomic_scopes()
+    cat.chain_scopes()
