@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for rune_bench.drivers.browseruse — driver client and subprocess entry point."""
+"""Tests for rune_bench.drivers.multion — driver client and subprocess entry point."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import rune_bench.drivers.browseruse.__main__ as bu_main
+import rune_bench.drivers.multion.__main__ as multion_main
 
 
 # ---------------------------------------------------------------------------
@@ -19,17 +19,9 @@ import rune_bench.drivers.browseruse.__main__ as bu_main
 
 
 def test_handle_ask_raises_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("RUNE_BROWSERUSE_API_KEY", raising=False)
-    with pytest.raises(RuntimeError, match="RUNE_BROWSERUSE_API_KEY"):
-        bu_main._handle_ask({"question": "test", "model": "m"})
-
-
-def test_handle_ask_raises_not_implemented_with_api_key(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("RUNE_BROWSERUSE_API_KEY", "test-key")
-    # with pytest.raises(NotImplementedError):
-#        bu_main._handle_ask({"question": "test", "model": "m"})
+    monkeypatch.delenv("RUNE_MULTION_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="RUNE_MULTION_API_KEY"):
+        multion_main._handle_ask({"question": "test", "model": "m"})
 
 
 # ---------------------------------------------------------------------------
@@ -38,8 +30,8 @@ def test_handle_ask_raises_not_implemented_with_api_key(
 
 
 def test_handle_info_returns_driver_metadata() -> None:
-    result = bu_main._handle_info({})
-    assert result["name"] == "browseruse"
+    result = multion_main._handle_info({})
+    assert result["name"] == "multion"
     assert "ask" in result["actions"]
     assert "info" in result["actions"]
 
@@ -53,16 +45,16 @@ def test_main_processes_info_request(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:
     monkeypatch.setattr(
-        bu_main.sys,
+        multion_main.sys,
         "stdin",
         io.StringIO(json.dumps({"action": "info", "params": {}, "id": "t1"}) + "\n"),
     )
 
-    bu_main.main()
+    multion_main.main()
 
     response = json.loads(capsys.readouterr().out.strip())
     assert response["status"] == "ok"
-    assert response["result"]["name"] == "browseruse"
+    assert response["result"]["name"] == "multion"
     assert response["id"] == "t1"
 
 
@@ -70,12 +62,12 @@ def test_main_returns_error_for_unknown_action(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:
     monkeypatch.setattr(
-        bu_main.sys,
+        multion_main.sys,
         "stdin",
         io.StringIO(json.dumps({"action": "bad", "params": {}, "id": "u1"}) + "\n"),
     )
 
-    bu_main.main()
+    multion_main.main()
 
     response = json.loads(capsys.readouterr().out.strip())
     assert response["status"] == "error"
@@ -85,9 +77,9 @@ def test_main_returns_error_for_unknown_action(
 def test_main_handles_invalid_json(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:
-    monkeypatch.setattr(bu_main.sys, "stdin", io.StringIO("not-json\n"))
+    monkeypatch.setattr(multion_main.sys, "stdin", io.StringIO("not-json\n"))
 
-    bu_main.main()
+    multion_main.main()
 
     response = json.loads(capsys.readouterr().out.strip())
     assert response["status"] == "error"
@@ -96,9 +88,9 @@ def test_main_handles_invalid_json(
 def test_main_skips_empty_lines(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:
-    monkeypatch.setattr(bu_main.sys, "stdin", io.StringIO("\n\n   \n"))
+    monkeypatch.setattr(multion_main.sys, "stdin", io.StringIO("\n\n   \n"))
 
-    bu_main.main()
+    multion_main.main()
 
     assert capsys.readouterr().out.strip() == ""
 
@@ -107,12 +99,12 @@ def test_main_handles_missing_req_id(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:
     monkeypatch.setattr(
-        bu_main.sys,
+        multion_main.sys,
         "stdin",
         io.StringIO(json.dumps({"action": "info", "params": {}}) + "\n"),
     )
 
-    bu_main.main()
+    multion_main.main()
 
     response = json.loads(capsys.readouterr().out.strip())
     assert response["id"] == ""
@@ -121,9 +113,9 @@ def test_main_handles_missing_req_id(
 def test_main_ask_error_propagated(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:
-    monkeypatch.delenv("RUNE_BROWSERUSE_API_KEY", raising=False)
+    monkeypatch.delenv("RUNE_MULTION_API_KEY", raising=False)
     monkeypatch.setattr(
-        bu_main.sys,
+        multion_main.sys,
         "stdin",
         io.StringIO(
             json.dumps(
@@ -137,15 +129,15 @@ def test_main_ask_error_propagated(
         ),
     )
 
-    bu_main.main()
+    multion_main.main()
 
     response = json.loads(capsys.readouterr().out.strip())
     assert response["status"] == "error"
-    assert "RUNE_BROWSERUSE_API_KEY" in response["error"]
+    assert "RUNE_MULTION_API_KEY" in response["error"]
 
 
 # ---------------------------------------------------------------------------
-# BrowserUseDriverClient — with mocked transport
+# MultiOnDriverClient — with mocked transport
 # ---------------------------------------------------------------------------
 
 
@@ -153,17 +145,17 @@ def test_driver_client_ask_returns_answer() -> None:
     mock_transport = MagicMock()
     mock_transport.call.return_value = {"answer": "test result"}
 
-    from rune_bench.drivers.browseruse import BrowserUseDriverClient
+    from rune_bench.drivers.multion import MultiOnDriverClient
 
-    client = BrowserUseDriverClient(transport=mock_transport)
+    client = MultiOnDriverClient(transport=mock_transport)
     # Set the env var so the API key check passes
-    os.environ["RUNE_BROWSERUSE_API_KEY"] = "test-key"
+    os.environ["RUNE_MULTION_API_KEY"] = "test-key"
     try:
         result = client.ask("test question", "model", "http://backend:11434")
         assert result == "test result"
         mock_transport.call.assert_called_once()
     finally:
-        del os.environ["RUNE_BROWSERUSE_API_KEY"]
+        del os.environ["RUNE_MULTION_API_KEY"]
 
 
 def test_driver_client_ask_structured_returns_agent_result() -> None:
@@ -174,10 +166,10 @@ def test_driver_client_ask_structured_returns_agent_result() -> None:
         "metadata": {"source": "test"},
     }
 
-    from rune_bench.drivers.browseruse import BrowserUseDriverClient
+    from rune_bench.drivers.multion import MultiOnDriverClient
 
-    client = BrowserUseDriverClient(transport=mock_transport)
-    os.environ["RUNE_BROWSERUSE_API_KEY"] = "test-key"
+    client = MultiOnDriverClient(transport=mock_transport)
+    os.environ["RUNE_MULTION_API_KEY"] = "test-key"
     try:
         result = client.ask_structured("q", "m", "http://b:11434")
         from rune_bench.agents.base import AgentResult
@@ -186,17 +178,17 @@ def test_driver_client_ask_structured_returns_agent_result() -> None:
         assert result.answer == "structured result"
         assert result.metadata == {"source": "test"}
     finally:
-        del os.environ["RUNE_BROWSERUSE_API_KEY"]
+        del os.environ["RUNE_MULTION_API_KEY"]
 
 
 def test_driver_client_raises_without_api_key() -> None:
     mock_transport = MagicMock()
 
-    from rune_bench.drivers.browseruse import BrowserUseDriverClient
+    from rune_bench.drivers.multion import MultiOnDriverClient
 
-    client = BrowserUseDriverClient(transport=mock_transport)
+    client = MultiOnDriverClient(transport=mock_transport)
     # Ensure env var is not set
-    os.environ.pop("RUNE_BROWSERUSE_API_KEY", None)
+    os.environ.pop("RUNE_MULTION_API_KEY", None)
     with pytest.raises(RuntimeError, match="requires"):
         client.ask_structured("q", "m", "http://b:11434")
 
@@ -205,12 +197,12 @@ def test_driver_client_raises_on_empty_answer() -> None:
     mock_transport = MagicMock()
     mock_transport.call.return_value = {"answer": ""}
 
-    from rune_bench.drivers.browseruse import BrowserUseDriverClient
+    from rune_bench.drivers.multion import MultiOnDriverClient
 
-    client = BrowserUseDriverClient(transport=mock_transport)
-    os.environ["RUNE_BROWSERUSE_API_KEY"] = "test-key"
+    client = MultiOnDriverClient(transport=mock_transport)
+    os.environ["RUNE_MULTION_API_KEY"] = "test-key"
     try:
         with pytest.raises(RuntimeError, match="empty answer"):
             client.ask_structured("q", "m", "http://b:11434")
     finally:
-        del os.environ["RUNE_BROWSERUSE_API_KEY"]
+        del os.environ["RUNE_MULTION_API_KEY"]

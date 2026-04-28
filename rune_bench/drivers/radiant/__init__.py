@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Radiant Security driver client — enterprise stub pending API access."""
+"""Radiant Security driver client — autonomous SOC incident investigation and response."""
 
 from __future__ import annotations
 from rune_bench.debug import debug_log
@@ -57,28 +57,23 @@ class RadiantDriverClient:
         backend_url: str | None = None,
         backend_type: str = "ollama",
     ) -> AgentResult:
-        """Dispatch a question to the driver and return a structured AgentResult.
-
-        Send a question to the Radiant Security driver.
-
-        Raises:
-            RuntimeError: if ``RUNE_RADIANT_API_KEY`` is not set.
-        """
-        api_key = os.getenv("RUNE_RADIANT_API_KEY")
-        if not api_key:
-            raise RuntimeError(
-                "Radiant Security requires an enterprise contract or API access. "
-                f"Visit {self.ONBOARDING_URL} to get started. "
-                "Once provisioned, set RUNE_RADIANT_API_KEY."
+        """Dispatch a question to the driver and return a structured AgentResult."""
+        self._check_auth()
+        params: dict = {
+            "question": question,
+            "model": model,
+            "backend_url": backend_url,
+        }
+        if backend_url:
+            params.update(
+                self._fetch_model_limits(
+                    model=model,
+                    backend_url=backend_url,
+                    backend_type=backend_type,
+                )
             )
-        result = self._transport.call(
-            "ask",
-            {
-                "question": question,
-                "model": model,
-                "backend_url": backend_url,
-            },
-        )
+
+        result = self._transport.call("ask", params)
         answer = str(result.get("answer", ""))
         if not answer:
             raise RuntimeError("Driver returned an empty answer.")
@@ -98,6 +93,7 @@ class RadiantDriverClient:
         backend_type: str = "ollama",
     ) -> AgentResult:
         """Dispatch a question to the driver asynchronously."""
+        self._check_auth()
         resolved_model = model.strip()
         params: dict = {
             "question": question,
@@ -105,14 +101,13 @@ class RadiantDriverClient:
         }
         if backend_url:
             params["backend_url"] = backend_url
-            if hasattr(self, "_fetch_model_limits"):
-                params.update(
-                    self._fetch_model_limits(
-                        model=resolved_model,
-                        backend_url=backend_url,
-                        backend_type=backend_type,
-                    )
+            params.update(
+                self._fetch_model_limits(
+                    model=resolved_model,
+                    backend_url=backend_url,
+                    backend_type=backend_type,
                 )
+            )
 
         debug_log(
             f"{self.__class__.__name__}.ask_async: question={question!r} model={resolved_model!r} "
@@ -138,6 +133,41 @@ class RadiantDriverClient:
             metadata=result.get("metadata"),
             telemetry=self._parse_telemetry(result.get("telemetry")),
         )
+
+    def _check_auth(self) -> None:
+        """Raise RuntimeError if RUNE_RADIANT_API_KEY is not set."""
+        api_key = os.getenv("RUNE_RADIANT_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "Radiant Security requires an enterprise contract or API access. "
+                f"Visit {self.ONBOARDING_URL} to get started. "
+                "Once provisioned, set RUNE_RADIANT_API_KEY."
+            )
+
+    def _fetch_model_limits(
+        self,
+        *,
+        model: str,
+        backend_url: str,
+        backend_type: str = "ollama",
+    ) -> dict:
+        """Return context_window / max_output_tokens for *model*, or ``{}`` on error."""
+        from rune_bench.backends import get_backend
+
+        try:
+            backend = get_backend(backend_type, backend_url)
+            normalized = backend.normalize_model_name(model)
+            caps = backend.get_model_capabilities(normalized)
+        except Exception as exc:  # noqa: BLE001
+            debug_log(f"Could not fetch model limits for {model!r}: {exc}")
+            return {}
+
+        limits: dict = {}
+        if caps.context_window:
+            limits["context_window"] = caps.context_window
+        if caps.max_output_tokens:
+            limits["max_output_tokens"] = caps.max_output_tokens
+        return limits
 
     def _parse_telemetry(self, raw: dict | None) -> RunTelemetry | None:
         """Parse raw telemetry dict into a RunTelemetry object."""

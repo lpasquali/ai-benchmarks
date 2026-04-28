@@ -217,6 +217,7 @@ class RuneApiApplication:
             "cost-estimate": _get_cost_estimate_backend,
         }
         self._rate_limits: dict[str, list[float]] = {}
+        self._active_tasks: dict[str, threading.Event] = {}
         self._lock = threading.Lock()
 
     @classmethod
@@ -391,7 +392,7 @@ class RuneApiApplication:
                                 )
                                 return
                             payload = list_backend_models(
-                                backend_url, backend_type=backend_type
+                                backend_url
                             )
                     except (RuntimeError, ValueError) as exc:
                         self._write_json(400, {"error": str(exc)})
@@ -657,6 +658,18 @@ class RuneApiApplication:
                     self._write_json(201, {"status": "created"})
                     return
 
+                if path == "/v1/estimates":
+                    try:
+                        req = CostEstimationRequest(**data)
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        result = loop.run_until_complete(_get_cost_estimate_backend(req))
+                        loop.close()
+                        self._write_json(200, result)
+                    except Exception as e:
+                        self._write_json(400, {"error": str(e)})
+                    return
+
                 if path.startswith("/v1/jobs/"):
                     kind = path.split("/")[-1]
                     handler = app.backend_functions.get(kind)
@@ -681,6 +694,9 @@ class RuneApiApplication:
                     )
 
                     if created:
+                        event = threading.Event()
+                        with app._lock:
+                            app._active_tasks[job_id] = event
 
                         def _run_in_thread(
                             job_id_inner, handler_inner, kind_inner, data_inner
@@ -698,6 +714,8 @@ class RuneApiApplication:
                                 )
                             finally:
                                 loop.close()
+                                with app._lock:
+                                    app._active_tasks.pop(job_id_inner, None)
 
                         threading.Thread(
                             target=_run_in_thread,
@@ -715,6 +733,42 @@ class RuneApiApplication:
 
             def do_PUT(self) -> None:
                 self.do_POST()
+
+            def do_DELETE(self) -> None:
+                parsed = urlparse(self.path)
+                path = parsed.path
+
+                tenant_id_hint = self.headers.get("X-Tenant-ID", "default").strip()
+                try:
+                    app._enforce_request_rate_limit(tenant_id_hint)
+                except RequestRateLimited:
+                    self._write_json(401, {"error": "rate limit exceeded"})
+                    return
+
+                tenant_id = self._authenticate()
+                if not tenant_id:
+                    self._write_json(401, {"error": "unauthorized"})
+                    return
+
+                if path.startswith("/v1/jobs/"):
+                    job_id = path.split("/")[-1]
+                    job = app.store.get_job(job_id)
+                    if not job or (
+                        not app.security.auth_disabled and job.tenant_id != tenant_id
+                    ):
+                        self._write_json(404, {"error": "job not found"})
+                        return
+
+                    with app._lock:
+                        event = app._active_tasks.get(job_id)
+                        if event:
+                            event.set()
+                    
+                    app.store.update_job(job_id, status="cancelled", error="Cancelled by user")
+                    self._write_json(200, {"status": "cancelled", "job_id": job_id})
+                    return
+
+                self._write_json(404, {"error": "not found"})
 
         return RuneApiHandler
 

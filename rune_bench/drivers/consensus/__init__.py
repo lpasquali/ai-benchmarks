@@ -25,8 +25,8 @@ class ConsensusDriverClient:
     """Research agent: evidence-based synthesis from academic papers.
 
     Uses the Semantic Scholar API for paper search and optionally Ollama
-    for answer synthesis.  The public interface mirrors the old
-    ``ConsensusRunner`` stub so existing call-sites require no changes.
+    for answer synthesis.  The public interface mirrors the
+    ``ConsensusRunner`` so existing call-sites require no changes.
     """
 
     def __init__(
@@ -84,6 +84,13 @@ class ConsensusDriverClient:
             params["model"] = normalized_model
         if backend_url:
             params["backend_url"] = backend_url
+            params.update(
+                self._fetch_model_limits(
+                    model=normalized_model,
+                    backend_url=backend_url,
+                    backend_type=backend_type,
+                )
+            )
         if limit is not None:
             params["limit"] = limit
 
@@ -127,6 +134,13 @@ class ConsensusDriverClient:
             params["model"] = normalized_model
         if backend_url:
             params["backend_url"] = backend_url
+            params.update(
+                self._fetch_model_limits(
+                    model=normalized_model,
+                    backend_url=backend_url,
+                    backend_type=backend_type,
+                )
+            )
         if limit is not None:
             params["limit"] = limit
 
@@ -154,6 +168,34 @@ class ConsensusDriverClient:
             metadata=result.get("metadata"),
             telemetry=self._parse_telemetry(result.get("telemetry")),
         )
+
+    def _fetch_model_limits(
+        self,
+        *,
+        model: str,
+        backend_url: str,
+        backend_type: str = "ollama",
+    ) -> dict:
+        """Return context_window / max_output_tokens for *model*, or ``{}`` on error."""
+        from rune_bench.backends import get_backend
+
+        if not model:
+            return {}
+
+        try:
+            backend = get_backend(backend_type, backend_url)
+            normalized = backend.normalize_model_name(model)
+            caps = backend.get_model_capabilities(normalized)
+        except Exception as exc:  # noqa: BLE001
+            debug_log(f"Could not fetch model limits for {model!r}: {exc}")
+            return {}
+
+        limits: dict = {}
+        if caps.context_window:
+            limits["context_window"] = caps.context_window
+        if caps.max_output_tokens:
+            limits["max_output_tokens"] = caps.max_output_tokens
+        return limits
 
     def _parse_telemetry(self, raw: dict | None) -> RunTelemetry | None:
         """Parse raw telemetry dict into a RunTelemetry object."""

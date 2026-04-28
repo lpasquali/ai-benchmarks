@@ -27,7 +27,7 @@ class ComfyUIRunner:
         self._base_url = base_url.rstrip("/")
         self._client_id = str(uuid.uuid4())
 
-    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
         """Run a ComfyUI workflow with the given prompt and return output image info."""
         # Minimal SDXL workflow template (API format)
         # Node IDs are standard for default ComfyUI simple workflow

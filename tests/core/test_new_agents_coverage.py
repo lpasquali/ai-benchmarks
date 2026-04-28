@@ -146,9 +146,9 @@ async def test_browser_use_runner_mocked_fixed():
     mock_agent = MagicMock()
     mock_agent.run = AsyncMock(return_value="browsed")
     with patch("browser_use.Agent", return_value=mock_agent):
-        assert "browsed" in await runner._run_task("q")
+        assert "browsed" in await runner._run_task("q", "m")
     runner._api_key = None
-    assert "Error: BROWSER_USE_API_KEY not set" in await runner._run_task("q")
+    assert "Error: BROWSER_USE_API_KEY not set" in await runner._run_task("q", "m")
 
 @patch("rune_bench.backends.ollama.OllamaModelManager.create")
 def test_ollama_backend_coverage_fixed(mock_create):

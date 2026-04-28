@@ -24,7 +24,7 @@ class SpellbookRunner:
         self._api_key = api_key or os.getenv("SPELLBOOK_API_KEY")
         self._api_base = "https://api.spellbook.legal/v1"
 
-    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
         """Run a legal document analysis and return the review result."""
         if not self._api_key:
             return "Error: SPELLBOOK_API_KEY not set."
