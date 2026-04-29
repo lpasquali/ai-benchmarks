@@ -33,6 +33,7 @@ COPY requirements.txt .
 COPY requirements-holmes.txt .
 RUN pip install --no-cache-dir --upgrade 'pip>=26.0' \
  && pip install --prefer-binary --no-cache-dir -r requirements.txt \
+ && pip install --no-cache-dir "psycopg[binary]" "psycopg-pool" \
  && if [ "$INSTALL_HOLMES" = "true" ]; then pip install --prefer-binary --no-cache-dir -r requirements-holmes.txt; fi \
  && pip install --no-cache-dir awscli
 

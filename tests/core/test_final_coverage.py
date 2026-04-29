@@ -94,8 +94,8 @@ async def test_api_application_dispatch_more_kinds():
     )
 
     # Mock handlers
-    app.backend_functions["agentic-agent"] = lambda r: {"ok": True}
-    app.backend_functions["cost-estimate"] = lambda r: {"cost": 0.1}
+    app.backend_functions["agentic-agent"] = lambda r, **kw: {"ok": True}
+    app.backend_functions["cost-estimate"] = lambda r, **kw: {"cost": 0.1}
 
     # Trigger from_dict branches
     payload = {

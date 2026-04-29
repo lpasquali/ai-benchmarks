@@ -371,8 +371,9 @@ class SettingsResponse:
 class UpdateSettingsRequest:
     """Request to update RUNE configuration settings."""
 
-    settings: dict
+    settings: dict | None = None
     profile: str | None = None  # None means update the 'defaults' section
+    active_profile: str | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -383,7 +384,13 @@ class CreateProfileRequest:
     """Request to create a new configuration profile."""
 
     name: str
-    settings: dict
+    settings: dict = field(default_factory=dict)
+    config: dict | None = None  # Alias for settings to support older UI versions
+
+    def __post_init__(self) -> None:
+        if self.config is not None and not self.settings:
+            # Transfer config to settings if settings is empty
+            object.__setattr__(self, "settings", self.config)
 
     def to_dict(self) -> dict:
         return asdict(self)

@@ -60,6 +60,12 @@ class Migrator:
                 continue
             sql_text = path.read_text(encoding="utf-8")
 
+            if self._dialect == "postgres":
+                # PostgreSQL uses SERIAL for autoincrementing primary keys
+                sql_text = sql_text.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
+                # PostgreSQL uses BYTEA instead of BLOB
+                sql_text = sql_text.replace(" BLOB", " BYTEA")
+
             # Split on ';' and execute each non-empty statement individually.
             # For SQLite we must do this to avoid implicit COMMITs.
             # For Postgres we can execute all at once, but keeping it uniform is simpler.
@@ -111,7 +117,9 @@ class Migrator:
     def _already_applied(self, conn: Any) -> set[int]:
         cursor = conn.execute("SELECT version FROM schema_version")
         rows = cursor.fetchall()
-        return {int(row[0]) for row in rows}
+        # Row access varies between sqlite3 (tuple or Row) and psycopg (dict or Row)
+        # Use index access [0] which is common to both for the first column.
+        return {int(row[0] if isinstance(row, (list, tuple)) else row["version"]) for row in rows}
 
     def _discover(self) -> list[tuple[int, pathlib.Path]]:
         discovered: list[tuple[int, pathlib.Path]] = []

@@ -149,3 +149,21 @@ class StoragePort(Protocol):
         querying — this is the building block for tenant scoping.
         """
         ...
+
+    # ── Settings & Profiles ───────────────────────────────────────────────
+
+    def set_setting(self, key: str, value: dict) -> None:
+        """Upsert a JSON-serializable setting into the database."""
+        ...
+
+    def get_setting(self, key: str) -> dict | None:
+        """Fetch a JSON-serializable setting by key."""
+        ...
+
+    def delete_setting(self, key: str) -> None:
+        """Remove a setting from the database."""
+        ...
+
+    def list_settings(self, prefix: str | None = None) -> dict[str, dict]:
+        """Return all settings, optionally filtered by key prefix."""
+        ...

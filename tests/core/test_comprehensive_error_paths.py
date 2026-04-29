@@ -163,14 +163,14 @@ async def test_api_server_remaining_paths(monkeypatch, tmp_path):
     store = api_server.JobStore(tmp_path / "jobs.db")
     created = []
 
-    async def backend_ollama(request):
+    async def backend_ollama(request, **kwargs):
         created.append(request.backend_url)
         return {"mode": "existing"}
 
-    async def backend_bench(request):
+    async def backend_bench(request, **kwargs):
         return {"answer": request.question}
 
-    async def backend_agentic_agent(request):
+    async def backend_agentic_agent(request, **kwargs):
         raise RuntimeError("bad-run")
 
     app = api_server.RuneApiApplication(
@@ -399,7 +399,7 @@ async def test_api_server_error_paths(monkeypatch, tmp_path):
 
     real_store = api_server.JobStore(tmp_path / "ok.db")
 
-    async def mock_agent(request):
+    async def mock_agent(request, **kwargs):
         return {"answer": request.question}
 
     app = api_server.RuneApiApplication(

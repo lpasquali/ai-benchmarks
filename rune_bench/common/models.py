@@ -7,6 +7,7 @@ calculates the required disk space with safety margins.
 
 import math
 from dataclasses import dataclass
+from typing import Dict, List
 
 
 # Ordered largest → smallest so the first match is always the best fit.
@@ -73,3 +74,42 @@ class ModelSelector:
     def _calculate_disk(vram_mb: int) -> int:
         """Disk = ceil(vram_gb * 1.15) + 32 GB base buffer."""
         return math.ceil((vram_mb / 1024) * _VRAM_OVERHEAD_FACTOR) + _BASE_DISK_GB
+
+
+@dataclass(frozen=True)
+class Modelinfo:
+    name: str
+    vram_mb: int = 0
+    description: str = ""
+
+# Popular official Ollama models for self-hosted installations
+OLLAMA_DEFAULT_MODELS = [
+    Modelinfo("llama3.1:8b", 5000, "Meta Llama 3.1 8B (General Purpose)"),
+    Modelinfo("llama3.1:70b", 40000, "Meta Llama 3.1 70B (High Performance)"),
+    Modelinfo("mistral:7b", 5000, "Mistral 7B v0.3"),
+    Modelinfo("mixtral:8x7b", 26000, "Mixtral 8x7B MoE"),
+    Modelinfo("phi3:mini", 2500, "Microsoft Phi-3 Mini"),
+    Modelinfo("codellama:7b", 5000, "Code Llama 7B (Coding)"),
+    Modelinfo("deepseek-coder:6.7b", 5000, "DeepSeek Coder 6.7B"),
+    Modelinfo("gemma2:9b", 6000, "Google Gemma 2 9B"),
+]
+
+# Standard OpenAI models
+OPENAI_DEFAULT_MODELS = [
+    Modelinfo("gpt-4o", 0, "GPT-4o (Multimodal)"),
+    Modelinfo("gpt-4o-mini", 0, "GPT-4o Mini"),
+    Modelinfo("gpt-4-turbo", 0, "GPT-4 Turbo"),
+    Modelinfo("gpt-3.5-turbo", 0, "GPT-3.5 Turbo"),
+]
+
+# Backend model mapping
+BACKEND_MODEL_REGISTRY: Dict[str, List[Modelinfo]] = {
+    "ollama": OLLAMA_DEFAULT_MODELS,
+    "openai": OPENAI_DEFAULT_MODELS,
+    "vastai": OLLAMA_DEFAULT_MODELS, # Vast.ai usually runs Ollama/vLLM images
+}
+
+def get_default_models(backend_type: str) -> List[str]:
+    """Return a list of model names for the given backend."""
+    models = BACKEND_MODEL_REGISTRY.get(backend_type.lower(), [])
+    return [m.name for m in models]

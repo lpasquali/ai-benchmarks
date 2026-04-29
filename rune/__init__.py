@@ -1317,7 +1317,7 @@ def show_config() -> None:
 
 @db_app.command("migrate-to-postgres")
 def db_migrate_to_postgres(
-    source: str = typer.Option("sqlite:///home/ubuntu/.rune/jobs.db", "--source", help="Source SQLite URL"),
+    source: str = typer.Option("sqlite:///~/.rune-api/jobs.db", "--source", help="Source SQLite URL"),
     target: str = typer.Option(..., "--target", help="Target Postgres URL"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be migrated without writing"),
 ) -> None:

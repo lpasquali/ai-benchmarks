@@ -36,17 +36,23 @@ class PostgresStorageAdapter:
             "sigstore_bundle",
             "rekor_entry",
             "tpm_attestation",
+            "log",
+            "screenshot",
         }
     )
 
     def __init__(self, db_url: str) -> None:
         self._db_url = db_url
+        pool_kwargs: dict[str, Any] = {}
+        if dict_row is not None:
+            pool_kwargs["row_factory"] = dict_row
+
         self._pool = ConnectionPool(
             conninfo=db_url,
             min_size=self._pool_min_size(),
             max_size=self._pool_max_size(),
             open=True,
-            kwargs={"row_factory": dict_row},
+            kwargs=pool_kwargs,
         )
         self._pool.wait()
         self._initialize()
@@ -504,3 +510,48 @@ class PostgresStorageAdapter:
             created_at=float(row["created_at"]),
             updated_at=float(row["updated_at"]),
         )
+
+    # ── Settings & Profiles ───────────────────────────────────────────────
+
+    def set_setting(self, key: str, value: dict) -> None:
+        """Upsert a JSON-serializable setting into the database."""
+        now = time.time()
+        with self.connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO settings (key, value_json, updated_at)
+                VALUES (%s, %s, %s)
+                ON CONFLICT(key) DO UPDATE SET
+                    value_json = EXCLUDED.value_json,
+                    updated_at = EXCLUDED.updated_at
+                """,
+                (key, json.dumps(value, sort_keys=True), now),
+            )
+
+    def get_setting(self, key: str) -> dict | None:
+        """Fetch a JSON-serializable setting by key."""
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT value_json FROM settings WHERE key = %s", (key,)
+            ).fetchone()
+        if row is None:
+            return None
+        return json.loads(row["value_json"])
+
+    def delete_setting(self, key: str) -> None:
+        """Remove a setting from the database."""
+        with self.connection() as conn:
+            conn.execute("DELETE FROM settings WHERE key = %s", (key,))
+
+    def list_settings(self, prefix: str | None = None) -> dict[str, dict]:
+        """Return all settings, optionally filtered by key prefix."""
+        query = "SELECT key, value_json FROM settings"
+        params: list[str] = []
+        if prefix:
+            query += " WHERE key LIKE %s"
+            params.append(f"{prefix}%%")
+
+        with self.connection() as conn:
+            rows = conn.execute(query, params).fetchall()
+
+        return {row["key"]: json.loads(row["value_json"]) for row in rows}

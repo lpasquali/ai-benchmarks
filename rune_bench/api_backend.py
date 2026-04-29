@@ -22,6 +22,7 @@ from rune_bench.metrics.cost import calculate_run_cost
 from rune_bench.resources.base import LLMResourceProvider
 from rune_bench.resources.existing_backend_provider import ExistingBackendProvider
 from rune_bench.workflows import warmup_backend_model
+from rune_bench.common.artifact_utils import process_agent_artifacts
 
 try:
     from rune_bench.resources.vastai.sdk import VastAI
@@ -44,9 +45,16 @@ def _make_resource_provider_for_benchmark(
     request: RunBenchmarkRequest,
 ) -> LLMResourceProvider:
     """Factory: return the LLM resource provider for a benchmark run."""
-    if request.provisioning and request.provisioning.vastai:
-        v = request.provisioning.vastai
+    backend_type = getattr(request, "backend_type", "ollama")
+    
+    if backend_type == "vastai" or (request.provisioning and request.provisioning.vastai):
         from rune_bench.resources.vastai import VastAIProvider
+        v = (request.provisioning.vastai if request.provisioning else None) or VastAIProvisioning(
+            template_hash=os.environ.get("RUNE_VASTAI_TEMPLATE", "c166c11f035d3a97871a23bd32ca6aba"),
+            min_dph=float(os.environ.get("RUNE_VASTAI_MIN_DPH", "0.0")),
+            max_dph=float(os.environ.get("RUNE_VASTAI_MAX_DPH", "10.0")),
+            reliability=float(os.environ.get("RUNE_VASTAI_RELIABILITY", "0.9")),
+        )
 
         return VastAIProvider(
             _vastai_sdk(),
@@ -61,7 +69,7 @@ def _make_resource_provider_for_benchmark(
         model=request.model,
         warmup=request.backend_warmup,
         warmup_timeout=request.backend_warmup_timeout,
-        backend_type=getattr(request, "backend_type", "ollama"),
+        backend_type=backend_type,
     )
 
 
@@ -69,10 +77,16 @@ def _make_resource_provider_for_ollama_instance(
     request: RunLLMInstanceRequest,
 ) -> LLMResourceProvider:
     """Factory: return the LLM resource provider for an Ollama instance run."""
-    if request.provisioning and request.provisioning.vastai:
-        v = request.provisioning.vastai
+    backend_type = getattr(request, "backend_type", "ollama")
+    
+    if backend_type == "vastai" or (request.provisioning and request.provisioning.vastai):
         from rune_bench.resources.vastai import VastAIProvider
-
+        v = (request.provisioning.vastai if request.provisioning else None) or VastAIProvisioning(
+            template_hash=os.environ.get("RUNE_VASTAI_TEMPLATE", "c166c11f035d3a97871a23bd32ca6aba"),
+            min_dph=0.0,
+            max_dph=10.0,
+            reliability=0.9,
+        )
         return VastAIProvider(
             _vastai_sdk(),
             template_hash=v.template_hash,
@@ -83,7 +97,7 @@ def _make_resource_provider_for_ollama_instance(
         )
     return ExistingBackendProvider(
         request.backend_url,
-        backend_type=getattr(request, "backend_type", "ollama"),
+        backend_type=backend_type,
     )
 
 
@@ -146,7 +160,11 @@ async def run_llm_instance(request: RunLLMInstanceRequest) -> dict:
     return out
 
 
-async def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
+async def run_agentic_agent(
+    request: RunAgenticAgentRequest,
+    job_id: str | None = None,
+    storage: Any | None = None,
+) -> dict:
     if request.backend_url and request.backend_warmup:
         warmup_backend_model(
             request.backend_url,
@@ -214,10 +232,14 @@ async def run_agentic_agent(request: RunAgenticAgentRequest) -> dict:
     else:
         result.telemetry = RunTelemetry(cost_estimate_usd=cost_usd)
 
+    processed_artifacts = result.artifacts
+    if job_id and storage and result.artifacts:
+        processed_artifacts = process_agent_artifacts(job_id, result.artifacts, storage)
+
     return {
         "answer": result.answer,
         "result_type": result.result_type,
-        "artifacts": result.artifacts,
+        "artifacts": processed_artifacts,
         "metadata": result.metadata,
         "telemetry": result.telemetry.to_dict() if result.telemetry else None,
     }
@@ -235,7 +257,11 @@ def _verify_attestation(target: str) -> None:
         )
 
 
-async def run_benchmark(request: RunBenchmarkRequest) -> dict:
+async def run_benchmark(
+    request: RunBenchmarkRequest,
+    job_id: str | None = None,
+    storage: Any | None = None,
+) -> dict:
     if request.attestation_required:
         _verify_attestation(request.kubeconfig)
 
@@ -285,10 +311,14 @@ async def run_benchmark(request: RunBenchmarkRequest) -> dict:
     else:
         agent_result.telemetry = RunTelemetry(cost_estimate_usd=cost_usd)
 
+    processed_artifacts = agent_result.artifacts
+    if job_id and storage and agent_result.artifacts:
+        processed_artifacts = process_agent_artifacts(job_id, agent_result.artifacts, storage)
+
     return {
         "answer": agent_result.answer,
         "result_type": agent_result.result_type,
-        "artifacts": agent_result.artifacts,
+        "artifacts": processed_artifacts,
         "metadata": agent_result.metadata,
         "telemetry": agent_result.telemetry.to_dict()
         if agent_result.telemetry
