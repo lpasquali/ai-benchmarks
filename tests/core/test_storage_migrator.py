@@ -19,7 +19,7 @@ _EXPECTED_TABLES = {
     "chain_state",
     "audit_artifact",
 }
-_EXPECTED_VERSIONS = [1, 2, 3, 4, 5]
+_EXPECTED_VERSIONS = [1, 2, 3, 4, 5, 6]
 
 
 @pytest.fixture
@@ -74,12 +74,12 @@ def test_migrator_partial_state(conn) -> None:
 
     applied = migrator.apply_pending(conn)
 
-    assert applied == [4, 5]
+    assert applied == [4, 5, 6]
     versions = {
         int(row[0])
         for row in conn.execute("SELECT version FROM schema_version").fetchall()
     }
-    assert versions == {1, 2, 3, 4, 5}
+    assert versions == {1, 2, 3, 4, 5, 6}
 
 
 def test_migrator_invalid_sql_raises_with_context(tmp_path: pathlib.Path, conn) -> None:

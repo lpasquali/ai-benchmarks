@@ -415,6 +415,7 @@ class TestInitTemplate:
             "question",
             "model",
             "kubeconfig",
+            "agent",
         }
         assert set(_FIELD_ENV_MAP.keys()) == known_keys
 

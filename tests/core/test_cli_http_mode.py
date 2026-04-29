@@ -18,11 +18,11 @@ def rune_api_server(tmp_path):
     store = JobStore(tmp_path / "jobs.db")
     state = {"agentic_calls": 0, "benchmark_calls": 0}
 
-    async def run_agentic(request):
+    async def run_agentic(request, **kwargs):
         state["agentic_calls"] += 1
         return {"answer": "agent-http-answer", "result_type": "text", "artifacts": []}
 
-    async def run_benchmark(request):
+    async def run_benchmark(request, **kwargs):
         state["benchmark_calls"] += 1
         return {
             "answer": "benchmark-http-answer",
