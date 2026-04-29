@@ -11,6 +11,7 @@ import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from rune_bench import debug_pprof
@@ -35,8 +36,11 @@ from rune_bench.common.backend_utils import (
 )
 from rune_bench.common.config import (
     create_profile,
+    delete_profile,
+    get_config_as_yaml,
     get_raw_config,
     load_config,
+    set_storage_adapter,
     update_settings,
 )
 from rune_bench.metrics.pricing import PricingSoothSayer
@@ -119,16 +123,20 @@ def _audit_artifact_content_type(kind: str) -> str:
     return "application/octet-stream"
 
 
-async def _run_agentic_backend(request: object) -> dict:
+async def _run_agentic_backend(
+    request: object, job_id: str | None = None, storage: Any | None = None
+) -> dict:
     if not isinstance(request, RunAgenticAgentRequest):
         raise RuntimeError("invalid request type for agentic-agent backend")
-    return await run_agentic_agent(request)
+    return await run_agentic_agent(request, job_id=job_id, storage=storage)
 
 
-async def _run_benchmark_backend(request: object) -> dict:
+async def _run_benchmark_backend(
+    request: object, job_id: str | None = None, storage: Any | None = None
+) -> dict:
     if not isinstance(request, RunBenchmarkRequest):
         raise RuntimeError("invalid request type for benchmark backend")
-    return await run_benchmark(request)
+    return await run_benchmark(request, job_id=job_id, storage=storage)
 
 
 async def _run_llm_instance_backend(request: object) -> dict:
@@ -227,7 +235,7 @@ class RuneApiApplication:
 
         db_url = os.environ.get(
             "RUNE_DATABASE_URL",
-            config.get("database_url", "sqlite:///home/ubuntu/.rune/jobs.db"),
+            config.get("database_url", "sqlite:///~/.rune-api/jobs.db"),
         )
         if db_url.startswith("sqlite:///"):
             db_path = Path(db_url[10:]).expanduser()
@@ -240,6 +248,7 @@ class RuneApiApplication:
         else:
             raise ValueError(f"Unsupported database URL scheme: {db_url}")
 
+        set_storage_adapter(store)
         return cls(store=store, security=security)
 
     def _enforce_request_rate_limit(self, tenant_id: str) -> None:
@@ -293,7 +302,7 @@ class RuneApiApplication:
                 else CostEstimationRequest(**payload)
             )
 
-        res = handler(req)
+        res = handler(req, job_id=str(uuid.uuid4()), storage=self.store)
         if inspect.isawaitable(res):
             return await res
         return res
@@ -457,6 +466,20 @@ class RuneApiApplication:
                     self._write_json(200, resp.to_dict())
                     return
 
+                if path == "/v1/settings/export":
+                    query = parse_qs(parsed.query)
+                    profile = query.get("profile", [None])[0]
+                    try:
+                        content = get_config_as_yaml(profile)
+                        self.send_response(200)
+                        self.send_header("Content-Type", "text/yaml")
+                        self.send_header("Content-Disposition", f'attachment; filename="rune-{profile or "defaults"}.yaml"')
+                        self.end_headers()
+                        self.wfile.write(content.encode())
+                    except Exception as exc:
+                        self._write_json(400, {"error": str(exc)})
+                    return
+
                 if path.startswith("/v1/runs/") and path.endswith("/trace"):
                     run_id = path.split("/")[3]
                     job = app.store.get_job(run_id)
@@ -602,6 +625,12 @@ class RuneApiApplication:
                     self._write_json(200, state)
                     return
 
+                if path.startswith("/v1/settings/profiles/"):
+                    profile_name = path.split("/")[-1]
+                    delete_profile(profile_name)
+                    self._write_json(200, {"status": "deleted", "profile": profile_name})
+                    return
+
                 if path.startswith("/v1/jobs/"):
                     job_id = path.split("/")[-1]
                     job = app.store.get_job(job_id)
@@ -648,7 +677,11 @@ class RuneApiApplication:
 
                 if path == "/v1/settings":
                     req = UpdateSettingsRequest(**data)
-                    update_settings(req.settings, req.profile)
+                    if req.settings is not None:
+                        update_settings(req.settings, req.profile)
+                    if req.active_profile is not None:
+                        os.environ["RUNE_PROFILE"] = req.active_profile
+
                     self._write_json(200, {"status": "updated"})
                     return
 
@@ -812,7 +845,7 @@ class RuneApiApplication:
                     else CostEstimationRequest(**payload)
                 )
 
-            res = handler(req)
+            res = handler(req, job_id=job_id, storage=self.store)
             if inspect.isawaitable(res):
                 result = await res
             else:

@@ -26,6 +26,16 @@ from typing import Any
 
 import yaml
 
+# Global storage adapter for DB-backed config (injected by API server)
+_DB_STORAGE: Any = None
+
+
+def set_storage_adapter(adapter: Any) -> None:
+    """Inject a StoragePort adapter to redirect config to the database."""
+    global _DB_STORAGE
+    _DB_STORAGE = adapter
+
+
 # Maps YAML config keys → corresponding RUNE_* env var names.
 # Intentionally excludes secrets: RUNE_API_TOKEN, VAST_API_KEY.
 _FIELD_ENV_MAP: dict[str, str] = {
@@ -53,6 +63,7 @@ _FIELD_ENV_MAP: dict[str, str] = {
     # Benchmark
     "question": "RUNE_QUESTION",
     "model": "RUNE_MODEL",
+    "agent": "RUNE_AGENT",
     "kubeconfig": "RUNE_KUBECONFIG",
 }
 
@@ -284,7 +295,7 @@ def get_loaded_config_files() -> list[Path]:
 
 
 def get_raw_config() -> dict[str, Any]:
-    """Return the raw merged configuration from all files without env injection."""
+    """Return the raw merged configuration from all files + database without env injection."""
     global_file = _find_config_file(_GLOBAL_CANDIDATES)
     project_file = _find_config_file(_PROJECT_CANDIDATES)
 
@@ -293,20 +304,41 @@ def get_raw_config() -> dict[str, Any]:
         raw = _merge(raw, _parse_yaml(global_file))
     if project_file:
         raw = _merge(raw, _parse_yaml(project_file))
+
+    # Merge database overrides if available
+    if _DB_STORAGE:
+        db_config = _DB_STORAGE.get_setting("rune_config") or {}
+        if db_config:
+            # Deep merge logic for defaults and profiles
+            if "defaults" in db_config:
+                raw["defaults"] = _merge(raw.get("defaults") or {}, db_config["defaults"])
+            if "profiles" in db_config:
+                raw_profiles = raw.get("profiles") or {}
+                for p_name, p_val in db_config["profiles"].items():
+                    raw_profiles[p_name] = _merge(raw_profiles.get(p_name) or {}, p_val)
+                raw["profiles"] = raw_profiles
+            if "attestation" in db_config:
+                raw["attestation"] = _merge(raw.get("attestation") or {}, db_config["attestation"])
+
     return raw
 
 
-def save_config(data: dict[str, Any], global_config: bool = False) -> Path:
-    """Save the configuration dict back to the preferred YAML file.
+def save_config(data: dict[str, Any], global_config: bool = False) -> Path | str:
+    """Save the configuration dict back to the preferred storage (DB or YAML).
 
     Args:
         data: The configuration dictionary to save.
         global_config: If True, save to ~/.rune/config.yaml. If False,
-                      prefer project-level rune.yaml.
+                      prefer project-level rune.yaml or database.
 
     Returns:
-        The Path to the saved file.
+        The Path to the saved file or "database".
     """
+    if _DB_STORAGE and not global_config:
+        # In API mode, we save all overrides to the database
+        _DB_STORAGE.set_setting("rune_config", data)
+        return "database"
+
     if global_config:
         path = _find_config_file(_GLOBAL_CANDIDATES) or _GLOBAL_CANDIDATES[0]
     else:
@@ -316,6 +348,27 @@ def save_config(data: dict[str, Any], global_config: bool = False) -> Path:
     with path.open("w") as fh:
         yaml.safe_dump(data, fh, sort_keys=False, default_flow_style=False)
     return path
+
+
+def get_config_as_yaml(profile: str | None = None) -> str:
+    """Return the effective configuration for a profile as a YAML string."""
+    raw = get_raw_config()
+    defaults = raw.get("defaults") or {}
+    profiles = raw.get("profiles") or {}
+    
+    # We want to export a clean YAML that contains only the relevant profile 
+    # and defaults, suitable for `rune --config exported.yaml run-benchmark`
+    export_data = {
+        "version": "1",
+        "defaults": defaults,
+    }
+    if profile:
+        if profile in profiles:
+            export_data["profiles"] = {profile: profiles[profile]}
+        else:
+            raise ValueError(f"Profile {profile} not found")
+            
+    return yaml.safe_dump(export_data, sort_keys=False, default_flow_style=False)
 
 
 def update_settings(updates: dict[str, Any], profile: str | None = None) -> Path:
@@ -343,6 +396,20 @@ def update_settings(updates: dict[str, Any], profile: str | None = None) -> Path
 
     # Determine which file to write to. If a project file exists, update it.
     # Otherwise, if a global file exists, update it.
+    project_file = _find_config_file(_PROJECT_CANDIDATES)
+    global_config = (
+        project_file is None and _find_config_file(_GLOBAL_CANDIDATES) is not None
+    )
+
+    return save_config(raw, global_config=global_config)
+
+
+def delete_profile(name: str) -> Path:
+    """Remove a profile from the configuration and save to disk."""
+    raw = get_raw_config()
+    if "profiles" in raw and name in raw["profiles"]:
+        del raw["profiles"][name]
+
     project_file = _find_config_file(_PROJECT_CANDIDATES)
     global_config = (
         project_file is None and _find_config_file(_GLOBAL_CANDIDATES) is not None

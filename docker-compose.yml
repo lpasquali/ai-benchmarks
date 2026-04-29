@@ -58,7 +58,8 @@ services:
       RUNE_BACKEND: local
       RUNE_API_HOST: 0.0.0.0
       RUNE_API_PORT: "8080"
-      RUNE_API_AUTH_DISABLED: "1"          # disable auth for local dev
+      RUNE_API_AUTH_DISABLED: "${RUNE_API_AUTH_DISABLED:-1}"          # disable auth for local dev
+      RUNE_DATABASE_URL: "${RUNE_DATABASE_URL:-postgresql://rune:runesecret@postgres:5432/rune}"
       RUNE_BACKEND_URL: http://ollama:11434
       RUNE_BACKEND_WARMUP: "true"
       RUNE_BACKEND_WARMUP_TIMEOUT: "300"
@@ -77,12 +78,41 @@ services:
         condition: service_completed_successfully
       ollama:
         condition: service_started
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 5s
+    restart: unless-stopped
+
+  # ── RUNE Audit ────────────────────────────────────────────────────────────
+  rune-audit:
+    image: ghcr.io/lpasquali/rune-audit:latest
+    command: ["tail", "-f", "/dev/null"]
+    environment:
+      RUNE_AUDIT_GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      RUNE_AUDIT_OUTPUT_DIR: /app/audit-output
+    volumes:
+      - audit-output:/app/audit-output
+    restart: unless-stopped
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-rune}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-runesecret}"
+      POSTGRES_DB: "${POSTGRES_DB:-rune}"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rune -d rune"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
   # ── Ollama inference server ────────────────────────────────────────────────
@@ -150,3 +180,5 @@ volumes:
   rune-db:          # SQLite job store
   ollama-models:    # pulled Ollama models (survives restarts)
   seaweedfs-data:   # SeaweedFS blob + metadata storage
+  postgres-data:    # PostgreSQL persistent data
+  audit-output:     # Generated audit reports

@@ -16,7 +16,7 @@ def rune_api_server(tmp_path):
     store = JobStore(tmp_path / "jobs.db")
     state = {"agentic_calls": 0, "store": store}
 
-    def run_agentic(request):
+    def run_agentic(request, **kwargs):
         state["agentic_calls"] += 1
         return {"answer": f"ok:{request.question}"}
 
@@ -28,12 +28,12 @@ def rune_api_server(tmp_path):
         ),
         backend_functions={
             "agentic-agent": run_agentic,
-            "benchmark": lambda request: {"answer": "bench"},
-            "llm-instance": lambda request: {
+            "benchmark": lambda request, **kwargs: {"answer": "bench"},
+            "llm-instance": lambda request, **kwargs: {
                 "mode": "existing",
                 "backend_url": request.backend_url,
             },
-            "ollama-instance": lambda request: {
+            "ollama-instance": lambda request, **kwargs: {
                 "mode": "existing",
                 "backend_url": request.backend_url,
             },

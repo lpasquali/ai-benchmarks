@@ -243,6 +243,8 @@ class SQLiteStorageAdapter:
             "sigstore_bundle",
             "rekor_entry",
             "tpm_attestation",
+            "log",
+            "screenshot",
         }
     )
 
@@ -576,3 +578,52 @@ class SQLiteStorageAdapter:
             created_at=float(row["created_at"]),
             updated_at=float(row["updated_at"]),
         )
+
+    # ── Settings & Profiles ───────────────────────────────────────────────
+
+    def set_setting(self, key: str, value: dict) -> None:
+        """Upsert a JSON-serializable setting into the database."""
+        now = time.time()
+        with closing(self._connect()) as conn:
+            with conn:
+                conn.execute(
+                    """
+                    INSERT INTO settings (key, value_json, updated_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(key) DO UPDATE SET
+                        value_json = excluded.value_json,
+                        updated_at = excluded.updated_at
+                    """,
+                    (key, json.dumps(value, sort_keys=True), now),
+                )
+
+    def get_setting(self, key: str) -> dict | None:
+        """Fetch a JSON-serializable setting by key."""
+        with closing(self._connect()) as conn:
+            with conn:
+                row = conn.execute(
+                    "SELECT value_json FROM settings WHERE key = ?", (key,)
+                ).fetchone()
+        if row is None:
+            return None
+        return json.loads(row["value_json"])
+
+    def delete_setting(self, key: str) -> None:
+        """Remove a setting from the database."""
+        with closing(self._connect()) as conn:
+            with conn:
+                conn.execute("DELETE FROM settings WHERE key = ?", (key,))
+
+    def list_settings(self, prefix: str | None = None) -> dict[str, dict]:
+        """Return all settings, optionally filtered by key prefix."""
+        query = "SELECT key, value_json FROM settings"
+        params: list[str] = []
+        if prefix:
+            query += " WHERE key LIKE ?"
+            params.append(f"{prefix}%")
+
+        with closing(self._connect()) as conn:
+            with conn:
+                rows = conn.execute(query, params).fetchall()
+
+        return {row["key"]: json.loads(row["value_json"]) for row in rows}
