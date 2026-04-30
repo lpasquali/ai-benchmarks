@@ -29,7 +29,7 @@ class RadiantDriverClient:
 
     ONBOARDING_URL = "https://radiantsecurity.ai/"
 
-    def __init__(self, *, transport: DriverTransport | None = None) -> None:
+    def __init__(self, *, transport: DriverTransport | None = None, **kwargs) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("radiant")
         self._async_transport: AsyncDriverTransport = make_async_driver_transport(
             "radiant"
@@ -197,4 +197,4 @@ class RadiantDriverClient:
         )
 
 
-RadiantRunner = RadiantDriverClient
+

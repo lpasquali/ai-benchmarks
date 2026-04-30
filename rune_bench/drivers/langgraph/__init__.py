@@ -29,12 +29,10 @@ class LangGraphDriverClient:
     Supports both Research and SRE scopes. For SRE tasks, a kubeconfig is required.
     """
 
-    def __init__(
-        self,
+    def __init__(self,
         kubeconfig: Path | None = None,
         *,
-        transport: DriverTransport | None = None,
-    ) -> None:
+        transport: DriverTransport | None = None, **kwargs) -> None:
         self._kubeconfig = kubeconfig
         self._transport: DriverTransport = transport or make_driver_transport(
             "langgraph"
@@ -174,4 +172,4 @@ class LangGraphDriverClient:
         )
 
 
-LangGraphRunner = LangGraphDriverClient
+

@@ -33,10 +33,13 @@ class HolmesDriverClient:
 
     def __init__(
         self,
-        kubeconfig: Path,
+        kubeconfig: str | Path,
         *,
         transport: DriverTransport | None = None,
+        **kwargs,
     ) -> None:
+        if isinstance(kubeconfig, str):
+            kubeconfig = Path(kubeconfig)
         if not kubeconfig.exists():
             raise FileNotFoundError(f"kubeconfig not found: {kubeconfig}")
         self._kubeconfig = kubeconfig
@@ -209,4 +212,3 @@ class HolmesDriverClient:
         return limits
 
 
-HolmesRunner = HolmesDriverClient

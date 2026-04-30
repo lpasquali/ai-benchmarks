@@ -7,7 +7,7 @@ import json
 import os
 import sys
 
-from rune_bench.agents.cybersec.radiant_runner import RadiantSecurityRunner
+from .runner import RadiantSecurityRunner
 
 
 def _handle_ask(params: dict) -> dict:

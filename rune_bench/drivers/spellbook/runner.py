@@ -20,11 +20,11 @@ from rune_bench.debug import debug_log
 class SpellbookRunner:
     """Legal/Ops agent: autonomous contract review via Spellbook."""
 
-    def __init__(self, api_key: str | None = None) -> None:
+    def __init__(self, api_key: str | None = None, **kwargs) -> None:
         self._api_key = api_key or os.getenv("SPELLBOOK_API_KEY")
         self._api_base = "https://api.spellbook.legal/v1"
 
-    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama", **kwargs) -> str:
         """Run a legal document analysis and return the review result."""
         if not self._api_key:
             return "Error: SPELLBOOK_API_KEY not set."

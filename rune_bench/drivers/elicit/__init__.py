@@ -29,11 +29,9 @@ class ElicitDriverClient:
     require no changes.
     """
 
-    def __init__(
-        self,
+    def __init__(self,
         *,
-        transport: DriverTransport | None = None,
-    ) -> None:
+        transport: DriverTransport | None = None, **kwargs) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("elicit")
         self._async_transport: AsyncDriverTransport = make_async_driver_transport(
             "elicit"
@@ -179,4 +177,4 @@ class ElicitDriverClient:
         )
 
 
-ElicitRunner = ElicitDriverClient
+

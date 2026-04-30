@@ -28,7 +28,7 @@ class SkillfortifyDriverClient:
 
     ONBOARDING_URL = "https://skillfortify.com/"
 
-    def __init__(self, *, transport: DriverTransport | None = None) -> None:
+    def __init__(self, *, transport: DriverTransport | None = None, **kwargs) -> None:
         self._transport: DriverTransport = transport or make_driver_transport(
             "skillfortify"
         )
@@ -198,4 +198,4 @@ class SkillfortifyDriverClient:
         )
 
 
-SkillfortifyRunner = SkillfortifyDriverClient
+

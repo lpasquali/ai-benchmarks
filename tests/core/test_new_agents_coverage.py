@@ -3,6 +3,7 @@ import pytest
 import json
 import sys
 import io
+import os
 from unittest.mock import MagicMock, patch, AsyncMock
 from pathlib import Path
 
@@ -12,21 +13,21 @@ sys.modules["browser_use"] = MagicMock()
 sys.modules["boto3"] = MagicMock()
 sys.modules["aioboto3"] = MagicMock()
 
-from rune_bench.agents.art.midjourney import MidjourneyRunner  # noqa: E402  # noqa: E402
-from rune_bench.agents.art.krea import KreaRunner  # noqa: E402  # noqa: E402
-from rune_bench.agents.art.comfyui import ComfyUIRunner  # noqa: E402  # noqa: E402
-from rune_bench.agents.ops.sierra import SierraRunner  # noqa: E402  # noqa: E402
-from rune_bench.agents.ops.multion import MultiOnRunner  # noqa: E402  # noqa: E402
-from rune_bench.agents.ops.browser_use import BrowserUseRunner  # noqa: E402  # noqa: E402
-from rune_bench.agents.cyber.xbow import XBOWRunner  # noqa: E402  # noqa: E402
-from rune_bench.agents.cybersec.radiant import RadiantSecurityRunner  # noqa: E402  # noqa: E402
-from rune_bench.agents.sre.cleric import ClericRunner  # noqa: E402  # noqa: E402
-from rune_bench.agents.legal.spellbook import SpellbookRunner  # noqa: E402  # noqa: E402
-from rune_bench.agents.legal.harvey import HarveyAIRunner  # noqa: E402  # noqa: E402
-from rune_bench.drivers.dagger.engine import DaggerEngine  # noqa: E402  # noqa: E402
-from rune_bench.backends.ollama import OllamaBackend, OllamaClient, OllamaModelManager  # noqa: E402  # noqa: E402
-from rune_bench.backends.bedrock import BedrockBackend  # noqa: E402  # noqa: E402
-from rune_bench.backends.base import BackendCredentials  # noqa: E402  # noqa: E402
+from rune_bench.drivers.midjourney.runner import MidjourneyRunner
+from rune_bench.drivers.krea.runner import KreaRunner
+from rune_bench.drivers.comfyui.runner import ComfyUIRunner
+from rune_bench.drivers.sierra.runner import SierraRunner
+from rune_bench.drivers.multion.runner import MultiOnRunner
+from rune_bench.drivers.browseruse.runner import BrowserUseRunner
+from rune_bench.drivers.xbow.runner import XBOWRunner
+from rune_bench.drivers.radiant.runner import RadiantSecurityRunner
+from rune_bench.drivers.cleric.runner import ClericRunner
+from rune_bench.drivers.spellbook.runner import SpellbookRunner
+from rune_bench.drivers.harvey.runner import HarveyAIRunner
+from rune_bench.drivers.dagger.engine import DaggerEngine
+from rune_bench.backends.ollama import OllamaBackend, OllamaClient, OllamaModelManager
+from rune_bench.backends.bedrock import BedrockBackend
+from rune_bench.backends.base import BackendCredentials, ModelCapabilities
 
 @patch("httpx.Client")
 def test_midjourney_runner_full(mock_client):
@@ -183,7 +184,7 @@ def test_ollama_client_extra_coverage():
         client.unload_model("m1")
 
 def test_debug_pprof_coverage_fixed():
-    from rune_bench.debug_pprof import start_background_server_if_configured, reset_for_tests, _threads_text, _heap_text  # noqa: E402  # noqa: E402
+    from rune_bench.debug_pprof import start_background_server_if_configured, reset_for_tests, _threads_text, _heap_text  # noqa: E402
     reset_for_tests()
     with patch.dict("os.environ", {"RUNE_PPROF_BIND": "127.0.0.1:0"}):
         start_background_server_if_configured()
@@ -225,22 +226,22 @@ def test_agent_error_paths_coverage_fixed(mock_client):
     mock_client.return_value.__enter__.return_value = mock_ctx
     mock_ctx.post.side_effect = Exception("conn error")
     with patch.dict("os.environ", {}, clear=True):
-        assert "KREA_API_KEY not set" in KreaRunner().ask("q", "m")
-        assert "MIDJOURNEY_API_KEY not set" in MidjourneyRunner(api_key=None).ask("q", "m")
-        assert "SIERRA_API_KEY not set" in SierraRunner().ask("q", "m")
-        assert "MULTION_API_KEY not set" in MultiOnRunner().ask("q", "m")
-        assert "XBOW_API_KEY not set" in XBOWRunner().ask("q", "m")
-        assert "SPELLBOOK_API_KEY not set" in SpellbookRunner().ask("q", "m")
-        assert "HARVEY_API_KEY not set" in HarveyAIRunner().ask("q", "m")
-        assert "RADIANT_API_KEY not set" in RadiantSecurityRunner().ask("q", "m")
+        assert "Error: KREA_API_KEY not set" in KreaRunner().ask("q", "m")
+        assert "Error: MIDJOURNEY_API_KEY not set" in MidjourneyRunner(api_key=None).ask("q", "m")
+        assert "Error: SIERRA_API_KEY not set" in SierraRunner().ask("q", "m")
+        assert "Error: MULTION_API_KEY not set" in MultiOnRunner().ask("q", "m")
+        assert "Error: XBOW_API_KEY not set" in XBOWRunner().ask("q", "m")
+        assert "Error: SPELLBOOK_API_KEY not set" in SpellbookRunner().ask("q", "m")
+        assert "Error: HARVEY_API_KEY not set" in HarveyAIRunner().ask("q", "m")
+        assert "Error: RADIANT_API_KEY not set" in RadiantSecurityRunner().ask("q", "m")
         assert "Cleric error" in ClericRunner().ask("q", "m")
 
 def test_attestation_factory_extra():
-    from rune_bench.attestation.factory import get_driver  # noqa: E402  # noqa: E402
+    from rune_bench.attestation.factory import get_driver  # noqa: E402
     assert get_driver({"driver": "noop"}) is not None
 
 def test_backend_utils_extra():
-    from rune_bench.common.backend_utils import normalize_backend_url, list_backend_models  # noqa: E402  # noqa: E402
+    from rune_bench.common.backend_utils import normalize_backend_url, list_backend_models  # noqa: E402
     assert normalize_backend_url("localhost:11434") == "http://localhost:11434"
     with patch("rune_bench.common.backend_utils.OllamaBackend") as mock_back:
         mock_back.return_value.list_models.return_value = ["m1"]
@@ -256,7 +257,7 @@ def test_comfyui_runner_fail(mock_client):
         assert "ComfyUI error" in res
 
 def test_http_client_extra_coverage():
-    from rune_bench.common.http_client import make_http_request  # noqa: E402  # noqa: E402
+    from rune_bench.common.http_client import make_http_request  # noqa: E402
     with patch("rune_bench.common.http_client.urlopen") as mock_urlopen:
         mock_resp = MagicMock()
         mock_resp.read.return_value = b'{"status":"ok"}'
@@ -274,7 +275,7 @@ def test_bedrock_backend_extra_coverage():
         mock_boto.assert_called()
 
 def test_catalog_loader_extra_coverage():
-    from rune_bench.catalog.loader import load  # noqa: E402  # noqa: E402
+    from rune_bench.catalog.loader import load  # noqa: E402
     with pytest.raises(FileNotFoundError, match="No catalog files found"):
         load(catalog_dir=Path("/tmp/non-existent-rune-dir"))
     with pytest.raises(FileNotFoundError, match="No catalog files found"):

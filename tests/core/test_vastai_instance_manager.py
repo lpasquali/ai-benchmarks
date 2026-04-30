@@ -8,7 +8,7 @@ from urllib.request import Request, urlopen
 import pytest
 from rune_bench.resources.vastai.instance import InstanceManager
 import rune_bench.api_server as api_server
-from rune_bench.job_store import JobStore
+from rune_bench.storage.sqlite import SQLiteStorageAdapter as JobStore
 
 
 def test_instance_manager_details_parsing():

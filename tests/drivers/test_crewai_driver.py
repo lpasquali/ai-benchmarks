@@ -349,8 +349,4 @@ def test_driver_client_raises_on_empty_answer() -> None:
         client.ask("q", "m", "http://o:11434")
 
 
-def test_driver_runner_alias() -> None:
-    from rune_bench.agents.ops.crewai import CrewAIRunner
-    from rune_bench.drivers.crewai import CrewAIDriverClient
 
-    assert CrewAIRunner is CrewAIDriverClient

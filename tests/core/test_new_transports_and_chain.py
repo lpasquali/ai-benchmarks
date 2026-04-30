@@ -868,20 +868,3 @@ class TestDriverClientAskStructured:
             asyncio.run(client.ask_async("q", "m"))
 
 
-# ---------------------------------------------------------------------------
-# Agent aliases (thin wrappers — import coverage)
-# ---------------------------------------------------------------------------
-
-
-class TestAgentAliases:
-    def test_invokeai_runner_exists(self) -> None:
-        from rune_bench.agents.art.invokeai import InvokeAIRunner
-        from rune_bench.drivers.invokeai import InvokeAIDriverClient
-
-        assert InvokeAIRunner is InvokeAIDriverClient
-
-    def test_browseruse_runner_exists(self) -> None:
-        from rune_bench.agents.ops.browseruse import BrowserUseRunner
-        from rune_bench.drivers.browseruse import BrowserUseDriverClient
-
-        assert BrowserUseRunner is BrowserUseDriverClient

@@ -18,11 +18,6 @@ from rune_bench.common import make_http_request, normalize_url
 from rune_bench.debug import debug_log
 from rune_bench.metrics import span
 
-# ---------------------------------------------------------------------------
-# Public type alias — keeps existing callsites using OllamaModelCapabilities
-# working without changes.
-# ---------------------------------------------------------------------------
-OllamaModelCapabilities = ModelCapabilities
 
 
 @dataclass
@@ -91,7 +86,7 @@ class OllamaClient:
                 names.add(item["name"])
         return names
 
-    def get_model_capabilities(self, model_name: str) -> OllamaModelCapabilities:
+    def get_model_capabilities(self, model_name: str) -> ModelCapabilities:
         """Return best-effort context/output capabilities for a model."""
         data = self._make_request(
             "/api/show",
@@ -120,7 +115,7 @@ class OllamaClient:
             f"Ollama model capabilities: model={model_name} context_window={context_window} "
             f"derived_max_output_tokens={max_output_tokens}"
         )
-        return OllamaModelCapabilities(
+        return ModelCapabilities(
             model_name=model_name,
             context_window=context_window,
             max_output_tokens=max_output_tokens,

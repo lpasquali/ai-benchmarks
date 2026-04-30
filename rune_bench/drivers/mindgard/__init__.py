@@ -34,11 +34,9 @@ class MindgardDriverClient:
         being **attacked** (the target under test), not a backend LLM.
     """
 
-    def __init__(
-        self,
+    def __init__(self,
         *,
-        transport: DriverTransport | None = None,
-    ) -> None:
+        transport: DriverTransport | None = None, **kwargs) -> None:
         self._transport: DriverTransport = transport or make_driver_transport(
             "mindgard"
         )
@@ -189,4 +187,4 @@ class MindgardDriverClient:
         )
 
 
-MindgardRunner = MindgardDriverClient
+

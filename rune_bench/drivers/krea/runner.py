@@ -21,11 +21,11 @@ from rune_bench.debug import debug_log
 class KreaRunner:
     """Art/Creative agent: real-time image enhancement via Krea AI."""
 
-    def __init__(self, api_key: str | None = None) -> None:
+    def __init__(self, api_key: str | None = None, **kwargs) -> None:
         self._api_key = api_key or os.getenv("KREA_API_KEY")
         self._api_base = "https://api.krea.ai/v1"
 
-    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama", **kwargs) -> str:
         """Generate/enhance an image and return the result URL."""
         if not self._api_key:
             return "Error: KREA_API_KEY not set."

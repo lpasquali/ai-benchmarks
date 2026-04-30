@@ -20,11 +20,11 @@ from rune_bench.debug import debug_log
 class SkillFortifyRunner:
     """Ops agent: autonomous skill development orchestration via SkillFortify."""
 
-    def __init__(self, api_key: str | None = None) -> None:
+    def __init__(self, api_key: str | None = None, **kwargs) -> None:
         self._api_key = api_key or os.getenv("SKILLFORTIFY_API_KEY")
         self._api_base = "https://api.skillfortify.com/v1"
 
-    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama", **kwargs) -> str:
         """Analyze skill requirements and return training plan."""
         if not self._api_key:
             return "Error: SKILLFORTIFY_API_KEY not set."

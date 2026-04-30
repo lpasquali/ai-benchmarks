@@ -34,11 +34,9 @@ class BurpGPTDriverClient:
     against the Burp Suite REST API.
     """
 
-    def __init__(
-        self,
+    def __init__(self,
         *,
-        transport: DriverTransport | None = None,
-    ) -> None:
+        transport: DriverTransport | None = None, **kwargs) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("burpgpt")
         self._async_transport: AsyncDriverTransport = make_async_driver_transport(
             "burpgpt"
@@ -188,4 +186,4 @@ class BurpGPTDriverClient:
         )
 
 
-BurpGPTRunner = BurpGPTDriverClient
+

@@ -17,7 +17,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import rune_bench.drivers.k8sgpt.__main__ as k8sgpt_main
-from rune_bench.agents.sre.k8sgpt import K8sGPTRunner
+from rune_bench.drivers.k8sgpt import K8sGPTDriverClient
 from rune_bench.drivers.k8sgpt import K8sGPTDriverClient
 
 
@@ -356,8 +356,6 @@ def test_client_ask_raises_on_none_answer(tmp_path: Path) -> None:
         client.ask("q", "m")
 
 
-def test_runner_alias() -> None:
-    assert K8sGPTRunner is K8sGPTDriverClient
 
 
 def test_format_findings_with_string_error() -> None:

@@ -310,16 +310,13 @@ def test_main_skips_empty_lines(
 
 
 # ---------------------------------------------------------------------------
-# GleanDriverClient / GleanRunner alias tests
 # ---------------------------------------------------------------------------
 
 from unittest.mock import MagicMock  # noqa: E402
 
-from rune_bench.drivers.glean import GleanDriverClient, GleanRunner  # noqa: E402
+from rune_bench.drivers.glean import GleanDriverClient, GleanDriverClient  # noqa: E402
 
 
-def test_glean_runner_is_alias() -> None:
-    assert GleanRunner is GleanDriverClient
 
 
 def test_glean_client_ask_returns_answer() -> None:

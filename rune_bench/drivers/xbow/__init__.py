@@ -28,7 +28,7 @@ class XbowDriverClient:
 
     ONBOARDING_URL = "https://xbow.com/"
 
-    def __init__(self, *, transport: DriverTransport | None = None) -> None:
+    def __init__(self, *, transport: DriverTransport | None = None, **kwargs) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("xbow")
         self._async_transport: AsyncDriverTransport = make_async_driver_transport(
             "xbow"
@@ -196,4 +196,4 @@ class XbowDriverClient:
         )
 
 
-XbowRunner = XbowDriverClient
+

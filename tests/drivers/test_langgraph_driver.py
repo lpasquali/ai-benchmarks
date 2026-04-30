@@ -430,8 +430,4 @@ def test_driver_client_raises_on_none_answer() -> None:
         client.ask("q", "m", "http://o:11434")
 
 
-def test_driver_runner_alias() -> None:
-    from rune_bench.agents.research.langgraph import LangGraphRunner
-    from rune_bench.drivers.langgraph import LangGraphDriverClient
 
-    assert LangGraphRunner is LangGraphDriverClient

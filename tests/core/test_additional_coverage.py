@@ -2,8 +2,8 @@
 import json
 import pytest
 from unittest.mock import MagicMock, patch
-from rune_bench.agents.ops.browser_use import BrowserUseRunner
-from rune_bench.agents.art.comfyui import ComfyUIRunner
+from rune_bench.drivers.browseruse.runner import BrowserUseRunner
+from rune_bench.drivers.comfyui import ComfyUIDriverClient
 from rune_bench.debug_pprof import start_background_server_if_configured
 
 def test_browser_use_runner_coverage():
@@ -11,7 +11,7 @@ def test_browser_use_runner_coverage():
     assert hasattr(runner, "ask")
 
 def test_comfyui_runner_coverage():
-    runner = ComfyUIRunner()
+    runner = ComfyUIDriverClient()
     assert hasattr(runner, "ask")
 
 def test_pprof_app_coverage():

@@ -7,7 +7,7 @@ import json
 import os
 import sys
 
-from rune_bench.agents.cybersec.xbow_runner import XBOWRunner
+from .runner import XBOWRunner
 
 
 def _handle_ask(params: dict) -> dict:

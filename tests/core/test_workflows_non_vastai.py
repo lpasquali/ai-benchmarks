@@ -96,13 +96,6 @@ def test_extract_ollama_service_url_prefers_direct_then_proxy():
     assert workflows._extract_ollama_service_url(details2) == "https://proxy:11434/x"
 
 
-# Backward-compatible aliases still work
-def test_backward_compatible_aliases():
-    assert workflows.use_existing_ollama_server is workflows.use_existing_backend_server
-    assert workflows.list_existing_ollama_models is workflows.list_backend_models
-    assert workflows.list_running_ollama_models is workflows.list_running_backend_models
-    assert workflows.warmup_existing_ollama_model is workflows.warmup_backend_model
-    assert workflows.provision_vastai_ollama is workflows.provision_vastai_backend
 
 
 # ── run_chain_workflow + JobStoreChainRecorder ──────────────────────────────
@@ -113,7 +106,7 @@ import asyncio  # noqa: E402
 from unittest.mock import AsyncMock  # noqa: E402
 
 from rune_bench.agents.base import AgentResult  # noqa: E402
-from rune_bench.job_store import JobStore  # noqa: E402
+from rune_bench.storage.sqlite import SQLiteStorageAdapter as JobStore  # noqa: E402
 
 
 def test_jobstore_chain_recorder_initialize_delegates_to_store(tmp_path):

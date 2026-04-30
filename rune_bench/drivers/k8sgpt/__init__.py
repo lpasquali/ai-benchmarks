@@ -33,10 +33,12 @@ class K8sGPTDriverClient:
 
     def __init__(
         self,
-        kubeconfig: Path,
+        kubeconfig: str | Path,
         *,
         transport: DriverTransport | None = None,
+        **kwargs,
     ) -> None:
+
         if not kubeconfig.exists():
             raise FileNotFoundError(f"kubeconfig not found: {kubeconfig}")
         self._kubeconfig = kubeconfig
@@ -192,4 +194,4 @@ class K8sGPTDriverClient:
         )
 
 
-K8sGPTRunner = K8sGPTDriverClient
+

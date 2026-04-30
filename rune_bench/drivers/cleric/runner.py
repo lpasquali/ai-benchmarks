@@ -20,13 +20,13 @@ from rune_bench.debug import debug_log
 class ClericRunner:
     """SRE agent: parallel investigation loop mimicking human debugging."""
 
-    def __init__(self, api_key: str | None = None, base_url: str | None = None) -> None:
+    def __init__(self, api_key: str | None = None, base_url: str | None = None, **kwargs) -> None:
         self._api_key = api_key or os.getenv("CLERIC_API_KEY")
         self._api_base = base_url or os.getenv(
             "CLERIC_API_BASE", "http://localhost:8080/v1"
         )
 
-    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama", **kwargs) -> str:
         """Run a Cleric investigation and return the findings."""
         if not self._api_key and "localhost" not in self._api_base:
             return "Error: CLERIC_API_KEY not set (required for remote API)."

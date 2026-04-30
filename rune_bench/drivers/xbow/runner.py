@@ -20,11 +20,11 @@ from rune_bench.debug import debug_log
 class XBOWRunner:
     """Cybersec agent: autonomous offensive security via XBOW."""
 
-    def __init__(self, api_key: str | None = None) -> None:
+    def __init__(self, api_key: str | None = None, **kwargs) -> None:
         self._api_key = api_key or os.getenv("XBOW_API_KEY")
         self._api_base = "https://api.xbow.com/v1"
 
-    def ask(self, question: str, model: str, backend_url: str | None = None) -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, **kwargs) -> str:
         """Run a security assessment and return the findings."""
         if not self._api_key:
             return "Error: XBOW_API_KEY not set."

@@ -3,7 +3,7 @@
 
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
-from rune_bench.agents.ops.browser_use import BrowserUseRunner
+from rune_bench.drivers.browseruse.runner import BrowserUseRunner
 
 def test_init_defaults(monkeypatch):
     monkeypatch.delenv("BROWSER_USE_API_KEY", raising=False)
@@ -21,13 +21,13 @@ def test_init_with_env(monkeypatch):
 
 def test_ask_sync_wrapper():
     runner = BrowserUseRunner(api_key="test-key", model="test-model")
-    with patch("rune_bench.agents.ops.browser_use.asyncio.run", return_value="success result"):
+    with patch("rune_bench.drivers.browseruse.runner.asyncio.run", return_value="success result"):
         result = runner.ask("test q", "test-model")
         assert result == "success result"
 
 def test_ask_sync_wrapper_exception():
     runner = BrowserUseRunner(api_key="test-key", model="test-model")
-    with patch("rune_bench.agents.ops.browser_use.asyncio.run", side_effect=Exception("sync error")):
+    with patch("rune_bench.drivers.browseruse.runner.asyncio.run", side_effect=Exception("sync error")):
         result = runner.ask("test q", "test-model")
         assert "Browser-Use error: sync error" in result
 

@@ -10,7 +10,7 @@ from unittest.mock import patch
 from urllib.request import Request, urlopen
 
 from rune_bench.api_server import ApiSecurityConfig, RuneApiApplication
-from rune_bench.job_store import JobStore
+from rune_bench.storage.sqlite import SQLiteStorageAdapter as JobStore
 from rune_bench.metrics import pricing as pricing_mod
 from rune_bench.metrics.pricing import (
     PricingSoothSayer,

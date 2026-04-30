@@ -4,7 +4,7 @@ import os
 from rich.console import Console
 
 import rune
-from rune_bench.backends.ollama import OllamaModelCapabilities
+from rune_bench.backends.ollama import ModelCapabilities
 from rune_bench.resources.vastai import ConnectionDetails
 from rune_bench.workflows import ExistingOllamaServer, VastAIProvisioningResult
 
@@ -14,7 +14,7 @@ def test_apply_model_limits_sets_only_missing(monkeypatch):
     monkeypatch.setenv("OVERRIDE_MAX_OUTPUT_TOKEN", "777")
 
     rune._apply_model_limits(
-        OllamaModelCapabilities(
+        ModelCapabilities(
             model_name="x",
             context_window=262144,
             max_output_tokens=52428,
@@ -34,7 +34,7 @@ def test_print_existing_ollama_displays_override_rows(monkeypatch):
         ExistingOllamaServer(
             url="http://localhost:11434", model_name="kavai/qwen3.5-GPT5:9b"
         ),
-        capabilities=OllamaModelCapabilities(
+        capabilities=ModelCapabilities(
             model_name="kavai/qwen3.5-GPT5:9b",
             context_window=262144,
             max_output_tokens=52428,
@@ -77,7 +77,7 @@ def test_print_vastai_result_displays_override_rows(monkeypatch):
 
     rune._print_vastai_result(
         result,
-        capabilities=OllamaModelCapabilities(
+        capabilities=ModelCapabilities(
             model_name="kavai/qwen3.5-GPT5:9b",
             context_window=262144,
             max_output_tokens=52428,

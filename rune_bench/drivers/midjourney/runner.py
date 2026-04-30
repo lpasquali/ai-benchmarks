@@ -20,13 +20,13 @@ from rune_bench.debug import debug_log
 class MidjourneyRunner:
     """Art/Creative agent: iterative image generation via Midjourney Remix."""
 
-    def __init__(self, api_base: str | None = None, api_key: str | None = None) -> None:
+    def __init__(self, api_base: str | None = None, api_key: str | None = None, **kwargs) -> None:
         self._api_base = api_base or os.getenv(
             "MIDJOURNEY_API_BASE", "https://api.useapi.net/v1"
         )
         self._api_key = api_key or os.getenv("MIDJOURNEY_API_KEY")
 
-    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama", **kwargs) -> str:
         """Generate an image from the prompt and return the result URL."""
         if not self._api_key:
             return "Error: MIDJOURNEY_API_KEY not set. Unofficial Midjourney API requires a proxy key."

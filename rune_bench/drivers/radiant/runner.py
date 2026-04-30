@@ -20,13 +20,13 @@ from rune_bench.debug import debug_log
 class RadiantSecurityRunner:
     """Cybersec agent: autonomous SOC incident investigation via Radiant Security."""
 
-    def __init__(self, api_key: str | None = None, base_url: str | None = None) -> None:
+    def __init__(self, api_key: str | None = None, base_url: str | None = None, **kwargs) -> None:
         self._api_key = api_key or os.getenv("RADIANT_API_KEY")
         self._api_base = base_url or os.getenv(
             "RADIANT_API_BASE", "https://api.radiantsecurity.ai/v1"
         )
 
-    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama", **kwargs) -> str:
         """Submit a security incident to Radiant and return the investigation report."""
         if not self._api_key:
             return "Error: RADIANT_API_KEY not set."

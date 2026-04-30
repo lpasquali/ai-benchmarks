@@ -7,7 +7,7 @@ import json
 import os
 import sys
 
-from rune_bench.agents.legal.harvey_runner import HarveyAIRunner
+from .runner import HarveyAIRunner
 
 
 def _handle_ask(params: dict) -> dict:

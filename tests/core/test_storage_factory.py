@@ -56,16 +56,6 @@ def test_make_storage_sqlite_empty_path_defaults_to_memory() -> None:
         store.close()
 
 
-def test_make_storage_sqlite_plus_pysqlite_alias(tmp_path) -> None:
-    db_file = tmp_path / "jobs.db"
-    store = make_storage(f"sqlite+pysqlite:///{db_file}")
-    try:
-        assert isinstance(store, SQLiteStorageAdapter)
-        assert db_file.exists() or True  # created lazily on first write
-        store.create_job(tenant_id="t", kind="benchmark", request_payload={})
-        assert db_file.exists()
-    finally:
-        store.close()
 
 
 @pytest.mark.parametrize(

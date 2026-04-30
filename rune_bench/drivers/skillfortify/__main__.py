@@ -7,7 +7,7 @@ import json
 import os
 import sys
 
-from rune_bench.agents.ops.skillfortify_runner import SkillFortifyRunner
+from .runner import SkillFortifyRunner
 
 
 def _handle_ask(params: dict) -> dict:

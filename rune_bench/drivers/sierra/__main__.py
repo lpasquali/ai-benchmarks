@@ -7,7 +7,7 @@ import json
 import os
 import sys
 
-from rune_bench.agents.ops.sierra_runner import SierraRunner
+from .runner import SierraRunner
 
 
 def _handle_ask(params: dict) -> dict:

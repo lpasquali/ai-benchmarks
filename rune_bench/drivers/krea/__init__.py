@@ -30,7 +30,7 @@ class KreaDriverClient:
 
     ONBOARDING_URL = "https://www.krea.ai/"
 
-    def __init__(self, *, transport: DriverTransport | None = None) -> None:
+    def __init__(self, *, transport: DriverTransport | None = None, **kwargs) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("krea")
         self._async_transport: AsyncDriverTransport = make_async_driver_transport(
             "krea"
@@ -198,4 +198,4 @@ class KreaDriverClient:
         )
 
 
-KreaRunner = KreaDriverClient
+

@@ -16,7 +16,7 @@ import rune_bench.api_server as api_server
 import rune_bench.backends.ollama as ollama_models_module
 import rune_bench.workflows as workflows
 from rune_bench.agents.base import AgentResult
-from rune_bench.agents.sre.holmes import HolmesRunner
+from rune_bench.drivers.holmes import HolmesDriverClient
 from rune_bench.api_client import RuneApiClient
 from rune_bench.common import normalize_url
 from rune_bench.backends.base import ModelCapabilities
@@ -432,7 +432,7 @@ def test_holmes_and_ollama_remaining_branches(monkeypatch, tmp_path):
 
     kubeconfig = tmp_path / "kube"
     kubeconfig.write_text("apiVersion: v1\n")
-    runner = HolmesRunner(kubeconfig)
+    runner = HolmesDriverClient(kubeconfig)
 
     # _fetch_model_limits success path via get_backend monkeypatch
     fake_backend = type(
@@ -690,7 +690,8 @@ async def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_
     monkeypatch.setattr(workflows, "list_backend_models", lambda _u: ["m"])
     monkeypatch.setattr(workflows, "list_running_backend_models", lambda _u: ["m"])
     monkeypatch.setattr(workflows, "normalize_backend_model_for_api", lambda m: m)
-    res = workflows.provision_vastai_ollama(
+    res = workflows.provision_vastai_backend(
+
         sdk=object(),
         template_hash="t",
         min_dph=1,

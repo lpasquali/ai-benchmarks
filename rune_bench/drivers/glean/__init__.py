@@ -26,11 +26,9 @@ class GleanDriverClient:
     Unlike SRE drivers, Glean does not require a kubeconfig.
     """
 
-    def __init__(
-        self,
+    def __init__(self,
         *,
-        transport: DriverTransport | None = None,
-    ) -> None:
+        transport: DriverTransport | None = None, **kwargs) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("glean")
         self._async_transport: AsyncDriverTransport = make_async_driver_transport(
             "glean"
@@ -165,4 +163,4 @@ class GleanDriverClient:
         )
 
 
-GleanRunner = GleanDriverClient
+

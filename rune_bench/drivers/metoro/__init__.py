@@ -33,6 +33,7 @@ class MetoroDriverClient:
         kubeconfig: Path,
         *,
         transport: DriverTransport | None = None,
+        **kwargs,
     ) -> None:
         if not kubeconfig.exists():
             raise FileNotFoundError(f"kubeconfig not found: {kubeconfig}")
@@ -172,4 +173,4 @@ class MetoroDriverClient:
         )
 
 
-MetoroRunner = MetoroDriverClient
+

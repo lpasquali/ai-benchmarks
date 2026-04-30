@@ -33,7 +33,7 @@ class BrowserUseDriverClient:
 
     ONBOARDING_URL = "https://github.com/browser-use/browser-use"
 
-    def __init__(self, *, transport: DriverTransport | None = None) -> None:
+    def __init__(self, *, transport: DriverTransport | None = None, **kwargs) -> None:
         self._transport: DriverTransport = transport or make_driver_transport(
             "browseruse"
         )

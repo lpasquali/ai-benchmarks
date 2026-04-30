@@ -63,12 +63,6 @@ from rune_bench.workflows import (
     use_existing_backend_server,
 )
 
-# Backward-compatible aliases for renamed workflow functions.
-use_existing_ollama_server = use_existing_backend_server
-list_existing_ollama_models = list_backend_models
-list_running_ollama_models = list_running_backend_models
-warmup_existing_ollama_model = warmup_backend_model
-provision_vastai_ollama = provision_vastai_backend
 
 
 class AsyncTyper(typer.Typer):

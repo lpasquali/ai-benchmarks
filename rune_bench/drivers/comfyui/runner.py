@@ -23,11 +23,11 @@ from rune_bench.debug import debug_log
 class ComfyUIRunner:
     """Art/Creative agent: autonomous art pipeline orchestration via ComfyUI node graph."""
 
-    def __init__(self, base_url: str = "http://127.0.0.1:8188") -> None:
+    def __init__(self, base_url: str = "http://127.0.0.1:8188", **kwargs) -> None:
         self._base_url = base_url.rstrip("/")
         self._client_id = str(uuid.uuid4())
 
-    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama") -> str:
+    def ask(self, question: str, model: str, backend_url: str | None = None, backend_type: str = "ollama", **kwargs) -> str:
         """Run a ComfyUI workflow with the given prompt and return output image info."""
         # Minimal SDXL workflow template (API format)
         # Node IDs are standard for default ComfyUI simple workflow

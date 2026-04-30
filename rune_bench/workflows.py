@@ -88,14 +88,6 @@ class VastAIProvisioningResult:
     pull_warning: str | None = None
 
 
-# -- Backward-compatible aliases -------------------------------------------
-# These preserve import compatibility for any callsite still using the old
-# Ollama-specific names.  They will be removed in a future release.
-use_existing_ollama_server = use_existing_backend_server
-list_existing_ollama_models = list_backend_models
-list_running_ollama_models = list_running_backend_models
-normalize_ollama_model_for_api = normalize_backend_model_for_api
-warmup_existing_ollama_model = warmup_backend_model
 
 
 # ---------------------------------------------------------------------------
@@ -226,8 +218,6 @@ def provision_vastai_backend(
     )
 
 
-# Backward-compatible alias
-provision_vastai_ollama = provision_vastai_backend
 
 
 def stop_vastai_instance(sdk: VastAI, contract_id: int | str) -> TeardownResult:

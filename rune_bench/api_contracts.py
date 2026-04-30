@@ -385,12 +385,9 @@ class CreateProfileRequest:
 
     name: str
     settings: dict = field(default_factory=dict)
-    config: dict | None = None  # Alias for settings to support older UI versions
 
     def __post_init__(self) -> None:
-        if self.config is not None and not self.settings:
-            # Transfer config to settings if settings is empty
-            object.__setattr__(self, "settings", self.config)
+        pass
 
     def to_dict(self) -> dict:
         return asdict(self)

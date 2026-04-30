@@ -122,8 +122,7 @@ def make_async_driver_transport(driver_name: str) -> AsyncDriverTransport:
     return AsyncStdioTransport(cmd)
 
 
-__all__ = [
-    "DriverTransport",
+__all__ = ["DriverTransport",
     "AsyncDriverTransport",
     "StdioTransport",
     "AsyncStdioTransport",
@@ -132,5 +131,4 @@ __all__ = [
     "ManualDriverTransport",
     "BrowserDriverTransport",
     "make_driver_transport",
-    "make_async_driver_transport",
-]
+    "make_async_driver_transport"]

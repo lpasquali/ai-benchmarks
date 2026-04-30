@@ -29,7 +29,7 @@ class HarveyDriverClient:
 
     ONBOARDING_URL = "https://www.harvey.ai/"
 
-    def __init__(self, *, transport: DriverTransport | None = None) -> None:
+    def __init__(self, *, transport: DriverTransport | None = None, **kwargs) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("harvey")
         self._async_transport: AsyncDriverTransport = make_async_driver_transport(
             "harvey"
@@ -197,4 +197,4 @@ class HarveyDriverClient:
         )
 
 
-HarveyRunner = HarveyDriverClient
+

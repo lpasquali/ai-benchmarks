@@ -7,7 +7,7 @@ import json
 import os
 import sys
 
-from rune_bench.agents.art.midjourney_runner import MidjourneyRunner
+from .runner import MidjourneyRunner
 
 
 def _handle_ask(params: dict) -> dict:

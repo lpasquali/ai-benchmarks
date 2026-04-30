@@ -24,7 +24,6 @@ from .base import BackendCredentials, LLMBackend, ModelCapabilities
 from .ollama import (
     OllamaBackend,
     OllamaClient,
-    OllamaModelCapabilities,
     OllamaModelManager,
 )
 
@@ -83,7 +82,6 @@ __all__ = [
     "ModelCapabilities",
     "OllamaBackend",
     "OllamaClient",
-    "OllamaModelCapabilities",
     "OllamaModelManager",
     "get_backend",
     "list_backends",

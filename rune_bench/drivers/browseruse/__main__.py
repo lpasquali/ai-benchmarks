@@ -7,7 +7,7 @@ import json
 import os
 import sys
 
-from rune_bench.agents.ops.browser_use import BrowserUseRunner
+from .runner import BrowserUseRunner
 
 
 def _handle_ask(params: dict) -> dict:

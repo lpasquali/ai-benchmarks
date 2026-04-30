@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 import pytest
-from rune_bench.job_store import JobStore
+from rune_bench.storage.sqlite import SQLiteStorageAdapter as JobStore
 
 
 @pytest.fixture

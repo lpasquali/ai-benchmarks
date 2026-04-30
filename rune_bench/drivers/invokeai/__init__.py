@@ -21,12 +21,10 @@ from rune_bench.drivers import (
 class InvokeAIDriverClient:
     """Run autonomous art generation workflows via InvokeAI."""
 
-    def __init__(
-        self,
+    def __init__(self,
         base_url: str | None = None,
         *,
-        transport: DriverTransport | None = None,
-    ) -> None:
+        transport: DriverTransport | None = None, **kwargs) -> None:
         self._base_url = base_url or "http://127.0.0.1:9090"
         self._transport: DriverTransport = transport or make_driver_transport(
             "invokeai"

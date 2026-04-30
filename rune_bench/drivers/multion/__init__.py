@@ -28,7 +28,7 @@ class MultiOnDriverClient:
 
     ONBOARDING_URL = "https://www.multion.ai/"
 
-    def __init__(self, *, transport: DriverTransport | None = None) -> None:
+    def __init__(self, *, transport: DriverTransport | None = None, **kwargs) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("multion")
         self._async_transport: AsyncDriverTransport = make_async_driver_transport(
             "multion"
@@ -198,4 +198,4 @@ class MultiOnDriverClient:
         )
 
 
-MultiOnRunner = MultiOnDriverClient
+

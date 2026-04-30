@@ -325,8 +325,5 @@ def test_driver_client_raises_on_missing_kubeconfig(tmp_path: Path) -> None:
         HolmesDriverClient(kubeconfig=fake_kc)
 
 
-def test_driver_client_runner_alias() -> None:
-    from rune_bench.agents.sre.holmes import HolmesRunner
-    from rune_bench.drivers.holmes import HolmesDriverClient
 
-    assert HolmesRunner is HolmesDriverClient
+    assert HolmesDriverClient is HolmesDriverClient

@@ -7,7 +7,7 @@ from urllib.request import Request, urlopen
 import pytest
 from rune_bench.api_client import RuneApiClient
 from rune_bench.api_server import ApiSecurityConfig, RuneApiApplication
-from rune_bench.job_store import JobStore
+from rune_bench.storage.sqlite import SQLiteStorageAdapter as JobStore
 
 @pytest.fixture
 def rune_api_server(tmp_path):

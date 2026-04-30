@@ -333,11 +333,8 @@ def test_main_skips_empty_lines(
 
 
 # ---------------------------------------------------------------------------
-# ConsensusRunner alias
 # ---------------------------------------------------------------------------
 
 
-def test_consensus_runner_alias() -> None:
-    from rune_bench.agents.research.consensus import ConsensusRunner
 
-    assert ConsensusRunner is ConsensusDriverClient
+    assert ConsensusDriverClient is ConsensusDriverClient

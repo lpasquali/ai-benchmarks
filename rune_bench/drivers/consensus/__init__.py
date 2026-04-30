@@ -29,11 +29,9 @@ class ConsensusDriverClient:
     ``ConsensusRunner`` so existing call-sites require no changes.
     """
 
-    def __init__(
-        self,
+    def __init__(self,
         *,
-        transport: DriverTransport | None = None,
-    ) -> None:
+        transport: DriverTransport | None = None, **kwargs) -> None:
         self._transport: DriverTransport = transport or make_driver_transport(
             "consensus"
         )
@@ -225,4 +223,4 @@ class ConsensusDriverClient:
         )
 
 
-ConsensusRunner = ConsensusDriverClient
+

@@ -10,7 +10,7 @@ import rune_bench.api_backend as api_backend
 import rune_bench.api_client as api_client_module
 import rune_bench.api_server as api_server
 from rune_bench.agents.base import AgentResult
-from rune_bench.agents.sre.holmes import HolmesRunner
+from rune_bench.drivers.holmes import HolmesDriverClient
 from rune_bench.api_client import RuneApiClient
 from rune_bench.resources.vastai import OfferFinder
 from rune_bench.resources.vastai import TemplateLoader
@@ -29,14 +29,14 @@ def test_holmes_runner_remaining_paths(monkeypatch, tmp_path):
     # transport error is propagated as RuntimeError
     failing_transport = MagicMock()
     failing_transport.call.side_effect = RuntimeError("transport failed")
-    runner = HolmesRunner(kubeconfig, transport=failing_transport)
+    runner = HolmesDriverClient(kubeconfig, transport=failing_transport)
     with pytest.raises(RuntimeError, match="transport failed"):
         runner.ask("q", "m")
 
     # transport returns answer correctly
     ok_transport = MagicMock()
     ok_transport.call.return_value = {"answer": "great"}
-    runner2 = HolmesRunner(kubeconfig, transport=ok_transport)
+    runner2 = HolmesDriverClient(kubeconfig, transport=ok_transport)
     assert runner2.ask("q", "m") == "great"
 
     # _fetch_model_limits returns {} when get_backend raises

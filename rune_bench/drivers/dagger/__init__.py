@@ -29,11 +29,9 @@ class DaggerDriverClient:
     connects to a local or remote Dagger engine automatically.
     """
 
-    def __init__(
-        self,
+    def __init__(self,
         *,
-        transport: DriverTransport | None = None,
-    ) -> None:
+        transport: DriverTransport | None = None, **kwargs) -> None:
         self._transport: DriverTransport = transport or make_driver_transport("dagger")
         self._async_transport: AsyncDriverTransport = make_async_driver_transport(
             "dagger"
@@ -182,4 +180,4 @@ class DaggerDriverClient:
         )
 
 
-DaggerRunner = DaggerDriverClient
+

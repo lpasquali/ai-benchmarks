@@ -217,7 +217,7 @@ def test_span_metrics_error_does_not_propagate():
 
 
 def test_sqlite_metrics_collector_persists_events(tmp_path: Path):
-    from rune_bench.job_store import JobStore
+    from rune_bench.storage.sqlite import SQLiteStorageAdapter as JobStore
 
     store = JobStore(tmp_path / "jobs.db")
     try:
@@ -244,7 +244,7 @@ def test_sqlite_metrics_collector_persists_events(tmp_path: Path):
 
 
 def test_job_store_events_summary_aggregates(tmp_path: Path):
-    from rune_bench.job_store import JobStore
+    from rune_bench.storage.sqlite import SQLiteStorageAdapter as JobStore
 
     store = JobStore(tmp_path / "jobs.db")
     try:
@@ -298,7 +298,7 @@ def test_sqlite_collector_survives_storage_error(tmp_path: Path):
 
 
 def test_span_with_sqlite_collector_end_to_end(tmp_path: Path):
-    from rune_bench.job_store import JobStore
+    from rune_bench.storage.sqlite import SQLiteStorageAdapter as JobStore
 
     store = JobStore(tmp_path / "jobs.db")
     try:
