@@ -700,9 +700,9 @@ async def run_llm_instance(
         try:
             client = _http_client()
             payload = await _run_http_job_with_progress(
-                submit_description="Submitting ollama-instance job to HTTP backend...",
-                wait_description="Waiting for ollama-instance job",
-                submit_job=lambda: client.submit_ollama_instance_job(
+                submit_description="Submitting llm-instance job to HTTP backend...",
+                wait_description="Waiting for llm-instance job",
+                submit_job=lambda: client.submit_llm_instance_job(
                     _request.to_dict(),
                     idempotency_key=idempotency_key,
                 ),
@@ -802,7 +802,7 @@ def ollama_list_models(
 
     if BACKEND_MODE == "http":
         try:
-            payload = _http_client().get_ollama_models(backend_url)
+            payload = _http_client().get_llm_models(backend_url)
             normalized_url = str(payload.get("backend_url", backend_url))
             models = [str(m) for m in payload.get("models", [])]
             running_models = {str(m) for m in payload.get("running_models", [])}

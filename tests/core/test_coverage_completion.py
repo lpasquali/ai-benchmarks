@@ -280,7 +280,7 @@ async def test_api_server_job_submission(sqlite_store):
     store = sqlite_store
     backend_functions = {
         "benchmark": AsyncMock(return_value={"answer": "ok"}),
-        "ollama-instance": AsyncMock(return_value={"mode": "existing"}),
+        "llm-instance": AsyncMock(return_value={"mode": "existing"}),
         "llm-instance": AsyncMock(return_value={"mode": "existing"}),
     }
     app = api_server.RuneApiApplication(
@@ -319,7 +319,7 @@ async def test_api_server_job_submission(sqlite_store):
         req_llm = {"provisioning": None, "backend_url": "http://x"}
         with urlopen(
             Request(
-                f"{base}/v1/jobs/ollama-instance",
+                f"{base}/v1/jobs/llm-instance",
                 method="POST",
                 data=json.dumps(req_llm).encode(),
                 headers=common_headers,

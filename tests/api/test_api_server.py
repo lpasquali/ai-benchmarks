@@ -33,7 +33,7 @@ def rune_api_server(tmp_path):
                 "mode": "existing",
                 "backend_url": request.backend_url,
             },
-            "ollama-instance": lambda request, **kwargs: {
+            "llm-instance": lambda request, **kwargs: {
                 "mode": "existing",
                 "backend_url": request.backend_url,
             },

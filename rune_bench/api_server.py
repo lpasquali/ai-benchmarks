@@ -142,7 +142,7 @@ async def _run_benchmark_backend(
 
 async def _run_llm_instance_backend(request: object) -> dict:
     if not isinstance(request, RunLLMInstanceRequest):
-        raise RuntimeError("invalid request type for ollama-instance backend")
+        raise RuntimeError("invalid request type for llm-instance backend")
     return await run_llm_instance(request)
 
 
@@ -221,7 +221,6 @@ class RuneApiApplication:
         self.backend_functions = backend_functions or {
             "agentic-agent": _run_agentic_backend,
             "benchmark": _run_benchmark_backend,
-            "ollama-instance": _run_llm_instance_backend,
             "llm-instance": _run_llm_instance_backend,
             "cost-estimate": _get_cost_estimate_backend,
         }
@@ -267,7 +266,6 @@ class RuneApiApplication:
         supported_kinds = (
             "agentic-agent",
             "benchmark",
-            "ollama-instance",
             "llm-instance",
             "cost-estimate",
         )
@@ -290,7 +288,7 @@ class RuneApiApplication:
                 if hasattr(RunBenchmarkRequest, "from_dict")
                 else RunBenchmarkRequest(**payload)
             )
-        elif kind in ("ollama-instance", "llm-instance"):
+        elif kind in ("llm-instance", "llm-instance"):
             req = (
                 RunLLMInstanceRequest.from_dict(payload)
                 if hasattr(RunLLMInstanceRequest, "from_dict")
@@ -380,7 +378,6 @@ class RuneApiApplication:
                 if path in (
                     "/v1/catalog/models",
                     "/v1/catalog/vastai-models",
-                    "/v1/ollama/models",
                     "/v1/llm/models",
                 ):
                     query = parse_qs(parsed.query)
@@ -814,7 +811,6 @@ class RuneApiApplication:
             supported_kinds = (
                 "agentic-agent",
                 "benchmark",
-                "ollama-instance",
                 "llm-instance",
                 "cost-estimate",
             )
@@ -833,7 +829,7 @@ class RuneApiApplication:
                     if hasattr(RunBenchmarkRequest, "from_dict")
                     else RunBenchmarkRequest(**payload)
                 )
-            elif kind in ("ollama-instance", "llm-instance"):
+            elif kind in ("llm-instance", "llm-instance"):
                 req = (
                     RunLLMInstanceRequest.from_dict(payload)
                     if hasattr(RunLLMInstanceRequest, "from_dict")

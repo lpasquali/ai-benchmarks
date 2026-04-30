@@ -113,7 +113,7 @@ def test_api_client_remaining_paths(monkeypatch):
     with pytest.raises(RuntimeError, match="missing 'models' list"):
         client.get_vastai_models()
     with pytest.raises(RuntimeError, match="missing 'models' list"):
-        client.get_ollama_models("http://x")
+        client.get_llm_models("http://x")
 
     monkeypatch.setattr(
         client,
@@ -121,13 +121,13 @@ def test_api_client_remaining_paths(monkeypatch):
         lambda *args, **kwargs: {"models": [], "running_models": "bad"},
     )
     with pytest.raises(RuntimeError, match="missing 'running_models' list"):
-        client.get_ollama_models("http://x")
+        client.get_llm_models("http://x")
 
     monkeypatch.setattr(client, "_request", lambda *args, **kwargs: {})
     for submit in (
         client.submit_agentic_agent_job,
         client.submit_benchmark_job,
-        client.submit_ollama_instance_job,
+        client.submit_llm_instance_job,
     ):
         with pytest.raises(RuntimeError, match="missing 'job_id'"):
             submit({})
@@ -180,7 +180,7 @@ async def test_api_server_remaining_paths(monkeypatch, tmp_path):
         ),
         backend_functions={
             "llm-instance": backend_ollama,
-            "ollama-instance": backend_ollama,
+            "llm-instance": backend_ollama,
             "benchmark": backend_bench,
             "agentic-agent": backend_agentic_agent,
         },
@@ -204,7 +204,7 @@ async def test_api_server_remaining_paths(monkeypatch, tmp_path):
     base = f"http://{host}:{port}"
     try:
         req = Request(
-            f"{base}/v1/ollama/models?backend_url=http://x",
+            f"{base}/v1/llm/models?backend_url=http://x",
             headers={"Authorization": "Bearer token", "X-Tenant-ID": "tenant"},
         )
         with urlopen(req) as response:  # nosec  # test request mock/local execution
@@ -237,7 +237,7 @@ async def test_api_server_remaining_paths(monkeypatch, tmp_path):
             urlopen(bad_kind)  # nosec  # test request mock/local execution
 
         req = Request(
-            f"{base}/v1/jobs/ollama-instance",
+            f"{base}/v1/jobs/llm-instance",
             method="POST",
             data=b'{"provisioning": {"vastai": {"template_hash": "t", "min_dph": 1, "max_dph": 2, "reliability": 0.9}}, "backend_url": "http://x"}',
             headers={

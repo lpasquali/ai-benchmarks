@@ -34,7 +34,7 @@ def rune_api_server(tmp_path):
         backend_functions={
             "agentic-agent": run_agentic,
             "benchmark": lambda request: {"answer": "bench"},
-            "ollama-instance": lambda request: {"mode": "existing"},
+            "llm-instance": lambda request: {"mode": "existing"},
         },
     )
     server = ThreadingHTTPServer(("127.0.0.1", 0), app.create_handler())

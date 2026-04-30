@@ -320,7 +320,7 @@ async def test_run_llm_instance_http_vastai_result_branch(monkeypatch):
         "C",
         (),
         {
-            "submit_ollama_instance_job": lambda self, *_a, **_k: "job-1",
+            "submit_llm_instance_job": lambda self, *_a, **_k: "job-1",
             "get_cost_estimate": lambda self, *_a, **_k: {
                 "projected_cost_usd": 1.0,
                 "cost_driver": "vastai",
@@ -364,7 +364,7 @@ async def test_run_llm_instance_http_existing_result_branch(monkeypatch):
     monkeypatch.setattr(rune, "BACKEND_MODE", "http")
 
     fake_client = type(
-        "C", (), {"submit_ollama_instance_job": lambda self, *_a, **_k: "job-1"}
+        "C", (), {"submit_llm_instance_job": lambda self, *_a, **_k: "job-1"}
     )()
     monkeypatch.setattr(rune, "_http_client", lambda: fake_client)
 
@@ -614,7 +614,7 @@ async def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_
     assert res_prov_obj.backend_url == "http://existing"
     assert warmups == [True]
 
-    # api_server RuntimeError path in /v1/ollama/models
+    # api_server RuntimeError path in /v1/llm/models
     app = api_server.RuneApiApplication(
         store=api_server.JobStore(tmp_path / "jobs.db"),
         security=api_server.ApiSecurityConfig(auth_disabled=True, tenant_tokens={}),
@@ -629,7 +629,7 @@ async def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_
     thread.start()
     host, port = server.server_address
     try:
-        req = Request(f"http://{host}:{port}/v1/ollama/models?backend_url=http://x")
+        req = Request(f"http://{host}:{port}/v1/llm/models?backend_url=http://x")
         with pytest.raises(HTTPError) as exc:
             urlopen(req)  # nosec  # test request mock/local execution
         assert exc.value.code == 400

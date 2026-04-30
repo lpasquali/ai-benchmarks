@@ -125,7 +125,7 @@ async def test_run_llm_instance_paths(monkeypatch):
         "C",
         (),
         {
-            "submit_ollama_instance_job": lambda self, payload, idempotency_key=None: (
+            "submit_llm_instance_job": lambda self, payload, idempotency_key=None: (
                 "job-1"
             ),
             "wait_for_job": mock_wait,

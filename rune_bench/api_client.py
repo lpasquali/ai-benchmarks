@@ -66,17 +66,17 @@ class RuneApiClient:
             )
         return [m for m in models if isinstance(m, dict)]
 
-    def get_ollama_models(self, backend_url: str) -> dict:
+    def get_llm_models(self, backend_url: str) -> dict:
         payload = self._request(
-            "GET", "/v1/ollama/models", query={"backend_url": backend_url}
+            "GET", "/v1/llm/models", query={"backend_url": backend_url}
         )
         if not isinstance(payload.get("models"), list):
             raise RuntimeError(
-                "API payload missing 'models' list for Ollama models endpoint"
+                "API payload missing 'models' list for LLM models endpoint"
             )
         if not isinstance(payload.get("running_models"), list):
             raise RuntimeError(
-                "API payload missing 'running_models' list for Ollama models endpoint"
+                "API payload missing 'running_models' list for LLM models endpoint"
             )
         return payload
 
@@ -123,18 +123,18 @@ class RuneApiClient:
             raise RuntimeError("API response missing 'job_id' for benchmark job")
         return job_id
 
-    def submit_ollama_instance_job(
+    def submit_llm_instance_job(
         self, request_payload: dict, *, idempotency_key: str | None = None
     ) -> str:
         payload = self._request(
             "POST",
-            "/v1/jobs/ollama-instance",
+            "/v1/jobs/llm-instance",
             body=request_payload,
             idempotency_key=idempotency_key,
         )
         job_id = payload.get("job_id")
         if not isinstance(job_id, str) or not job_id.strip():
-            raise RuntimeError("API response missing 'job_id' for ollama-instance job")
+            raise RuntimeError("API response missing 'job_id' for llm-instance job")
         return job_id
 
     def get_job_status(self, job_id: str) -> dict:

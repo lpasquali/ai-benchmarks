@@ -11,6 +11,10 @@ from rune_bench.storage.sqlite import SQLiteStorageAdapter
 
 @pytest.fixture
 def temp_config():
+    # Ensure we don't redirect config to DB during these tests
+    from rune_bench.common import config
+    config.set_storage_adapter(None)
+
     with tempfile.TemporaryDirectory() as tmpdir:
         config_path = Path(tmpdir) / "rune.yaml"
         config_path.write_text("""

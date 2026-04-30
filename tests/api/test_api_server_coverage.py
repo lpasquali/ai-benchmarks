@@ -30,7 +30,7 @@ async def test_backend_type_checks():
 
     # Test _run_llm_instance_backend type check
     with pytest.raises(
-        RuntimeError, match="invalid request type for ollama-instance backend"
+        RuntimeError, match="invalid request type for llm-instance backend"
     ):
         await _run_llm_instance_backend(MagicMock())
 
@@ -94,7 +94,7 @@ async def test_api_application_execute_kinds():
     )
 
     await app._execute_job("j2", handler, "benchmark", payload)
-    await app._execute_job("j3", handler, "ollama-instance", payload)
+    await app._execute_job("j3", handler, "llm-instance", payload)
     await app._execute_job("j4", handler, "cost-estimate", {"model": "m", "agent": "a"})
 
     # Test unsupported kind in _execute_job

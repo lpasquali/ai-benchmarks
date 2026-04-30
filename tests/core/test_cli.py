@@ -163,7 +163,7 @@ def test_cli_vastai_list_models_http_error(mock_client_cls):
 @patch("rune.RuneApiClient")
 def test_cli_ollama_list_models_http(mock_client_cls):
     mock_client = mock_client_cls.return_value
-    mock_client.get_ollama_models.return_value = {
+    mock_client.get_llm_models.return_value = {
         "backend_url": "http://remote",
         "models": ["m1_ollama"],
         "running_models": ["m1_ollama"],
@@ -180,7 +180,7 @@ def test_cli_ollama_list_models_http(mock_client_cls):
 @patch("rune.RuneApiClient")
 def test_cli_ollama_list_models_http_error(mock_client_cls):
     mock_client = mock_client_cls.return_value
-    mock_client.get_ollama_models.side_effect = RuntimeError("api error")
+    mock_client.get_llm_models.side_effect = RuntimeError("api error")
     result = runner.invoke(
         app,
         ["--backend", "http", "ollama-list-models", "--backend-url", "http://remote"],

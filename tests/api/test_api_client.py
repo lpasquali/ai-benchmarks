@@ -27,7 +27,7 @@ def test_get_vastai_models_validates_payload(monkeypatch):
     assert models == [{"name": "x"}]
 
 
-def test_get_ollama_models_validates_payload(monkeypatch):
+def test_get_llm_models_validates_payload(monkeypatch):
     client = RuneApiClient("http://api:8080")
     monkeypatch.setattr(
         client,
@@ -39,7 +39,7 @@ def test_get_ollama_models_validates_payload(monkeypatch):
         },
     )
 
-    payload = client.get_ollama_models("http://localhost:11434")
+    payload = client.get_llm_models("http://localhost:11434")
     assert payload["backend_url"] == "http://localhost:11434"
     assert payload["models"] == ["a", "b"]
     assert payload["running_models"] == ["a"]
@@ -65,13 +65,13 @@ def test_submit_benchmark_job_returns_job_id(monkeypatch):
     assert job_id == "job-987"
 
 
-def test_submit_ollama_instance_job_returns_job_id(monkeypatch):
+def test_submit_llm_instance_job_returns_job_id(monkeypatch):
     client = RuneApiClient("http://api:8080")
     monkeypatch.setattr(
         client, "_request", lambda *_args, **_kwargs: {"job_id": "job-654"}
     )
 
-    job_id = client.submit_ollama_instance_job({"vastai": False})
+    job_id = client.submit_llm_instance_job({"vastai": False})
     assert job_id == "job-654"
 
 

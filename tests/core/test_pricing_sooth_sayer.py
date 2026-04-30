@@ -153,7 +153,7 @@ async def test_finops_simulate_http(tmp_path):
             "agentic-agent": lambda r: {"answer": "x"},
             "benchmark": lambda r: {"answer": "b"},
             "llm-instance": lambda r: {"mode": "x", "backend_url": "http://x"},
-            "ollama-instance": lambda r: {"mode": "x", "backend_url": "http://x"},
+            "llm-instance": lambda r: {"mode": "x", "backend_url": "http://x"},
         },
     )
     server = ThreadingHTTPServer(("127.0.0.1", 0), app.create_handler())
