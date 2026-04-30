@@ -7,7 +7,7 @@ import json
 import os
 import sys
 
-from rune_bench.agents.art.comfyui import ComfyUIRunner
+from rune_bench.agents.art.comfyui_runner import ComfyUIRunner
 
 
 def _handle_ask(params: dict) -> dict:

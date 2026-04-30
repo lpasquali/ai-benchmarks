@@ -7,7 +7,7 @@ import json
 import os
 import sys
 
-from rune_bench.agents.legal.spellbook import SpellbookRunner
+from rune_bench.agents.legal.spellbook_runner import SpellbookRunner
 
 
 def _handle_ask(params: dict) -> dict:

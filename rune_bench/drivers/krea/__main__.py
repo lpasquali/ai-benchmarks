@@ -7,7 +7,7 @@ import json
 import os
 import sys
 
-from rune_bench.agents.art.krea import KreaRunner
+from rune_bench.agents.art.krea_runner import KreaRunner
 
 
 def _handle_ask(params: dict) -> dict:

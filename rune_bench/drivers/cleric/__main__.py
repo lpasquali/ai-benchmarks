@@ -7,7 +7,7 @@ import json
 import os
 import sys
 
-from rune_bench.agents.sre.cleric import ClericRunner
+from rune_bench.agents.sre.cleric_runner import ClericRunner
 
 
 def _handle_ask(params: dict) -> dict:
