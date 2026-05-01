@@ -2,13 +2,14 @@
 from unittest.mock import MagicMock
 
 import rune_bench.workflows as workflows
+import rune_bench.common.backend_utils as backend_utils
 
 
 def test_use_existing_backend_server(monkeypatch):
     monkeypatch.setattr(
-        workflows, "normalize_backend_url", lambda _: "http://localhost:11434"
+        backend_utils, "normalize_backend_url", lambda _: "http://localhost:11434"
     )
-    server = workflows.use_existing_backend_server("localhost:11434", "model:1")
+    server = backend_utils.use_existing_backend_server("localhost:11434", "model:1")
     assert server.url == "http://localhost:11434"
     assert server.model_name == "model:1"
 
