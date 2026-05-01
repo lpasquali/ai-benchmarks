@@ -4,4 +4,4 @@
 # holmesgpt==0.23.0 pins postgrest==0.16.8 but also requires supabase>=2.5.
 # Upper bound relaxed to <2.29 per Dependabot bump.
 holmesgpt>=0.23.0
-supabase>=2.5,<2.29
+supabase>=2.5,<2.30
