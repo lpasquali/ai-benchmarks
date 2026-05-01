@@ -241,7 +241,7 @@ class CostEstimator:
                         break
                 
                 if compute_service:
-                    request = billing_v1.ListSkusRequest(parent=compute_service)
+                    _ = billing_v1.ListSkusRequest(parent=compute_service)
                     # We would iterate and match the SKU description, returning the rate.
                     # This is stubbed due to the massive size of the GCP catalog.
                     pass
