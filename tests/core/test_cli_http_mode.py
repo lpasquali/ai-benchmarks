@@ -9,13 +9,13 @@ from rich.console import Console
 
 import rune
 from rune_bench.api_server import ApiSecurityConfig, RuneApiApplication
-from rune_bench.storage.sqlite import SQLiteStorageAdapter as JobStore
+from rune_bench.storage.sqlite import SQLiteStorageAdapter
 from rune_bench.workflows import SpendGateAction
 
 
 @pytest.fixture
 def rune_api_server(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+    store = SQLiteStorageAdapter(tmp_path / "jobs.db")
     state = {"agentic_calls": 0, "benchmark_calls": 0}
 
     async def run_agentic(request, **kwargs):

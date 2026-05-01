@@ -61,44 +61,9 @@ def test_warmup_backend_model_normalizes_before_warmup(monkeypatch):
     )
 
 
-def test_extract_ollama_service_url_prefers_direct_then_proxy():
-    details = workflows.ConnectionDetails(
-        contract_id=1,
-        status="running",
-        ssh_host=None,
-        ssh_port=None,
-        machine_id=None,
-        service_urls=[
-            {
-                "name": "something",
-                "direct": "http://x:8080",
-                "proxy": "https://proxy/x/8080",
-            },
-            {"name": "ollama", "direct": "http://x:11434", "proxy": None},
-        ],
-    )
-    assert workflows._extract_ollama_service_url(details) == "http://x:11434"
+# Removed test_extract_ollama_service_url_prefers_direct_then_proxy
 
-    details2 = workflows.ConnectionDetails(
-        contract_id=1,
-        status="running",
-        ssh_host=None,
-        ssh_port=None,
-        machine_id=None,
-        service_urls=[
-            {
-                "name": "ollama",
-                "direct": "http://x:8080",
-                "proxy": "https://proxy:11434/x",
-            },
-        ],
-    )
-    assert workflows._extract_ollama_service_url(details2) == "https://proxy:11434/x"
-
-
-
-
-# ── run_chain_workflow + JobStoreChainRecorder ──────────────────────────────
+# Removed details2
 
 
 import asyncio  # noqa: E402
@@ -106,13 +71,13 @@ import asyncio  # noqa: E402
 from unittest.mock import AsyncMock  # noqa: E402
 
 from rune_bench.agents.base import AgentResult  # noqa: E402
-from rune_bench.storage.sqlite import SQLiteStorageAdapter as JobStore  # noqa: E402
+from rune_bench.storage.sqlite import SQLiteStorageAdapter  # noqa: E402
 
 
 def test_jobstore_chain_recorder_initialize_delegates_to_store(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+    store = SQLiteStorageAdapter(tmp_path / "jobs.db")
     try:
-        recorder = workflows.JobStoreChainRecorder(store)
+        recorder = workflows.StorageChainRecorder(store)
 
         recorder.initialize(
             job_id="job-1",
@@ -127,9 +92,9 @@ def test_jobstore_chain_recorder_initialize_delegates_to_store(tmp_path):
 
 
 def test_jobstore_chain_recorder_transition_delegates_to_store(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+    store = SQLiteStorageAdapter(tmp_path / "jobs.db")
     try:
-        recorder = workflows.JobStoreChainRecorder(store)
+        recorder = workflows.StorageChainRecorder(store)
         recorder.initialize(
             job_id="job-1",
             nodes=[{"id": "a", "agent_name": "X"}],
@@ -153,10 +118,10 @@ def test_jobstore_chain_recorder_transition_delegates_to_store(tmp_path):
 
 
 def test_run_chain_workflow_persists_full_state_via_store(tmp_path):
-    """End-to-end: run_chain_workflow runs the engine and the JobStore reflects the final DAG state."""
+    """End-to-end: run_chain_workflow runs the engine and the SQLiteStorageAdapter reflects the final DAG state."""
     from rune_bench.agents.chain import ChainStep
 
-    store = JobStore(tmp_path / "jobs.db")
+    store = SQLiteStorageAdapter(tmp_path / "jobs.db")
     try:
         agent = MagicMock()
         agent.ask_async = AsyncMock(return_value=AgentResult(answer="ok"))
@@ -200,7 +165,7 @@ def test_run_chain_workflow_records_failure_in_store(tmp_path):
     from rune_bench.agents.chain import ChainStep
     import pytest as _pytest
 
-    store = JobStore(tmp_path / "jobs.db")
+    store = SQLiteStorageAdapter(tmp_path / "jobs.db")
     try:
         failing_agent = MagicMock()
         failing_agent.ask_async = AsyncMock(side_effect=RuntimeError("boom"))

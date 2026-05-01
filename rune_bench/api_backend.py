@@ -102,20 +102,9 @@ def _make_resource_provider_for_ollama_instance(
 
 
 def _make_agent_runner(
-    agent_name: str | Path = "holmes", *, kubeconfig: Path | None = None
+    agent_name: str = "holmes", *, kubeconfig: Path | None = None
 ) -> Any:
-    """Lazy factory: resolve an agent via the registry.
-
-    Accepts either the new ``(agent_name, *, kubeconfig=...)`` signature or
-    the legacy ``(kubeconfig_path)`` positional call used by existing tests
-    and monkeypatches.
-    """
-    # Legacy call-site compat: if *agent_name* is a Path or pathlib-like object,
-    # the caller is using the old ``_make_agent_runner(kubeconfig)`` signature.
-    if isinstance(agent_name, Path):
-        kubeconfig = agent_name
-        agent_name = "holmes"
-
+    """Lazy factory: resolve an agent via the registry."""
     kwargs: dict[str, Any] = {}
     if kubeconfig is not None:
         kwargs["kubeconfig"] = kubeconfig
@@ -277,7 +266,7 @@ async def run_benchmark(
     effective_model = result.model or request.model
     start_time = time.perf_counter()
     try:
-        runner = _make_agent_runner(Path(request.kubeconfig))
+        runner = _make_agent_runner(kubeconfig=Path(request.kubeconfig))
         agent_result = await runner.ask_structured(
             question=request.question,
             model=effective_model,
@@ -329,13 +318,13 @@ async def run_benchmark(
     }
 
 
-def get_cost_estimate(request: CostEstimationRequest) -> dict:
+async def get_cost_estimate(request: CostEstimationRequest) -> dict:
     """Estimate cost for a benchmark run based on cloud or local hardware parameters."""
     from rune_bench.common.costs import CostEstimator
 
     estimator = CostEstimator()
     try:
-        response = estimator.estimate_sync(request)
+        response = await estimator.estimate(request)
         return {
             "projected_cost_usd": response.projected_cost_usd,
             "cost_driver": response.cost_driver,

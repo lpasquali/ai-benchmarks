@@ -8,12 +8,12 @@ from urllib.request import Request, urlopen
 import pytest
 from rune_bench.api_client import RuneApiClient
 from rune_bench.api_server import ApiSecurityConfig, RuneApiApplication
-from rune_bench.storage.sqlite import SQLiteStorageAdapter as JobStore
+from rune_bench.storage.sqlite import SQLiteStorageAdapter
 
 
 @pytest.fixture
 def rune_api_server(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+    store = SQLiteStorageAdapter(tmp_path / "jobs.db")
     state = {"agentic_calls": 0, "store": store}
 
     def run_agentic(request, **kwargs):
@@ -213,7 +213,7 @@ def test_chain_state_returns_empty_shell_when_job_exists_but_no_chain_state(
 def test_chain_state_returns_full_state_shape(rune_api_server):
     """Verify the API endpoint returns the documented JSON shape.
 
-    Full populated-state behavior is exercised at the JobStore level in
+    Full populated-state behavior is exercised at the SQLiteStorageAdapter level in
     test_job_store.py (where we control the DB directly). This test confirms
     the wire format the dashboard will consume.
     """
@@ -381,7 +381,7 @@ def test_audit_artifact_content_type_helper():
 
 
 def test_audit_artifacts_list_returns_populated_artifacts(rune_api_server):
-    """Happy path: write artifacts via the JobStore exposed by the fixture, list via the API."""
+    """Happy path: write artifacts via the SQLiteStorageAdapter exposed by the fixture, list via the API."""
     base_url, state = rune_api_server
     store = state["store"]
     client = RuneApiClient(base_url, api_token="token-a", tenant_id="tenant-a")  # nosec

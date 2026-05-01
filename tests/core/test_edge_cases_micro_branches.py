@@ -565,7 +565,7 @@ async def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_
 
     mock_agent_run = AsyncMock()
     mock_agent_run.ask_structured.return_value = AgentResult(answer="ok")
-    monkeypatch.setattr(api_backend, "_make_agent_runner", lambda _p: mock_agent_run)
+    monkeypatch.setattr(api_backend, "_make_agent_runner", lambda **k: mock_agent_run)
 
     async def mock_cost(*a, **k):
         return 0.0
@@ -616,7 +616,7 @@ async def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_
 
     # api_server RuntimeError path in /v1/llm/models
     app = api_server.RuneApiApplication(
-        store=api_server.JobStore(tmp_path / "jobs.db"),
+        store=api_server.SQLiteStorageAdapter(tmp_path / "jobs.db"),
         security=api_server.ApiSecurityConfig(auth_disabled=True, tenant_tokens={}),
     )
 

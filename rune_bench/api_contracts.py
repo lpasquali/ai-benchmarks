@@ -253,6 +253,33 @@ class CostEstimationResponse:
 
 
 @dataclass(frozen=True)
+class FinOpsSimulationResponse:
+    projected_cost_usd: float
+    projected_total_usd: float
+    runs_per_period: int
+    period_days: int
+    cost_low_usd: float
+    cost_high_usd: float
+    confidence: str
+    confidence_score: float
+    currency: str
+    historical_basis: str
+    historical_sample_count: int
+    token_samples_from_history: int
+    avg_duration_seconds: float
+    llm_input_tokens_assumed: float
+    llm_output_tokens_assumed: float
+    vast_pricing_source: str
+    components_usd: dict
+    total_cost_usd: float
+    gpu_cost_usd: float
+    token_cost_usd: float
+    historical_match: bool
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+@dataclass(frozen=True)
 class ChainStateResponse:
     """State of a multi-agent chain (DAG) execution, suitable for dashboard rendering.
 

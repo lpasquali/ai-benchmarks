@@ -7,11 +7,11 @@ from urllib.request import Request, urlopen
 import pytest
 from rune_bench.api_client import RuneApiClient
 from rune_bench.api_server import ApiSecurityConfig, RuneApiApplication
-from rune_bench.storage.sqlite import SQLiteStorageAdapter as JobStore
+from rune_bench.storage.sqlite import SQLiteStorageAdapter
 
 @pytest.fixture
 def rune_api_server(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+    store = SQLiteStorageAdapter(tmp_path / "jobs.db")
     state = {"agentic_calls": 0, "store": store}
 
     def run_agentic(request):

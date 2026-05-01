@@ -8,7 +8,7 @@ from urllib.request import Request, urlopen
 import pytest
 from rune_bench.resources.vastai.instance import InstanceManager
 import rune_bench.api_server as api_server
-from rune_bench.storage.sqlite import SQLiteStorageAdapter as JobStore
+from rune_bench.storage.sqlite import SQLiteStorageAdapter
 
 
 def test_instance_manager_details_parsing():
@@ -115,7 +115,7 @@ def test_api_server_misc_paths(misc_server):
 
 @pytest.mark.asyncio
 async def test_api_server_internal_dispatch_and_failures(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+    store = SQLiteStorageAdapter(tmp_path / "jobs.db")
     try:
         app = api_server.RuneApiApplication(
             store=store,
@@ -165,7 +165,7 @@ async def test_api_server_internal_dispatch_and_failures(tmp_path):
 
 
 def test_job_to_payload_fields(tmp_path):
-    store = JobStore(tmp_path / "jobs.db")
+    store = SQLiteStorageAdapter(tmp_path / "jobs.db")
     try:
         job_id, _ = store.create_job(
             tenant_id="t", kind="agentic-agent", request_payload={"x": 1}
