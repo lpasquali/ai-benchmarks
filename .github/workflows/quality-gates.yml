@@ -116,7 +116,7 @@ jobs:
 
   # ─── SR-2 quantitative compliance (rune-audit) ─────────────────────────────
   sr2-compliance:
-    uses: lpasquali/rune-ci/.github/workflows/sr2-compliance.yml@23b84477724ddf4c91fbbe1535657639f921d18c
+    uses: lpasquali/rune-ci/.github/workflows/sr2-compliance.yml@ac515194651fe5d0e47df48ec68b045c33f743e4
     with:
       rune-audit-ref: main
     secrets: inherit
@@ -125,7 +125,7 @@ jobs:
   container:
     needs: [changes, security]
     if: needs.changes.outputs.docker == 'true'
-    uses: lpasquali/rune-ci/.github/workflows/container-build.yml@144ef855dbf0420e5d9a8de2c8d8f89c2e789265
+    uses: lpasquali/rune-ci/.github/workflows/container-build.yml@ac515194651fe5d0e47df48ec68b045c33f743e4
     with:
       image-name: "rune"
       push: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}

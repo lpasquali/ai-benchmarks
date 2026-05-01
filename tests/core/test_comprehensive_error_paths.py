@@ -339,6 +339,7 @@ async def test_api_server_remaining_paths(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_api_server_error_paths(monkeypatch, tmp_path):
+    from rune_bench.storage.sqlite import SQLiteStorageAdapter
     class ExplodingStore(SQLiteStorageAdapter):
         def create_job(self, **kwargs):
             raise RuntimeError("db-down")
@@ -488,9 +489,8 @@ async def test_offer_template_backend_instance_and_workflow_remaining(
     monkeypatch.setattr(
         api_backend,
         "_make_agent_runner",
-        lambda path: mock_agent_run,
+        lambda **k: mock_agent_run,
     )
-
     async def mock_cost(*a, **k):
         return 0.0
 

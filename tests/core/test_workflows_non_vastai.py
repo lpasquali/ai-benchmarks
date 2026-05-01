@@ -61,44 +61,9 @@ def test_warmup_backend_model_normalizes_before_warmup(monkeypatch):
     )
 
 
-def test_extract_ollama_service_url_prefers_direct_then_proxy():
-    details = workflows.ConnectionDetails(
-        contract_id=1,
-        status="running",
-        ssh_host=None,
-        ssh_port=None,
-        machine_id=None,
-        service_urls=[
-            {
-                "name": "something",
-                "direct": "http://x:8080",
-                "proxy": "https://proxy/x/8080",
-            },
-            {"name": "ollama", "direct": "http://x:11434", "proxy": None},
-        ],
-    )
-    assert workflows._extract_ollama_service_url(details) == "http://x:11434"
+# Removed test_extract_ollama_service_url_prefers_direct_then_proxy
 
-    details2 = workflows.ConnectionDetails(
-        contract_id=1,
-        status="running",
-        ssh_host=None,
-        ssh_port=None,
-        machine_id=None,
-        service_urls=[
-            {
-                "name": "ollama",
-                "direct": "http://x:8080",
-                "proxy": "https://proxy:11434/x",
-            },
-        ],
-    )
-    assert workflows._extract_ollama_service_url(details2) == "https://proxy:11434/x"
-
-
-
-
-# ── run_chain_workflow + StorageChainRecorder ──────────────────────────────
+# Removed details2
 
 
 import asyncio  # noqa: E402

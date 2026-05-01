@@ -565,7 +565,7 @@ async def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_
 
     mock_agent_run = AsyncMock()
     mock_agent_run.ask_structured.return_value = AgentResult(answer="ok")
-    monkeypatch.setattr(api_backend, "_make_agent_runner", lambda _p: mock_agent_run)
+    monkeypatch.setattr(api_backend, "_make_agent_runner", lambda **k: mock_agent_run)
 
     async def mock_cost(*a, **k):
         return 0.0

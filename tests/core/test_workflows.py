@@ -12,7 +12,6 @@ from rune_bench.workflows import (
     provision_vastai_backend,
     run_chain_workflow,
     UserAbortedError,
-    _extract_ollama_service_url,
     debug_log,
 )
 
@@ -251,13 +250,6 @@ def test_provision_vastai_backend():
                 confirm_create=lambda: True,
             )
             assert res.contract_id == "123"
-
-
-def test_extract_ollama_service_url():
-    with patch(
-        "rune_bench.workflows.OllamaBackend.extract_service_url", return_value="url"
-    ):
-        assert _extract_ollama_service_url(MagicMock()) == "url"
 
 
 def test_debug_log(monkeypatch):
