@@ -41,7 +41,7 @@ class CostEstimator:
         )
 
     def estimate_sync(self, request: CostEstimationRequest) -> CostEstimationResponse:
-        """Synchronous version of estimate for CLI/legacy callers."""
+        """Synchronous version of estimate."""
         import asyncio
 
         return asyncio.run(self.estimate(request))
@@ -81,7 +81,7 @@ class CostEstimator:
             import httpx
 
             async with httpx.AsyncClient() as client:
-                resp = await client.get(url, timeout=10.0)
+                resp = await client.get(url, timeout=4.0)
                 data = resp.json()
                 items = data.get("Items", [])
                 rate = 3.06  # Fallback

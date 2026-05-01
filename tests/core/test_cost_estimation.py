@@ -38,7 +38,8 @@ def _req(**kwargs) -> CostEstimationRequest:
 
 def test_get_cost_estimate_vastai():
     r = _req(vastai=True, min_dph=2.0, max_dph=4.0)
-    out = get_cost_estimate(r)
+    import asyncio
+    out = asyncio.run(get_cost_estimate(r))
     assert out["cost_driver"] == "vastai"
     # CostEstimator._estimate_vastai uses midpoint: (2+4)/2 = 3.0
     assert out["projected_cost_usd"] == pytest.approx(3.0, rel=1e-3)
@@ -50,7 +51,8 @@ def test_get_cost_estimate_vastai():
 
 def test_get_cost_estimate_vastai_zero_max_dph():
     r = _req(vastai=True, min_dph=2.0, max_dph=0.0)
-    out = get_cost_estimate(r)
+    import asyncio
+    out = asyncio.run(get_cost_estimate(r))
     assert out["cost_driver"] == "vastai"
     assert out["projected_cost_usd"] == pytest.approx(2.0, rel=1e-3)
 
@@ -64,7 +66,8 @@ def test_get_cost_estimate_local_hardware():
         local_hardware_lifespan_years=5.0,
         estimated_duration_seconds=7200,
     )
-    out = get_cost_estimate(r)
+    import asyncio
+    out = asyncio.run(get_cost_estimate(r))
     assert out["cost_driver"] == "local"
     assert out["local_energy_kwh"] == pytest.approx(0.4, rel=1e-3)
     assert out["projected_cost_usd"] > 0.0
@@ -78,26 +81,30 @@ def test_get_cost_estimate_local_hardware_no_lifespan():
         local_energy_rate_kwh=0.15,
         local_hardware_lifespan_years=0.0,
     )
-    out = get_cost_estimate(r)
+    import asyncio
+    out = asyncio.run(get_cost_estimate(r))
     assert out["cost_driver"] == "local"
 
 
 def test_get_cost_estimate_aws():
     r = _req(aws=True, model="g4dn.xlarge")
-    out = get_cost_estimate(r)
+    import asyncio
+    out = asyncio.run(get_cost_estimate(r))
     assert out["cost_driver"] == "aws"
     assert out["projected_cost_usd"] == pytest.approx(0.53, rel=1e-2)
 
 
 def test_get_cost_estimate_aws_high_end():
     r = _req(aws=True, model="p4d.24xlarge")
-    out = get_cost_estimate(r)
+    import asyncio
+    out = asyncio.run(get_cost_estimate(r))
     assert out["projected_cost_usd"] == pytest.approx(12.0, rel=1e-2)
 
 
 def test_get_cost_estimate_gcp():
     r = _req(gcp=True, model="n1-standard-4")
-    out = get_cost_estimate(r)
+    import asyncio
+    out = asyncio.run(get_cost_estimate(r))
     assert out["cost_driver"] == "gcp"
     assert out["projected_cost_usd"] == pytest.approx(0.70, rel=1e-2)
 
@@ -120,14 +127,16 @@ def test_get_cost_estimate_azure(monkeypatch):
     monkeypatch.setitem(sys.modules, "httpx", mock_httpx)
 
     r = _req(azure=True, model="Standard_NC6s_v3")
-    out = get_cost_estimate(r)
+    import asyncio
+    out = asyncio.run(get_cost_estimate(r))
     assert out["cost_driver"] == "azure"
     assert out["projected_cost_usd"] == pytest.approx(3.06, rel=1e-2)
 
 
 def test_get_cost_estimate_unknown_driver():
     r = _req()
-    out = get_cost_estimate(r)
+    import asyncio
+    out = asyncio.run(get_cost_estimate(r))
     assert out["cost_driver"] == "error"
     assert out["projected_cost_usd"] == 0.0
     assert out["resource_impact"] == "low"
@@ -135,13 +144,15 @@ def test_get_cost_estimate_unknown_driver():
 
 def test_get_cost_estimate_high_impact():
     r = _req(vastai=True, min_dph=25.0, max_dph=25.0)
-    out = get_cost_estimate(r)
+    import asyncio
+    out = asyncio.run(get_cost_estimate(r))
     assert out["resource_impact"] == "high"
 
 
 def test_get_cost_estimate_medium_impact():
     r = _req(vastai=True, min_dph=10.0, max_dph=10.0)
-    out = get_cost_estimate(r)
+    import asyncio
+    out = asyncio.run(get_cost_estimate(r))
     assert out["resource_impact"] == "medium"
 
 

@@ -47,7 +47,6 @@ from rune_bench.common.config import (
 from rune_bench.metrics.pricing import PricingSoothSayer
 from rune_bench.storage.sqlite import SQLiteStorageAdapter
 
-JobStore = SQLiteStorageAdapter
 _HTTP_REQUEST_SOCKET_TIMEOUT_S = 30.0
 
 
@@ -687,6 +686,38 @@ class RuneApiApplication:
                     req = CreateProfileRequest(**data)
                     create_profile(req.name, req.settings)
                     self._write_json(201, {"status": "created"})
+                    return
+
+                if path == "/v1/finops/simulate":
+                    query = parse_qs(parsed.query)
+                    agent = query.get("agent", [""])[0]
+                    model = query.get("model", [""])[0]
+                    gpu = query.get("gpu", ["RTX 4090"])[0]
+                    suite = query.get("suite", [""])[0]
+                    runs_per_period = int(query.get("runs_per_period", ["1"])[0])
+                    period_days = int(query.get("period_days", ["1"])[0])
+
+                    try:
+                        soothsayer = PricingSoothSayer(store=app.store)
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        projection = loop.run_until_complete(
+                            soothsayer.simulate(
+                                tenant_id=tenant_id,
+                                agent=agent,
+                                model=model,
+                                gpu=gpu,
+                                suite=suite,
+                                runs_per_period=runs_per_period,
+                                period_days=period_days,
+                            )
+                        )
+
+                        loop.close()
+                        self._write_json(200, projection)
+                    except Exception as exc:
+                        logging.exception("FinOps simulation failed")
+                        self._write_json(400, {"error": str(exc)})
                     return
 
                 if path == "/v1/estimates":

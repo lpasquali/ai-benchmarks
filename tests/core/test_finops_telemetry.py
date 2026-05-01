@@ -9,14 +9,14 @@ from rune_bench.metrics.pricing import PricingSoothSayer
 def rune_api_server(tmp_path):
     from rune_bench.api_server import (
         RuneApiApplication,
-        JobStore,
+        SQLiteStorageAdapter,
         ApiSecurityConfig,
         ThreadingHTTPServer,
     )
     import threading
 
     tmp_db = tmp_path / "jobs.db"
-    store = JobStore(tmp_db)
+    store = SQLiteStorageAdapter(tmp_db)
     state = {"agentic_calls": 0, "store": store}
 
     def run_agentic(request):
@@ -111,6 +111,7 @@ async def test_api_finops_simulate(rune_api_server):
     import httpx
 
     async with httpx.AsyncClient() as client:
+        # Test GET
         response = await client.get(
             f"{base_url}/v1/finops/simulate",
             params={"agent": "holmes", "model": "gpt-4o"},
@@ -120,6 +121,18 @@ async def test_api_finops_simulate(rune_api_server):
         data = response.json()
         assert "total_cost_usd" in data
         assert data["historical_match"] is True
+
+        # Test POST (Webhook use case)
+        response_post = await client.post(
+            f"{base_url}/v1/finops/simulate",
+            params={"agent": "holmes", "model": "gpt-4o"},
+            headers={"X-Tenant-ID": "tenant-a", "Authorization": "Bearer token-a"},
+        )
+        assert response_post.status_code == 200
+        data_post = response_post.json()
+        assert "cost_high_usd" in data_post
+        assert "projected_cost_usd" in data_post
+        assert "confidence_score" in data_post
 
 
 @pytest.mark.asyncio
@@ -167,3 +180,25 @@ async def test_api_run_trace_sse(rune_api_server):
 
             assert any("event: log" in line for line in lines)
             assert any("data: {" in line for line in lines)
+
+@pytest.mark.asyncio
+async def test_api_estimates_webhook_pattern(rune_api_server):
+    base_url, state = rune_api_server
+    import httpx
+
+    async with httpx.AsyncClient() as client:
+        # Webhook consumption pattern: /v1/estimates
+        response = await client.post(
+            f"{base_url}/v1/estimates",
+            json={
+                "aws": True,
+                "model": "g4dn.xlarge",
+                "estimated_duration_seconds": 3600
+            },
+            headers={"X-Tenant-ID": "tenant-a", "Authorization": "Bearer token-a"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "confidence_score" in data
+        assert data["cost_driver"] == "aws"
+        assert data["projected_cost_usd"] > 0
