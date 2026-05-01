@@ -32,6 +32,7 @@ _BACKEND_REGISTRY: dict[str, type] = {}
 _BUILTIN_BACKENDS: dict[str, tuple[str, str]] = {
     "ollama": ("rune_bench.backends.ollama", "OllamaBackend"),
     "bedrock": ("rune_bench.backends.bedrock", "BedrockBackend"),
+    "k8s-inference": ("rune_bench.backends.k8s_inference", "K8sInferenceBackend"),
 }
 
 
