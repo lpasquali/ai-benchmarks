@@ -9,22 +9,25 @@ touching the API server.
 
 from __future__ import annotations
 
+import os
 from urllib.parse import urlparse
 
 from rune_bench.storage.base import StoragePort
 from rune_bench.storage.migrator import Migrator
+from rune_bench.storage.postgres import PostgresStorageAdapter
 from rune_bench.storage.sqlite import JobRecord, SQLiteStorageAdapter
 
 __all__ = [
     "JobRecord",
     "Migrator",
+    "PostgresStorageAdapter",
     "SQLiteStorageAdapter",
     "StoragePort",
     "make_storage",
 ]
 
 
-_SUPPORTED_SCHEMES = ("sqlite://",)
+_SUPPORTED_SCHEMES = ("sqlite://", "postgres://", "postgresql://")
 
 
 def make_storage(url: str) -> StoragePort:
@@ -34,10 +37,15 @@ def make_storage(url: str) -> StoragePort:
 
     * ``sqlite:///absolute/path/to/file.db`` — file-backed SQLite
     * ``sqlite:///:memory:`` — in-memory SQLite (test fixtures)
+    * ``postgres://...`` or ``postgresql://...`` — PostgreSQL
 
     Unknown schemes raise :class:`RuntimeError` with the list of supported
     schemes, so boot-time config errors surface with an actionable message.
     """
+    env_url = os.environ.get("RUNE_DB_URI") or os.environ.get("RUNE_POSTGRES_URL")
+    if env_url:
+        url = env_url
+
     parsed = urlparse(url)
     scheme = parsed.scheme.lower()
     if scheme in ("sqlite", "sqlite+pysqlite"):
@@ -51,6 +59,8 @@ def make_storage(url: str) -> StoragePort:
             # arrives here as "/abs/path" — SQLite consumes that verbatim.
             db_path = path
         return SQLiteStorageAdapter(db_path)
+    if scheme in ("postgres", "postgresql"):
+        return PostgresStorageAdapter(url)
     raise RuntimeError(
         f"unsupported storage URL scheme {parsed.scheme!r}; "
         f"supported: {', '.join(_SUPPORTED_SCHEMES)}"
