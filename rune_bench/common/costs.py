@@ -121,7 +121,7 @@ class CostEstimator:
             # Bedrock is SaaS (Token-based) + maybe provisioned throughput. We estimate token-based list prices.
             # Using _LLM_USD_PER_MILLION logic from pricing.py if possible, or static Bedrock baselines
             rate = 0.0
-            from rune_bench.metrics.pricing import _model_llm_rates, _DEFAULT_INPUT_TOKENS, _DEFAULT_OUTPUT_TOKENS
+            from rune_bench.metrics.pricing import _model_llm_rates
             in_per_m, out_per_m = _model_llm_rates(m)
             
             # Assume 1M tokens/hour throughput for high-intensity agent loop if no explicit counts given
