@@ -12,7 +12,6 @@ from rune_bench.workflows import (
     provision_vastai_backend,
     run_chain_workflow,
     UserAbortedError,
-    _extract_ollama_service_url,
     debug_log,
 )
 
