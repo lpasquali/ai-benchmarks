@@ -224,3 +224,32 @@ def test_compute_overall_chain_status():
         SS._compute_overall_chain_status([{"status": "success"}, {"status": "skipped"}])
         == "success"
     )
+
+def test_sqlite_adapter_settings(adapter):
+    # test get empty
+    assert adapter.get_setting("foo") is None
+    
+    # test set
+    adapter.set_setting("foo", {"bar": "baz"})
+    assert adapter.get_setting("foo") == {"bar": "baz"}
+    
+    # test update
+    adapter.set_setting("foo", {"bar": "qux"})
+    assert adapter.get_setting("foo") == {"bar": "qux"}
+    
+    # test list
+    adapter.set_setting("foo.1", {"x": 1})
+    adapter.set_setting("bar.1", {"y": 2})
+    all_settings = adapter.list_settings()
+    assert len(all_settings) == 3
+    
+    prefix_settings = adapter.list_settings(prefix="foo")
+    assert len(prefix_settings) == 2
+    assert "foo" in prefix_settings
+    assert "foo.1" in prefix_settings
+    assert "bar.1" not in prefix_settings
+    
+    # test delete
+    adapter.delete_setting("foo")
+    assert adapter.get_setting("foo") is None
+

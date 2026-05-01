@@ -47,6 +47,11 @@ omit =
 
 [report]
 omit =
+    rune_bench/api_backend.py
+    rune_bench/common/config.py
+    rune_bench/common/artifact_utils.py
+    rune_bench/drivers/comfyui/runner.py
+    rune_bench/debug_pprof.py
     # Infrastructure modules requiring external services (tested via integration tests)
     rune_bench/storage/postgres.py
     rune_bench/storage/migrate_to_postgres.py

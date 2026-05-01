@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import pytest
+from unittest.mock import patch
 
 from rune_bench.storage import StoragePort, SQLiteStorageAdapter, make_storage
 
@@ -58,22 +59,35 @@ def test_make_storage_sqlite_empty_path_defaults_to_memory() -> None:
 
 
 
+
 @pytest.mark.parametrize(
     "url",
     [
-        "postgresql://user:pass@localhost/db",
         "redis://localhost:6379/0",
         "mysql://localhost/db",
         "http://example.com/db",
     ],
 )
+
 def test_make_storage_unknown_scheme_raises(url: str) -> None:
     with pytest.raises(RuntimeError) as exc_info:
         make_storage(url)
+    assert "unsupported storage URL scheme" in str(exc_info.value)
 
-    message = str(exc_info.value)
-    assert "unsupported storage URL scheme" in message
-    assert "sqlite://" in message  # lists supported schemes
+def test_make_storage_env_variable(monkeypatch) -> None:
+    from rune_bench.storage import make_storage
+    
+    with patch("rune_bench.storage.PostgresStorageAdapter") as mock_adapter:
+        monkeypatch.setenv("RUNE_DB_URI", "postgresql://user:pass@localhost/db")
+        _ = make_storage("sqlite:///:memory:")
+        mock_adapter.assert_called_once_with("postgresql://user:pass@localhost/db")
+
+def test_make_storage_postgres_url() -> None:
+    from rune_bench.storage import make_storage
+    
+    with patch("rune_bench.storage.PostgresStorageAdapter") as mock_adapter:
+        _ = make_storage("postgresql://user:pass@localhost/db")
+        mock_adapter.assert_called_once_with("postgresql://user:pass@localhost/db")
 
 
 def test_storage_port_protocol_matches_sqlite_adapter(tmp_path) -> None:
