@@ -30,3 +30,4 @@ def test_postgres_service_connectivity(pg_url):
     """
     with psycopg.connect(pg_url) as conn:
         conn.execute("SELECT 1")
+# Trigger CI
