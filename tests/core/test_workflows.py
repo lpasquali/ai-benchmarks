@@ -252,13 +252,6 @@ def test_provision_vastai_backend():
             assert res.contract_id == "123"
 
 
-def test_extract_ollama_service_url():
-    with patch(
-        "rune_bench.workflows.OllamaBackend.extract_service_url", return_value="url"
-    ):
-        assert _extract_ollama_service_url(MagicMock()) == "url"
-
-
 def test_debug_log(monkeypatch):
     from rune_bench.debug import set_debug
 

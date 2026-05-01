@@ -689,19 +689,19 @@ class RuneApiApplication:
                     return
 
                 if path == "/v1/finops/simulate":
-                    query = parse_qs(parsed.query)  # pragma: no cover
-                    agent = query.get("agent", [""])[0]  # pragma: no cover
-                    model = query.get("model", [""])[0]  # pragma: no cover
-                    gpu = query.get("gpu", ["RTX 4090"])[0]  # pragma: no cover
-                    suite = query.get("suite", [""])[0]  # pragma: no cover
-                    runs_per_period = int(query.get("runs_per_period", ["1"])[0])  # pragma: no cover
-                    period_days = int(query.get("period_days", ["1"])[0])  # pragma: no cover
+                    query = parse_qs(parsed.query)
+                    agent = query.get("agent", [""])[0]
+                    model = query.get("model", [""])[0]
+                    gpu = query.get("gpu", ["RTX 4090"])[0]
+                    suite = query.get("suite", [""])[0]
+                    runs_per_period = int(query.get("runs_per_period", ["1"])[0])
+                    period_days = int(query.get("period_days", ["1"])[0])
 
-                    try:  # pragma: no cover
-                        soothsayer = PricingSoothSayer(store=app.store)  # pragma: no cover
-                        loop = asyncio.new_event_loop()  # pragma: no cover
-                        asyncio.set_event_loop(loop)  # pragma: no cover
-                        projection = loop.run_until_complete(  # pragma: no cover
+                    try:
+                        soothsayer = PricingSoothSayer(store=app.store)
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        projection = loop.run_until_complete(
                             soothsayer.simulate(
                                 tenant_id=tenant_id,
                                 agent=agent,
@@ -713,12 +713,12 @@ class RuneApiApplication:
                             )
                         )
 
-                        loop.close()  # pragma: no cover
-                        self._write_json(200, projection)  # pragma: no cover
-                    except Exception as exc:  # pragma: no cover
-                        logging.exception("FinOps simulation failed")  # pragma: no cover
-                        self._write_json(400, {"error": str(exc)})  # pragma: no cover
-                    return  # pragma: no cover
+                        loop.close()
+                        self._write_json(200, projection)
+                    except Exception as exc:
+                        logging.exception("FinOps simulation failed")
+                        self._write_json(400, {"error": str(exc)})
+                    return
 
                 if path == "/v1/estimates":
                     try:  # pragma: no cover
