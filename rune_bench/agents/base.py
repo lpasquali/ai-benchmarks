@@ -41,7 +41,6 @@ class AgentRunner(Protocol):
     """Protocol for agentic runner implementations across all domains.
 
     Implement this protocol to add a new agent framework alongside HolmesGPT.
-    The ``ask()`` method returns a plain string for backward compatibility.
     """
 
     def ask(

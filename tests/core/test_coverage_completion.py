@@ -11,7 +11,7 @@ from pathlib import Path
 import rune
 import rune_bench.api_backend as api_backend
 import rune_bench.api_server as api_server
-from rune_bench.api_server import JobStore
+from rune_bench.api_server import 
 from rune_bench.api_contracts import (
     RunAgenticAgentRequest,
     RunBenchmarkRequest,
@@ -26,7 +26,7 @@ from rune_bench.agents.base import AgentResult
 @pytest.fixture
 def sqlite_store(tmp_path):
     db_path = tmp_path / "jobs.db"
-    store = JobStore(db_path)
+    store = SQLiteStorageAdapter(db_path)
     try:
         yield store
     finally:

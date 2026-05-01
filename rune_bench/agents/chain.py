@@ -34,8 +34,9 @@ class ChainStateRecorder(Protocol):
     """Optional callback interface invoked by ``ChainExecutionEngine`` on every state change.
 
     A recorder lets the engine remain transport-agnostic while still emitting
-    enough information for callers (e.g. ``JobStore``) to persist a live DAG
-    state for dashboard rendering. All methods MUST be safe to call from any
+    enough information for callers (e.g. storage adapters) to persist a live DAG
+    state for dashboard rendering.
+ All methods MUST be safe to call from any
     asyncio task; implementations are responsible for thread-safety.
     """
 

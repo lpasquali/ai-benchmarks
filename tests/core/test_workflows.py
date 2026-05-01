@@ -7,7 +7,7 @@ from rune_bench.workflows import (
     evaluate_spend_gate,
     normalize_backend_url,
     run_preflight_cost_check,
-    JobStoreChainRecorder,
+    StorageChainRecorder,
     stop_vastai_instance,
     provision_vastai_backend,
     run_chain_workflow,
@@ -71,7 +71,7 @@ async def test_run_preflight_cost_check():
 
 def test_job_store_chain_recorder():
     mock_store = MagicMock()
-    recorder = JobStoreChainRecorder(mock_store)
+    recorder = StorageChainRecorder(mock_store)
 
     recorder.initialize(job_id="j1", nodes=[], edges=[])
     mock_store.record_chain_initialized.assert_called_once()

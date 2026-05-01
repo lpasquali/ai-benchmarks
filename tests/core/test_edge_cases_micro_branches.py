@@ -616,7 +616,7 @@ async def test_api_backend_server_workflows_instance_remaining(monkeypatch, tmp_
 
     # api_server RuntimeError path in /v1/llm/models
     app = api_server.RuneApiApplication(
-        store=api_server.JobStore(tmp_path / "jobs.db"),
+        store=api_server.SQLiteStorageAdapter(tmp_path / "jobs.db"),
         security=api_server.ApiSecurityConfig(auth_disabled=True, tenant_tokens={}),
     )
 

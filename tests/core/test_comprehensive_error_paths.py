@@ -160,7 +160,7 @@ def test_api_client_remaining_paths(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_api_server_remaining_paths(monkeypatch, tmp_path):
-    store = api_server.JobStore(tmp_path / "jobs.db")
+    store = api_server.SQLiteStorageAdapter(tmp_path / "jobs.db")
     created = []
 
     async def backend_ollama(request, **kwargs):
@@ -339,7 +339,7 @@ async def test_api_server_remaining_paths(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_api_server_error_paths(monkeypatch, tmp_path):
-    class ExplodingStore(api_server.JobStore):
+    class ExplodingStore(SQLiteStorageAdapter):
         def create_job(self, **kwargs):
             raise RuntimeError("db-down")
 
@@ -397,7 +397,7 @@ async def test_api_server_error_paths(monkeypatch, tmp_path):
         server.server_close()
         store.close()
 
-    real_store = api_server.JobStore(tmp_path / "ok.db")
+    real_store = api_server.SQLiteStorageAdapter(tmp_path / "ok.db")
 
     async def mock_agent(request, **kwargs):
         return {"answer": request.question}

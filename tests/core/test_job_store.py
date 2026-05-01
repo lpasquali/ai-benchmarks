@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 import pytest
-from rune_bench.storage.sqlite import SQLiteStorageAdapter as JobStore
+from rune_bench.storage.sqlite import SQLiteStorageAdapter
 
 
 @pytest.fixture
 def store(tmp_path):
-    storage = JobStore(tmp_path / "jobs.db")
+    storage = SQLiteStorageAdapter(tmp_path / "jobs.db")
     yield storage
     storage.close()
 
