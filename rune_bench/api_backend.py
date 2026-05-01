@@ -48,6 +48,7 @@ def _make_resource_provider_for_benchmark(
     backend_type = getattr(request, "backend_type", "ollama")
     
     if backend_type == "vastai" or (request.provisioning and request.provisioning.vastai):
+        from rune_bench.api_contracts import VastAIProvisioning
         from rune_bench.resources.vastai import VastAIProvider
         v = (request.provisioning.vastai if request.provisioning else None) or VastAIProvisioning(
             template_hash=os.environ.get("RUNE_VASTAI_TEMPLATE", "c166c11f035d3a97871a23bd32ca6aba"),
@@ -80,6 +81,7 @@ def _make_resource_provider_for_ollama_instance(
     backend_type = getattr(request, "backend_type", "ollama")
     
     if backend_type == "vastai" or (request.provisioning and request.provisioning.vastai):
+        from rune_bench.api_contracts import VastAIProvisioning
         from rune_bench.resources.vastai import VastAIProvider
         v = (request.provisioning.vastai if request.provisioning else None) or VastAIProvisioning(
             template_hash=os.environ.get("RUNE_VASTAI_TEMPLATE", "c166c11f035d3a97871a23bd32ca6aba"),

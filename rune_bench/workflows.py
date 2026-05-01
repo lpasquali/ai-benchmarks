@@ -17,7 +17,6 @@ from .common.backend_utils import (
     list_running_backend_models,
     normalize_backend_model_for_api,
     normalize_backend_url as normalize_backend_url,
-    use_existing_backend_server,
     warmup_backend_model,
 )
 from .debug import debug_log
