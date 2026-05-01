@@ -116,7 +116,7 @@ jobs:
 
   # ─── SR-2 quantitative compliance (rune-audit) ─────────────────────────────
   sr2-compliance:
-    uses: lpasquali/rune-ci/.github/workflows/sr2-compliance.yml@23b84477724ddf4c91fbbe1535657639f921d18c
+    uses: lpasquali/rune-ci/.github/workflows/sr2-compliance.yml@ac515194651fe5d0e47df48ec68b045c33f743e4
     with:
       rune-audit-ref: main
     secrets: inherit
