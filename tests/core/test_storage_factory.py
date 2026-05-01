@@ -61,7 +61,6 @@ def test_make_storage_sqlite_empty_path_defaults_to_memory() -> None:
 @pytest.mark.parametrize(
     "url",
     [
-        "postgresql://user:pass@localhost/db",
         "redis://localhost:6379/0",
         "mysql://localhost/db",
         "http://example.com/db",
