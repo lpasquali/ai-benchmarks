@@ -60,8 +60,8 @@ from rune_bench.workflows import (
     run_preflight_cost_check,
     stop_vastai_instance,
     warmup_backend_model,
-    use_existing_backend_server,
 )
+from rune_bench.common.backend_utils import use_existing_backend_server
 
 
 
