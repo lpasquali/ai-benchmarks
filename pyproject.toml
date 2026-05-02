@@ -40,6 +40,8 @@ holmes = [
     "holmesgpt>=0.23.0",
     # supabase<2.29 — relaxed upper bound per Dependabot bump
     "supabase>=2.5,<2.30",
+    "litellm>=1.83.7",
+    "google-cloud-aiplatform>=1.133.0",
 ]
 aws = [
     "boto3>=1.34",

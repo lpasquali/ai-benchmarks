@@ -5,3 +5,5 @@
 # Upper bound relaxed to <2.29 per Dependabot bump.
 holmesgpt>=0.23.0
 supabase>=2.5,<2.30
+litellm>=1.83.7
+google-cloud-aiplatform>=1.133.0
