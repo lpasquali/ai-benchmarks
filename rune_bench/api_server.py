@@ -233,8 +233,11 @@ class RuneApiApplication:
         security = ApiSecurityConfig.from_env()  # pragma: no cover
 
         db_url = os.environ.get(  # pragma: no cover
-            "RUNE_DATABASE_URL",
-            config.get("database_url", "sqlite:///~/.rune-api/jobs.db"),
+            "RUNE_DB_URL",
+            os.environ.get(
+                "RUNE_DATABASE_URL",
+                config.get("database_url", "sqlite:///~/.rune-api/jobs.db"),
+            )
         )
         if db_url.startswith("sqlite:///"):  # pragma: no cover
             db_path = Path(db_url[10:]).expanduser()  # pragma: no cover
